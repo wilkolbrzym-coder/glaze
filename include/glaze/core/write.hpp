@@ -54,6 +54,12 @@ namespace glz
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
+         // In case of error, we must resize back to the written size to avoid
+         // leaving the buffer in an expanded state (capacity size) full of spaces.
+         // We do not enforce space invariant on the tail on error.
+         if constexpr (traits::is_resizable) {
+            buffer.resize(ix);
+         }
          return {ix, ctx.error, ctx.custom_error_message};
       }
 
@@ -91,6 +97,9 @@ namespace glz
       serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
+         if constexpr (traits::is_resizable) {
+            buffer.resize(ix);
+         }
          return {ix, ctx.error, ctx.custom_error_message};
       }
 

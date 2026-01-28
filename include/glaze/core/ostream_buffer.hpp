@@ -100,6 +100,14 @@ namespace glz
          logical_size_ = new_size;
       }
 
+      void resize(size_t new_size, char c)
+      {
+         if (new_size > buffer_.size() + flush_offset_) {
+            buffer_.resize(new_size - flush_offset_, c);
+         }
+         logical_size_ = new_size;
+      }
+
       // Final flush - called by buffer_traits::finalize()
       void finalize(size_t total_written)
       {

@@ -161,19 +161,13 @@ namespace glz
          }
       }
 
+      // Space Invariant Strategy:
+      // We guarantee that the buffer is pre-filled with spaces (0x20)
+      // during resizing and initial preparation.
+      // Therefore, we can skip the write entirely if the character is a space.
       if (c == ' ') {
-         bool dirty = false;
-         for (size_t i = 0; i < n; ++i) {
-            if (b[ix + i] != ' ') {
-               dirty = true;
-               break;
-            }
-         }
-
-         if (!dirty) {
-            ix += n;
-            return;
-         }
+         ix += n;
+         return;
       }
 
       std::memset(&b[ix], c, n);
@@ -227,20 +221,14 @@ namespace glz
       assign_maybe_cast('\n', b, ix);
       ++ix;
 
+      // Space Invariant Strategy:
+      // We guarantee that the buffer is pre-filled with spaces (0x20)
+      // during resizing and initial preparation.
       if (c == ' ') {
-         bool dirty = false;
-         for (size_t i = 0; i < n; ++i) {
-            if (b[ix + i] != ' ') {
-               dirty = true;
-               break;
-            }
-         }
-
-         if (!dirty) {
-            ix += n;
-            return;
-         }
+         ix += n;
+         return;
       }
+
       std::memset(&b[ix], c, n);
       ix += n;
    }

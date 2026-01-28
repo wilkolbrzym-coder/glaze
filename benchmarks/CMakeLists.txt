@@ -84,3 +84,14 @@ target_compile_options(prettify_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
+
+# Space Invariant Benchmark
+add_executable(space_invariant_bench space_invariant_bench.cpp)
+target_link_libraries(space_invariant_bench PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(space_invariant_bench PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)

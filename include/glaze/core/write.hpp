@@ -21,7 +21,33 @@ namespace glz
       if constexpr (traits::is_resizable) {
          // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_and_fill_spaces(buffer, 2 * write_padding_bytes);
+         }
+         else {
+            // Buffer Reuse: If we are reusing a buffer, we must ensure it is filled with spaces.
+            // We assume the user wants to overwrite the buffer.
+            // The "Space Invariant" requires that any unused capacity is spaces.
+            // However, the *used* part from the previous run contains JSON data.
+            // We must clear it to spaces to support the "Check-and-Skip" (or pure skip) optimization.
+
+            // To be strictly safe and meet the requirement: "wykonaj jeden duży std::memset od 0 do capacity()"
+            if constexpr (requires { buffer.capacity(); }) {
+                // Resize up to capacity so we can access it safely
+                auto cap = buffer.capacity();
+                auto current_size = buffer.size();
+                if (cap > 0) {
+                    if (current_size < cap) {
+                        buffer.resize(cap);
+                    }
+                    std::memset(buffer.data(), ' ', cap);
+                    // We effectively reset index to 0, so we just resize back to what we need?
+                    // No, write uses `ix` to track position.
+                    // But we don't want to resize buffer down to 0, because `ensure_space` uses size.
+                    // Actually, `ensure_space` checks `if (required > b.size())`.
+                    // If we leave size at `cap`, ensure_space won't trigger until we exceed cap.
+                    // This is good.
+                }
+            }
          }
       }
       size_t ix = 0; // overwrite index
@@ -44,7 +70,20 @@ namespace glz
       if constexpr (traits::is_resizable) {
          // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_and_fill_spaces(buffer, 2 * write_padding_bytes);
+         }
+         else {
+             // Reused buffer clean up
+             if constexpr (requires { buffer.capacity(); }) {
+                auto cap = buffer.capacity();
+                auto current_size = buffer.size();
+                if (cap > 0) {
+                    if (current_size < cap) {
+                        buffer.resize(cap);
+                    }
+                    std::memset(buffer.data(), ' ', cap);
+                }
+             }
          }
       }
       context ctx{};

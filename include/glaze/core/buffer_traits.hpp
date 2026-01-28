@@ -78,9 +78,63 @@ namespace glz
             if constexpr (requires { b.capacity(); }) {
                const auto cap = b.capacity();
                if (cap > written) {
-                  b.resize(written);
-                  resize_and_fill_spaces(b, cap);
-                  b.resize(written);
+                  // Ensure the tail (unused capacity) is filled with spaces
+                  // We must do this carefully to not write out of bounds of 'size()'
+                  // if we are to respect standard C++ container rules, but for performance
+                  // we know we own the buffer.
+                  // However, idiomatic usage is:
+                  // 1. Resize UP (filled with spaces)
+                  // 2. Write
+                  // 3. Resize DOWN (finalize)
+                  // If we resize down, the data beyond size is technically "gone" but still in capacity.
+                  // To adhere to the "Space Invariant", we want the MEMORY in capacity to be spaces.
+                  // std::string/vector doesn't guarantee preserving data on resize-up if it wasn't part of size.
+                  // BUT, if we just set size = written, the next ensure_space will resize up.
+                  // If resize_and_fill_spaces is called, it fills new elements with ' '.
+
+                  // The only risk is if we resize down, then resize up, does it preserve the old data (which were spaces)?
+                  // Standard: "If the container shrinks, all elements beyond the new size are destroyed."
+                  // "If the container expands, new elements are value-initialized" (or copy initialized).
+                  // So `resize(n, ' ')` fills NEW elements with ' '.
+                  // It does NOT necessarily fill "reused capacity" with ' '. It might just construct them.
+                  // For `char`, it's trivial.
+                  // The concern is: if we have "dirty" data in the capacity that wasn't overwritten by spaces.
+                  // When does dirty data get there?
+                  // Only if we write NON-spaces to it.
+                  // We write JSON data.
+                  // Then we call finalize(written).
+                  // The data from `written` to `old_size` is now "garbage" (the tail of the JSON).
+                  // WE MUST CLEAR THIS TAIL.
+
+                  // We need to fill [written, old_size) with spaces before resizing down?
+                  // Or assume we will clear it next time?
+                  // "Post-Serialization Space Fill": "Po zakończeniu serializacji, musimy zapewnić, że niewykorzystana część zaalokowanego bufora (capacity) jest wypełniona spacjami."
+
+                  // Correct logic:
+                  // 1. Fill [written, capacity) with spaces.
+                  // 2. Resize to written.
+
+                  // Accessing up to capacity is unsafe via operator[] if size < capacity.
+                  // But we can resize up to capacity, memset, then resize down.
+
+                  const auto old_size = b.size();
+                  // If we wrote less than size, the tail [written, old_size) contains dirty JSON data.
+                  if (written < old_size) {
+                      std::memset(b.data() + written, ' ', old_size - written);
+                  }
+
+                  // What about [old_size, capacity)?
+                  // If we previously resized up with ' ', it should be spaces.
+                  // But just to be sure per "Strict Invariant":
+                  if (old_size < cap) {
+                      // This part requires resizing up to cap to legally access it, or using raw pointer hacks.
+                      // Standard compliant way:
+                      b.resize(cap, ' '); // Resize to full capacity, filling new slots with ' ' if any
+                      // Now everything from [written, cap) is spaces (because we memset [written, old_size) above)
+                      b.resize(written); // Resize back down
+                  } else {
+                      b.resize(written);
+                  }
                }
                else {
                   b.resize(written);

@@ -24,6 +24,16 @@ namespace glz
       if constexpr (requires { b.resize(n, ' '); }) {
          b.resize(n, ' ');
       }
+      else if constexpr (vector_like<B>) {
+         const auto old_size = b.size();
+         if (n > old_size) {
+            b.resize(n);
+            std::memset(b.data() + old_size, ' ', n - old_size);
+         }
+         else {
+            b.resize(n);
+         }
+      }
       else {
          const auto old_size = b.size();
          b.resize(n);
@@ -76,37 +86,17 @@ namespace glz
       GLZ_ALWAYS_INLINE static void finalize(Buffer& b, size_t written) noexcept(not is_resizable)
       {
          if constexpr (is_resizable) {
+            // Restore correct logical size
             if constexpr (requires { b.capacity(); }) {
-               const auto cap = b.capacity();
-               if (cap > written) {
-                  // Ensure the tail (unused capacity) is filled with spaces
-                  // We must do this carefully to not write out of bounds of 'size()'
-                  // if we are to respect standard C++ container rules, but for performance
-                  // we know we own the buffer.
-
-                  const auto old_size = b.size();
-                  // If we wrote less than size, the tail [written, old_size) contains dirty JSON data.
-                  if (written < old_size) {
-                      std::memset(b.data() + written, ' ', old_size - written);
-                  }
-
-                  // Ensure capacity beyond size is also valid spaces if we were to grow back into it.
-                  if (old_size < cap) {
-                      b.resize(cap, ' '); // Resize to full capacity, filling new slots with ' '
-                      b.resize(written); // Resize back down
-                  } else {
-                      b.resize(written);
-                  }
-               }
-               else {
-                  b.resize(written);
+               // Per "Space Invariant", we ensure the tail is spaces.
+               // The start-of-write logic or resize_and_fill_spaces handles the capacity.
+               // We just need to clear the part we wrote but didn't use (if any) and shrink.
+               if (written < b.size()) {
+                  std::memset(b.data() + written, ' ', b.size() - written);
                }
             }
-            else {
-               b.resize(written); // Standard resize is fine for shrinking/finalizing
-            }
+            b.resize(written);
          }
-         // For fixed buffers: no-op, count is returned in result
       }
 
       // Flush written data to underlying storage (for streaming buffers)

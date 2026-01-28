@@ -22,6 +22,10 @@ namespace glz
          // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
          if (buffer.size() < 2 * write_padding_bytes) {
             resize_and_fill_spaces(buffer, 2 * write_padding_bytes);
+            if constexpr (vector_like<std::remove_cvref_t<Buffer>>) {
+               // Verify space invariant for new buffers to be absolutely safe
+               std::memset(buffer.data(), ' ', buffer.size());
+            }
          }
          else {
             // Buffer Reuse: If we are reusing a buffer, we must ensure it is filled with spaces.
@@ -77,6 +81,9 @@ namespace glz
          // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
          if (buffer.size() < 2 * write_padding_bytes) {
             resize_and_fill_spaces(buffer, 2 * write_padding_bytes);
+            if constexpr (vector_like<std::remove_cvref_t<Buffer>>) {
+               std::memset(buffer.data(), ' ', buffer.size());
+            }
          }
          else {
              // Reused buffer clean up

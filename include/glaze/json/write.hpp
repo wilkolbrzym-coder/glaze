@@ -1620,7 +1620,7 @@ namespace glz
       {
          if constexpr (not check_write_unchecked(Opts)) {
             if (const auto k = ix + 4; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               resize_and_fill_spaces(b, 2 * k);
             }
          }
          if constexpr (std::endian::native == std::endian::big) {
@@ -2505,7 +2505,7 @@ namespace glz
 
       if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_and_fill_spaces(buffer, 2 * write_padding_bytes);
          }
       }
       context ctx{};
@@ -2559,7 +2559,7 @@ namespace glz
 
       if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
-            buffer.resize(2 * write_padding_bytes);
+            resize_and_fill_spaces(buffer, 2 * write_padding_bytes);
          }
       }
       context ctx{};

@@ -159,15 +159,18 @@ namespace glz
          if (k > b.size()) [[unlikely]] {
             resize_and_fill_spaces(b, 2 * k);
          }
-      }
 
-      // Space Invariant Strategy:
-      // We guarantee that the buffer is pre-filled with spaces (0x20)
-      // during resizing and initial preparation.
-      // Therefore, we can skip the write entirely if the character is a space.
-      if (c == ' ') {
-         ix += n;
-         return;
+         // Space Invariant Strategy:
+         // We guarantee that the buffer is pre-filled with spaces (0x20)
+         // during resizing and initial preparation.
+         // Therefore, we can skip the write entirely if the character is a space.
+         if (c == ' ') {
+            if (b[ix] != ' ') {
+               std::memset(&b[ix], c, n);
+            }
+            ix += n;
+            return;
+         }
       }
 
       std::memset(&b[ix], c, n);
@@ -198,7 +201,7 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            resize_and_fill_spaces(b, 2 * k);
          }
       }
 
@@ -224,9 +227,14 @@ namespace glz
       // Space Invariant Strategy:
       // We guarantee that the buffer is pre-filled with spaces (0x20)
       // during resizing and initial preparation.
-      if (c == ' ') {
-         ix += n;
-         return;
+      if constexpr (vector_like<B>) {
+         if (c == ' ') {
+            if (b[ix] != ' ') {
+               std::memset(&b[ix], c, n);
+            }
+            ix += n;
+            return;
+         }
       }
 
       std::memset(&b[ix], c, n);

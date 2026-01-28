@@ -158,3 +158,10 @@ target_link_libraries(lazy_test PRIVATE glz_test_common)
 
 add_test(NAME lazy_test COMMAND lazy_test)
 
+## Buffer reuse test - test for dirty buffer handling
+
+add_executable(buffer_reuse_test buffer_reuse_test.cpp)
+
+target_link_libraries(buffer_reuse_test PRIVATE glz_test_common)
+
+add_test(NAME buffer_reuse_test COMMAND buffer_reuse_test)

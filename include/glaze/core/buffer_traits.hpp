@@ -75,7 +75,20 @@ namespace glz
       GLZ_ALWAYS_INLINE static void finalize(Buffer& b, size_t written) noexcept(not is_resizable)
       {
          if constexpr (is_resizable) {
-            b.resize(written); // Standard resize is fine for shrinking/finalizing
+            if constexpr (requires { b.capacity(); }) {
+               const auto cap = b.capacity();
+               if (cap > written) {
+                  b.resize(written);
+                  resize_and_fill_spaces(b, cap);
+                  b.resize(written);
+               }
+               else {
+                  b.resize(written);
+               }
+            }
+            else {
+               b.resize(written); // Standard resize is fine for shrinking/finalizing
+            }
          }
          // For fixed buffers: no-op, count is returned in result
       }

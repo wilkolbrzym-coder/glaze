@@ -160,6 +160,22 @@ namespace glz
             resize_and_fill_spaces(b, 2 * k);
          }
       }
+
+      if (c == ' ') {
+         bool dirty = false;
+         for (size_t i = 0; i < n; ++i) {
+            if (b[ix + i] != ' ') {
+               dirty = true;
+               break;
+            }
+         }
+
+         if (!dirty) {
+            ix += n;
+            return;
+         }
+      }
+
       std::memset(&b[ix], c, n);
       ix += n;
    }
@@ -212,8 +228,18 @@ namespace glz
       ++ix;
 
       if (c == ' ') {
-         ix += n;
-         return;
+         bool dirty = false;
+         for (size_t i = 0; i < n; ++i) {
+            if (b[ix + i] != ' ') {
+               dirty = true;
+               break;
+            }
+         }
+
+         if (!dirty) {
+            ix += n;
+            return;
+         }
       }
       std::memset(&b[ix], c, n);
       ix += n;

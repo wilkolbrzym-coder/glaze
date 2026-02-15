@@ -30,6 +30,17 @@ target_compile_options(lazy_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
 
+# BSON benchmark
+add_executable(bson_benchmark bson_benchmark.cpp)
+target_link_libraries(bson_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(bson_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
 # Simple float benchmark
 add_executable(simple_float_benchmark simple_float_benchmark.cpp)
 target_link_libraries(simple_float_benchmark PRIVATE

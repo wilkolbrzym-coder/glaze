@@ -118,6 +118,7 @@ endif()
 
 add_subdirectory(api_test)
 add_subdirectory(beve_test)
+add_subdirectory(bson_test)
 add_subdirectory(cbor_test)
 add_subdirectory(buffer_pool_test)
 add_subdirectory(cli_menu_test)

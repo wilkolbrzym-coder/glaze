@@ -16,6 +16,8 @@ if (glaze_ENABLE_FUZZING)
   add_subdirectory(fuzzing)
 endif()
 
+add_subdirectory(benchmarks)
+
 # Done in developer mode only, so users won't be bothered by this :)
 file(GLOB_RECURSE headers CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/include/glaze/*.hpp")
 source_group(TREE "${PROJECT_SOURCE_DIR}/include" PREFIX headers FILES ${headers})

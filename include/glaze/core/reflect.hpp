@@ -1430,7 +1430,7 @@ namespace glz
 
       size_t min_length = (std::numeric_limits<size_t>::max)();
       for (auto& s : strings) {
-         if (s.contains('"')) {
+         if (s.find('"') != std::string_view::npos) {
             return {}; // Sized hashing requires looking for terminating quote
          }
 

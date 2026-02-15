@@ -55,7 +55,7 @@ enum class my_enum {
 template <>
 struct glz::meta<my_enum> {
     using enum my_enum;
-    static constexpr auto value = enumerate(A, B, C);
+    static constexpr auto value = enumerate("A", A, "B", B, "C", C);
 };
 
 struct all_types_struct {
@@ -273,6 +273,80 @@ int main() {
         std::vector<std::vector<std::map<std::string, int>>> v2;
         expect(!glz::read_bson(v2, buffer));
         expect(v == v2);
+    };
+
+    "utf8_short_string"_test = [] {
+        std::string s = "Zażółć";
+        std::string buffer;
+        expect(!glz::write_bson(s, buffer));
+        std::string s2;
+        expect(!glz::read_bson(s2, buffer));
+        expect(s == s2);
+    };
+
+    "string_with_null_byte"_test = [] {
+        std::string s;
+        s.push_back('a');
+        s.push_back('\0');
+        s.push_back('b'); // Napis "a\0b"
+
+        std::string buffer;
+        expect(!glz::write_bson(s, buffer));
+        std::string s2;
+        expect(!glz::read_bson(s2, buffer));
+        expect(s.size() == 3);
+        expect(s == s2);
+    };
+
+    "single_char_string"_test = [] {
+        std::string s = "x";
+        std::string buffer;
+        expect(!glz::write_bson(s, buffer));
+        std::string s2;
+        expect(!glz::read_bson(s2, buffer));
+        expect(s == s2);
+    };
+
+    "malformed_bson"_test = [] {
+        "truncated_document"_test = [] {
+            std::string buffer = "\x05\x00\x00\x00"; // Size 5, but only 4 bytes
+            simple_struct s;
+            auto ec = glz::read_bson(s, buffer);
+            expect(ec.ec == glz::error_code::unexpected_end);
+        };
+
+        "missing_null_terminator_key"_test = [] {
+            // Document size 12, type 0x10 (Int32), key "i" without null, value
+            std::string buffer;
+            int32_t size = 12;
+            buffer.append((char*)&size, 4);
+            buffer.push_back(0x10);
+            buffer.push_back('i');
+            // Missing null terminator for key 'i'
+            int32_t val = 42;
+            buffer.append((char*)&val, 4);
+            buffer.push_back(0x00);
+
+            simple_struct s;
+            auto ec = glz::read_bson(s, buffer);
+            expect(ec.ec == glz::error_code::unexpected_end);
+        };
+
+        "invalid_string_size"_test = [] {
+            // Document size 15, type 0x02 (String), key "s", size 10, but buffer ends
+            std::string buffer;
+            int32_t doc_size = 15;
+            buffer.append((char*)&doc_size, 4);
+            buffer.push_back(0x02);
+            buffer.append("s\0", 2);
+            int32_t str_size = 10;
+            buffer.append((char*)&str_size, 4);
+            buffer.append("abc"); // only 3 chars instead of 9+null
+
+            simple_struct s;
+            auto ec = glz::read_bson(s, buffer);
+            expect(ec.ec == glz::error_code::unexpected_end);
+        };
     };
 
     return 0;

@@ -39,26 +39,33 @@ namespace glz
       MaxKey = 0x7F
    };
 
+   namespace detail {
+      template <class T>
+      struct bson_type_helper {
+         static constexpr uint8_t get() noexcept {
+            using V = std::decay_t<T>;
+            if constexpr (std::same_as<V, double>) return uint8_t(bson_type::Double);
+            else if constexpr (std::same_as<V, float>) return uint8_t(bson_type::Double);
+            else if constexpr (str_t<V>) return uint8_t(bson_type::String);
+            else if constexpr (is_named_enum<V>) return uint8_t(bson_type::String);
+            else if constexpr (glaze_object_t<V> || reflectable<V> || writable_map_t<V> || readable_map_t<V>) return uint8_t(bson_type::Document);
+            else if constexpr (is_variant<V>) return uint8_t(bson_type::Document);
+            else if constexpr (range<V>) return uint8_t(bson_type::Array);
+            else if constexpr (bool_t<V>) return uint8_t(bson_type::Boolean);
+            else if constexpr (std::same_as<V, int32_t>) return uint8_t(bson_type::Int32);
+            else if constexpr (std::integral<V> && sizeof(V) <= 4) return uint8_t(bson_type::Int32);
+            else if constexpr (std::integral<V> && sizeof(V) == 8) return uint8_t(bson_type::Int64);
+            else if constexpr (std::is_enum_v<V>) return uint8_t(bson_type::Int32);
+            else if constexpr (nullable_like<V>) {
+                return bson_type_helper<typename V::value_type>::get();
+            }
+            else return uint8_t(bson_type::Null);
+         }
+      };
+   }
+
    template <class T>
-   inline constexpr uint8_t bson_type_v = [] {
-      using V = std::decay_t<T>;
-      if constexpr (std::same_as<V, double>) return uint8_t(bson_type::Double);
-      else if constexpr (std::same_as<V, float>) return uint8_t(bson_type::Double);
-      else if constexpr (str_t<V>) return uint8_t(bson_type::String);
-      else if constexpr (is_named_enum<V>) return uint8_t(bson_type::String);
-      else if constexpr (glaze_object_t<V> || reflectable<V> || writable_map_t<V> || readable_map_t<V>) return uint8_t(bson_type::Document);
-      else if constexpr (is_variant<V>) return uint8_t(bson_type::Document);
-      else if constexpr (range<V>) return uint8_t(bson_type::Array);
-      else if constexpr (bool_t<V>) return uint8_t(bson_type::Boolean);
-      else if constexpr (std::same_as<V, int32_t>) return uint8_t(bson_type::Int32);
-      else if constexpr (std::integral<V> && sizeof(V) <= 4) return uint8_t(bson_type::Int32);
-      else if constexpr (std::integral<V> && sizeof(V) == 8) return uint8_t(bson_type::Int64);
-      else if constexpr (std::is_enum_v<V>) return uint8_t(bson_type::Int32);
-      else if constexpr (nullable_like<V>) {
-          return bson_type_v<typename V::value_type>;
-      }
-      else return uint8_t(bson_type::Null);
-   }();
+   inline constexpr uint8_t bson_type_v = detail::bson_type_helper<T>::get();
 
    namespace detail {
       template <typename T>

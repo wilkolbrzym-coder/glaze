@@ -555,6 +555,7 @@ namespace glz
          std::string_view sv{};
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
             return;
+         }
          value = sv;
       }
    };
@@ -565,7 +566,7 @@ namespace glz
    {
       static_assert([]() {
          constexpr bool ok = []<size_t... I>(std::index_sequence<I...>) {
-            return ((always_skipped<field_t<T, I>> || read_supported<field_t<T, I>, MSGPACK>) && ...);
+            return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || read_supported<field_t<T, I>, MSGPACK>) && ...);
          }(std::make_index_sequence<reflect<T>::size>{});
          if constexpr (!ok) {
             []<size_t... I>(std::index_sequence<I...>) {
@@ -708,7 +709,7 @@ namespace glz
    {
       static_assert([]() {
          constexpr bool ok = []<size_t... I>(std::index_sequence<I...>) {
-            return ((always_skipped<field_t<T, I>> || read_supported<field_t<T, I>, MSGPACK>) && ...);
+            return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || read_supported<field_t<T, I>, MSGPACK>) && ...);
          }(std::make_index_sequence<reflect<T>::size>{});
          if constexpr (!ok) {
             []<size_t... I>(std::index_sequence<I...>) {

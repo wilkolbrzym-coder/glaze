@@ -718,7 +718,7 @@ namespace glz
             }(std::make_index_sequence<reflect<T>::size>{});
          }
          return ok;
-       }(), "One of the object's members is not serializable. Check if member's type has glz::meta or is reflectable.");
+      }(), "One of the object's members is not serializable. Check if member's type has glz::meta or is reflectable.");
       static constexpr uint8_t type_code = bson::type::document;
       static constexpr auto N = reflect<T>::size;
 

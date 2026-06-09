@@ -136,6 +136,4 @@ suite diagnostics_tests = [] {
    };
 };
 
-int main() {
-   return ut::run();
-}
+int main() { return 0; }

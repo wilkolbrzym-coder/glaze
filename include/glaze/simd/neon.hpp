@@ -88,12 +88,23 @@ namespace glz::detail
             0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80
          };
          uint8x16_t masked = vandq_u8(input, bitmask_elements);
-         uint8x16_t temp = vpaddq_u8(masked, masked);
-         temp = vpaddq_u8(temp, temp);
-         temp = vpaddq_u8(temp, temp);
-         uint64_t low = vgetq_lane_u64(vreinterpretq_u64_u8(temp), 0);
-         uint64_t high = vgetq_lane_u64(vreinterpretq_u64_u8(temp), 1);
-         return static_cast<uint16_t>((low & 0xFF) | ((high & 0xFF) << 8));
+         
+         // Split into two 64-bit halves for ARMv7 / ARM64 compatibility
+         uint8x8_t low_half = vget_low_u8(masked);
+         uint8x8_t high_half = vget_high_u8(masked);
+         
+         uint8x8_t p1 = vpadd_u8(low_half, low_half);
+         p1 = vpadd_u8(p1, p1);
+         p1 = vpadd_u8(p1, p1);
+         
+         uint8x8_t p2 = vpadd_u8(high_half, high_half);
+         p2 = vpadd_u8(p2, p2);
+         p2 = vpadd_u8(p2, p2);
+         
+         uint8_t mask_low = vget_lane_u8(p1, 0);
+         uint8_t mask_high = vget_lane_u8(p2, 0);
+         
+         return static_cast<uint16_t>(mask_low | (mask_high << 8));
       }
 
       template <class Data, class WriteEscape>

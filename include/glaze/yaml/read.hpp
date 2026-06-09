@@ -4073,6 +4073,18 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
    struct from<YAML, T>
    {
+      static_assert([]() {
+         constexpr bool ok = []<size_t... I>(std::index_sequence<I...>) {
+            return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || read_supported<field_t<T, I>, YAML>) && ...);
+         }(std::make_index_sequence<reflect<T>::size>{});
+         if constexpr (!ok) {
+            []<size_t... I>(std::index_sequence<I...>) {
+               (..., void(detail::read_diagnostics<T, YAML, I>::value));
+            }(std::make_index_sequence<reflect<T>::size>{});
+         }
+         return ok;
+      }(), "One of the object's members is not deserializable. Check if member's type has glz::meta or is reflectable.");
+
       // Tag is the discriminator key of an enclosing tagged variant (empty when not tagged).
       // When set, the mapping parsers skip an entry whose key equals the tag, since the
       // variant resolver has already consumed it to select this alternative.

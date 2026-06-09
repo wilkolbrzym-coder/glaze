@@ -677,6 +677,17 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<BSON, T>
    {
+      static_assert([]() {
+         constexpr bool ok = []<size_t... I>(std::index_sequence<I...>) {
+            return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || write_supported<field_t<T, I>, BSON>) && ...);
+         }(std::make_index_sequence<reflect<T>::size>{});
+         if constexpr (!ok) {
+            []<size_t... I>(std::index_sequence<I...>) {
+               (..., void(detail::write_diagnostics<T, BSON, I>::value));
+            }(std::make_index_sequence<reflect<T>::size>{});
+         }
+         return ok;
+       }(), "One of the object's members is not serializable. Check if member's type has glz::meta or is reflectable.");
       static constexpr uint8_t type_code = bson::type::document;
       static constexpr auto N = reflect<T>::size;
 

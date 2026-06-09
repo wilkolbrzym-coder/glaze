@@ -281,7 +281,9 @@ int main()
       for (size_t i = 0; i < iterations; ++i) {
          size_t ix = 0;
          glz::meta_serialize<mock_format_driver, glz::opts{}, my_struct>::op(obj, ctx, buf_meta, ix);
-         asm volatile("" : "+g"(ix), "+g"(buf_meta) : : "memory");
+#if defined(__clang__) || defined(__GNUC__)
+         asm volatile("" : "+g"(ix) : : "memory");
+#endif
       }
       auto end_meta = std::chrono::high_resolution_clock::now();
       double dur_meta = std::chrono::duration_cast<std::chrono::microseconds>(end_meta - start_meta).count();
@@ -292,7 +294,9 @@ int main()
       for (size_t i = 0; i < iterations; ++i) {
          size_t ix = 0;
          hand_written_serializer::serialize_my_struct(obj, buf_hand, ix);
-         asm volatile("" : "+g"(ix), "+g"(buf_hand) : : "memory");
+#if defined(__clang__) || defined(__GNUC__)
+         asm volatile("" : "+g"(ix) : : "memory");
+#endif
       }
       auto end_hand = std::chrono::high_resolution_clock::now();
       double dur_hand = std::chrono::duration_cast<std::chrono::microseconds>(end_hand - start_hand).count();

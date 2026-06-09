@@ -270,6 +270,37 @@ namespace glz
    // cases explicitly.
    // ==========================================================================
 
+   // --- Nullable / Null / Variant support for BSON concept checks ------------
+   template <always_null_t T>
+   struct to<BSON, T>
+   {
+      static constexpr uint8_t type_code = bson::type::null;
+      template <auto Opts>
+      static void op(auto&&, is_context auto&&, auto&&, auto&) noexcept {}
+   };
+
+   template <nullable_like T>
+   struct to<BSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+      {
+         if (value) {
+            serialize<BSON>::template op<Opts>(*value, ctx, b, ix);
+         }
+      }
+   };
+
+   template <is_variant T>
+   struct to<BSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+      {
+         std::visit([&](auto&& alt) { serialize<BSON>::template op<Opts>(alt, ctx, b, ix); }, value);
+      }
+   };
+
    // --- Boolean --------------------------------------------------------------
    template <>
    struct to<BSON, bool>

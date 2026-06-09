@@ -1316,6 +1316,17 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
    struct from<CBOR, T> final
    {
+      static_assert([]() {
+         constexpr bool ok = []<size_t... I>(std::index_sequence<I...>) {
+            return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || read_supported<field_t<T, I>, CBOR>) && ...);
+         }(std::make_index_sequence<reflect<T>::size>{});
+         if constexpr (!ok) {
+            []<size_t... I>(std::index_sequence<I...>) {
+               (..., void(detail::read_diagnostics<T, CBOR, I>::value));
+            }(std::make_index_sequence<reflect<T>::size>{});
+         }
+         return ok;
+      }(), "One of the object's members is not deserializable. Check if member's type has glz::meta or is reflectable.");
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {

@@ -20,8 +20,8 @@ struct valid_struct {
 };
 
 struct unsupported_struct {
-   struct dummy {};
-   dummy d;
+private:
+   int x;
 };
 
 

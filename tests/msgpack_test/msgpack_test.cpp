@@ -100,6 +100,26 @@ namespace
 
       bool operator==(const ext_record&) const = default;
    };
+
+   struct simple_msgpack_obj
+   {
+      int x = 42;
+      std::string name = "hello";
+   };
+
+   struct large_msgpack_obj
+   {
+      int x = 42;
+      std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
+      std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+   };
+
+   struct msgpack_event
+   {
+      std::string name;
+      glz::msgpack::timestamp time;
+      bool operator==(const msgpack_event&) const = default;
+   };
 } // namespace
 
 template <>
@@ -860,14 +880,7 @@ int main()
    };
 
    "timestamp in struct"_test = [] {
-      struct event
-      {
-         std::string name;
-         glz::msgpack::timestamp time;
-         bool operator==(const event&) const = default;
-      };
-
-      event original{"test_event", {1700000000, 123000000}};
+      msgpack_event original{"test_event", {1700000000, 123000000}};
       expect_roundtrip_equal(original);
    };
 
@@ -1031,19 +1044,6 @@ int main()
 
    // Bounded buffer overflow tests for MessagePack
    {
-      struct simple_msgpack_obj
-      {
-         int x = 42;
-         std::string name = "hello";
-      };
-
-      struct large_msgpack_obj
-      {
-         int x = 42;
-         std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
-         std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-      };
-
       "msgpack write to std::array with sufficient space succeeds"_test = [] {
          simple_msgpack_obj obj{};
          std::array<char, 512> buffer{};

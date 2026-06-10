@@ -19,6 +19,11 @@ struct valid_struct {
    std::string y{"hello"};
 };
 
+struct unsupported_struct {
+   struct dummy {};
+   dummy d;
+};
+
 
 suite diagnostics_tests = [] {
    "valid_struct_supported"_test = [] {
@@ -42,23 +47,23 @@ suite diagnostics_tests = [] {
    };
 
    "invalid_struct_unsupported"_test = [] {
-      // Test writing support concepts should be false for unsupported type std::thread
-      static_assert(!glz::write_supported<std::thread, glz::JSON>);
-      static_assert(!glz::write_supported<std::thread, glz::CBOR>);
-      static_assert(!glz::write_supported<std::thread, glz::BEVE>);
-      static_assert(!glz::write_supported<std::thread, glz::YAML>);
-      static_assert(!glz::write_supported<std::thread, glz::TOML>);
-      static_assert(!glz::write_supported<std::thread, glz::MSGPACK>);
-      static_assert(!glz::write_supported<std::thread, glz::BSON>);
+      // Test writing support concepts should be false for unsupported types
+      static_assert(!glz::write_supported<unsupported_struct, glz::JSON>);
+      static_assert(!glz::write_supported<unsupported_struct, glz::CBOR>);
+      static_assert(!glz::write_supported<unsupported_struct, glz::BEVE>);
+      static_assert(!glz::write_supported<unsupported_struct, glz::YAML>);
+      static_assert(!glz::write_supported<unsupported_struct, glz::TOML>);
+      static_assert(!glz::write_supported<unsupported_struct, glz::MSGPACK>);
+      static_assert(!glz::write_supported<unsupported_struct, glz::BSON>);
 
-      // Test reading support concepts should be false for unsupported type std::thread
-      static_assert(!glz::read_supported<std::thread, glz::JSON>);
-      static_assert(!glz::read_supported<std::thread, glz::CBOR>);
-      static_assert(!glz::read_supported<std::thread, glz::BEVE>);
-      static_assert(!glz::read_supported<std::thread, glz::YAML>);
-      static_assert(!glz::read_supported<std::thread, glz::TOML>);
-      static_assert(!glz::read_supported<std::thread, glz::MSGPACK>);
-      static_assert(!glz::read_supported<std::thread, glz::BSON>);
+      // Test reading support concepts should be false for unsupported types
+      static_assert(!glz::read_supported<unsupported_struct, glz::JSON>);
+      static_assert(!glz::read_supported<unsupported_struct, glz::CBOR>);
+      static_assert(!glz::read_supported<unsupported_struct, glz::BEVE>);
+      static_assert(!glz::read_supported<unsupported_struct, glz::YAML>);
+      static_assert(!glz::read_supported<unsupported_struct, glz::TOML>);
+      static_assert(!glz::read_supported<unsupported_struct, glz::MSGPACK>);
+      static_assert(!glz::read_supported<unsupported_struct, glz::BSON>);
    };
 
    "roundtrips"_test = [] {

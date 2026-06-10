@@ -100,27 +100,27 @@ namespace
 
       bool operator==(const ext_record&) const = default;
    };
-
-   struct simple_msgpack_obj
-   {
-      int x = 42;
-      std::string name = "hello";
-   };
-
-   struct large_msgpack_obj
-   {
-      int x = 42;
-      std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
-      std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-   };
-
-   struct msgpack_event
-   {
-      std::string name;
-      glz::msgpack::timestamp time;
-      bool operator==(const msgpack_event&) const = default;
-   };
 } // namespace
+
+struct simple_msgpack_obj
+{
+   int x = 42;
+   std::string name = "hello";
+};
+
+struct large_msgpack_obj
+{
+   int x = 42;
+   std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
+   std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+};
+
+struct msgpack_event
+{
+   std::string name;
+   glz::msgpack::timestamp time;
+   bool operator==(const msgpack_event&) const = default;
+};
 
 template <>
 struct glz::meta<simple_record>

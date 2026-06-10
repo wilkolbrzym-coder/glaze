@@ -20,8 +20,7 @@ struct valid_struct {
 };
 
 struct unsupported_struct {
-private:
-   [[maybe_unused]] int x;
+   static constexpr bool glaze_reflect = false;
 };
 
 

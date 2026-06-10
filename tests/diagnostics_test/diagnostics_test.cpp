@@ -21,7 +21,7 @@ struct valid_struct {
 
 struct unsupported_struct {
 private:
-   int x;
+   [[maybe_unused]] int x;
 };
 
 

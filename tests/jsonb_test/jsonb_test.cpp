@@ -295,6 +295,91 @@ suite header_tests = [] {
    };
 };
 
+// Reading a FLOAT/FLOAT5 payload into an integer target casts the decoded double to the
+// integer type. NaN, +/-Inf, and finite-but-out-of-range values are not representable as
+// the integer and previously hit static_cast<T>(tmp) directly, which is undefined behavior
+// (UBSan: "nan is outside the range of representable values of type 'int'"). These must now
+// be rejected with an error, while genuinely integral floats still convert.
+suite float_to_int_coercion_tests = [] {
+   "NaN/Inf float payload into integer is rejected"_test = [] {
+      const std::array<double, 3> nonfinite{
+         std::numeric_limits<double>::quiet_NaN(),
+         std::numeric_limits<double>::infinity(),
+         -std::numeric_limits<double>::infinity(),
+      };
+      for (double v : nonfinite) {
+         std::string buf;
+         expect(not glz::write_jsonb(v, buf)); // emits a FLOAT5 sentinel payload
+         int out = 12345;
+         expect(bool(glz::read_jsonb(out, buf))); // must be an error, not UB
+      }
+   };
+
+   "out-of-range finite float into integer is rejected"_test = [] {
+      std::string buf;
+      expect(not glz::write_jsonb(1e300, buf));
+      {
+         int32_t out = 0;
+         expect(bool(glz::read_jsonb(out, buf)));
+      }
+      {
+         int64_t out = 0;
+         expect(bool(glz::read_jsonb(out, buf)));
+      }
+      {
+         uint64_t out = 0;
+         expect(bool(glz::read_jsonb(out, buf)));
+      }
+   };
+
+   "64-bit boundary float into integer is rejected without UB"_test = [] {
+      // static_cast<double>(INT64_MAX) rounds up to 2^63, so a naive `tmp <= max` guard would
+      // admit exactly 2^63 and then invoke UB. It must be rejected.
+      std::string buf;
+      expect(not glz::write_jsonb(9223372036854775808.0, buf)); // 2^63 == INT64_MAX + 1
+      int64_t out = 0;
+      expect(bool(glz::read_jsonb(out, buf)));
+
+      // The largest representable double strictly below 2^63 is in range and must convert.
+      buf.clear();
+      const double in_range = 9223372036854774784.0; // 2^63 - 1024
+      expect(not glz::write_jsonb(in_range, buf));
+      out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == static_cast<int64_t>(in_range));
+   };
+
+   "integral float into integer still converts"_test = [] {
+      std::string buf;
+      expect(not glz::write_jsonb(3.0, buf));
+      int out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == 3);
+
+      // Exact extremes round-trip through the float payload into the integer.
+      buf.clear();
+      expect(not glz::write_jsonb(2147483647.0, buf)); // INT32_MAX
+      int32_t out32 = 0;
+      expect(not glz::read_jsonb(out32, buf));
+      expect(out32 == 2147483647);
+
+      buf.clear();
+      expect(not glz::write_jsonb(-2147483648.0, buf)); // INT32_MIN
+      out32 = 0;
+      expect(not glz::read_jsonb(out32, buf));
+      expect(out32 == -2147483648);
+   };
+
+   "fractional float into integer truncates toward zero"_test = [] {
+      // Pre-existing, well-defined behavior (the cast truncates); the UB guard preserves it.
+      std::string buf;
+      expect(not glz::write_jsonb(3.9, buf));
+      int out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == 3);
+   };
+};
+
 suite container_tests = [] {
    "vector of int"_test = [] {
       std::vector<int> v = {1, 2, 3, 4, 5};
@@ -1045,6 +1130,33 @@ suite converter_tests = [] {
       expect(j.value() == "255");
    };
 
+   "jsonb_to_json INT5 hex sign-bit magnitudes"_test = [] {
+      auto convert = [](const std::string& payload) {
+         std::string buf;
+         buf.push_back(static_cast<char>((12u << 4) | 4u)); // INT5, u8_follows
+         buf.push_back(static_cast<char>(payload.size()));
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      // "-0x8000000000000000" is exactly int64 min; negating the signed magnitude was UB.
+      auto j = convert("-0x8000000000000000");
+      expect(j.has_value());
+      expect(j.value() == "-9223372036854775808");
+
+      // Positive magnitudes with the sign bit set used to wrap to a negative int.
+      j = convert("0x8000000000000000");
+      expect(j.has_value());
+      expect(j.value() == "9223372036854775808");
+
+      j = convert("0xFFFFFFFFFFFFFFFF");
+      expect(j.has_value());
+      expect(j.value() == "18446744073709551615");
+
+      // A negative magnitude past int64 min has no representation and is rejected.
+      expect(!convert("-0x8000000000000001").has_value());
+   };
+
    "jsonb_to_json maps NaN to null and infinities to 9e999"_test = [] {
       std::string buf;
       expect(not glz::write_jsonb(std::numeric_limits<double>::quiet_NaN(), buf));
@@ -1074,6 +1186,301 @@ suite converter_tests = [] {
       expect(j.has_value());
       // Expected: "a\uD83D\uDE00"
       expect(j.value() == std::string("\"") + payload + "\"");
+   };
+
+   "jsonb_to_json rejects a TEXT/TEXTJ payload that is not a JSON string body"_test = [] {
+      // TEXT and TEXTJ are emitted verbatim between quotes, so a payload that violates
+      // the spec would splice its own bytes into the output document.
+      auto scalar = [](uint8_t type_code, const std::string& payload) {
+         std::string buf;
+         if (payload.size() <= 11) {
+            buf.push_back(static_cast<char>((payload.size() << 4) | type_code));
+         }
+         else {
+            buf.push_back(static_cast<char>((12u << 4) | type_code)); // u8_follows
+            buf.push_back(static_cast<char>(payload.size()));
+         }
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      for (const uint8_t tc : {uint8_t(7), uint8_t(8)}) { // TEXT, TEXTJ
+         expect(!scalar(tc, "a\"b").has_value()); // unescaped quote ends the string early
+         expect(!scalar(tc, "a\\").has_value()); // dangling escape
+         expect(!scalar(tc, std::string("a\nb")).has_value()); // raw control character
+      }
+      expect(!scalar(8, "\\q").has_value()); // not a JSON escape
+      expect(!scalar(8, "\\u00g1").has_value()); // \u without four hex digits
+      expect(!scalar(8, "\\u00").has_value()); // \u truncated by the payload end
+      expect(!scalar(8, "\\uD83D").has_value()); // high surrogate with no low surrogate
+      expect(!scalar(8, "\\uDE00").has_value()); // low surrogate on its own
+      expect(!scalar(8, "\\uD83Dx").has_value()); // high surrogate not followed by \u
+      expect(scalar(8, "\\uD83D\\uDE00").value() == R"("\uD83D\uDE00")"); // a proper pair
+
+      // An unescaped quote in a TEXT value used to close the string and let the rest of
+      // the payload be read as further object members.
+      const std::string key = "a";
+      const std::string value = "x\",\"b\":\"y";
+      std::string members;
+      members.push_back(static_cast<char>((key.size() << 4) | 7u));
+      members += key;
+      members.push_back(static_cast<char>((value.size() << 4) | 7u));
+      members += value;
+      std::string blob;
+      blob.push_back(static_cast<char>((12u << 4) | 12u)); // object, size_nibble=u8_follows
+      blob.push_back(static_cast<char>(members.size()));
+      blob += members;
+      expect(!glz::jsonb_to_json(blob).has_value());
+
+      // The same bytes carried as TEXTRAW are escaped, not rejected.
+      expect(scalar(10, value).value() == R"("x\",\"b\":\"y")");
+   };
+
+   "jsonb_to_json rejects an INT/FLOAT payload that is not a JSON number"_test = [] {
+      // INT and FLOAT are copied out verbatim to preserve the blob's exact decimal
+      // representation, so the payload has to be checked against the JSON grammar first.
+      auto scalar = [](uint8_t type_code, const std::string& payload) {
+         std::string buf;
+         if (payload.size() <= 11) {
+            buf.push_back(static_cast<char>((payload.size() << 4) | type_code));
+         }
+         else {
+            buf.push_back(static_cast<char>((12u << 4) | type_code)); // u8_follows
+            buf.push_back(static_cast<char>(payload.size()));
+         }
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      for (const uint8_t tc : {uint8_t(3), uint8_t(5)}) { // INT, FLOAT
+         expect(scalar(tc, "0").value() == "0");
+         expect(scalar(tc, "-7").value() == "-7");
+         expect(scalar(tc, "1e10").value() == "1e10"); // exact bytes preserved
+         expect(!scalar(tc, "").has_value());
+         expect(!scalar(tc, "-").has_value());
+         expect(!scalar(tc, "1e").has_value());
+         expect(!scalar(tc, "1.").has_value());
+         expect(!scalar(tc, "01").has_value()); // leading zero belongs to INT5
+         expect(!scalar(tc, "0x10").has_value()); // hex belongs to INT5
+         expect(!scalar(tc, "+1").has_value()); // leading plus belongs to INT5
+         expect(!scalar(tc, "1,\"b\":2").has_value()); // would fabricate a sibling member
+      }
+
+      // FLOAT5 carries JSON5-only float syntax, which is normalized textually: a leading
+      // '+' is dropped and the digit the payload omits on one side of the '.' is supplied.
+      // These are the spellings SQLite's json() produces, byte for byte.
+      expect(scalar(6, ".5").value() == "0.5");
+      expect(scalar(6, "+1.5").value() == "1.5");
+      expect(scalar(6, "5.").value() == "5.0");
+      expect(scalar(6, "-.5").value() == "-0.5");
+      expect(scalar(6, "-5.").value() == "-5.0");
+      expect(scalar(6, "-0.").value() == "-0.0");
+      expect(scalar(6, "5.e3").value() == "5.0e3"); // the omitted digit is not always trailing
+      expect(scalar(6, ".5E+3").value() == "0.5E+3");
+      expect(scalar(6, "+.5").value() == "0.5");
+
+      // Normalizing textually rather than through a double keeps payloads that are already
+      // valid JSON exact, including ones binary64 cannot represent or even hold.
+      expect(scalar(6, "1e400").value() == "1e400");
+      expect(scalar(6, ".12345678901234567890123").value() == "0.12345678901234567890123");
+
+      expect(!scalar(6, "1,\"b\":2").has_value());
+      expect(!scalar(6, "abc").has_value());
+      expect(!scalar(6, "0x10").has_value()); // hex belongs to INT5
+      // A '.' with a digit on neither side is not JSON5 either, so it is rejected rather
+      // than normalized into a number it never denoted.
+      expect(!scalar(6, ".").has_value());
+      expect(!scalar(6, ".e5").has_value());
+      expect(!scalar(6, "1.2.3").has_value());
+      // fast_float would accept these spellings; none of them is JSON5.
+      expect(!scalar(6, "nan").has_value());
+      expect(!scalar(6, "inf").has_value());
+      expect(!scalar(6, "infinity").has_value());
+
+      // The JSON5 sentinels keep their existing renderings.
+      expect(scalar(6, "NaN").value() == "null");
+      expect(scalar(6, "Infinity").value() == "9e999");
+      expect(scalar(6, "+Infinity").value() == "9e999");
+      expect(scalar(6, "-Infinity").value() == "-9e999");
+   };
+
+   "jsonb_to_json rejects a non-text object key"_test = [] {
+      // A key slot holding anything but a text type would be emitted as a bare unquoted
+      // key, e.g. {{}:false}.
+      auto object_with_key = [](uint8_t key_type) {
+         std::string members;
+         members.push_back(static_cast<char>((0u << 4) | key_type)); // empty payload
+         members.push_back(static_cast<char>((1u << 4) | 1u)); // true, size 1
+         members.push_back('x');
+         std::string buf;
+         buf.push_back(static_cast<char>((12u << 4) | 12u)); // object, size_nibble=u8_follows
+         buf.push_back(static_cast<char>(members.size()));
+         buf += members;
+         return glz::jsonb_to_json(buf);
+      };
+
+      expect(!object_with_key(0).has_value()); // null
+      expect(!object_with_key(1).has_value()); // true
+      expect(!object_with_key(11).has_value()); // array
+      expect(!object_with_key(12).has_value()); // object
+      expect(object_with_key(7).value() == R"({"":true})"); // text keys still work
+   };
+
+   "jsonb_to_json escapes control characters in TEXTRAW and TEXT5"_test = [] {
+      // These two arms hand the payload to the JSON string writer, which leaves control
+      // characters unescaped by default for performance. A blob is untrusted input, so the
+      // converter forces that option on: a raw control byte would otherwise be copied into
+      // the output document and the result would not be JSON.
+      auto scalar = [](uint8_t type_code, const std::string& payload) {
+         std::string buf;
+         buf.push_back(static_cast<char>((payload.size() << 4) | type_code));
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      expect(scalar(10,
+                    "a\x1c"
+                    "b")
+                .value() == R"("a\u001Cb")"); // TEXTRAW
+      expect(scalar(9,
+                    "a\x1c"
+                    "b")
+                .value() == R"("a\u001Cb")"); // TEXT5
+      expect(scalar(10, std::string("a\0b", 3)).value() == R"("a\u0000b")");
+      // The escapes with short forms still use them.
+      expect(scalar(10, "a\nb").value() == R"("a\nb")");
+      expect(scalar(10, "a\tb").value() == R"("a\tb")");
+   };
+
+   "jsonb_to_json pins the writer options that would leak payload bytes"_test = [] {
+      // escape_control_characters, raw_string and unquoted are all inheritable, so a caller's
+      // opts would otherwise decide whether the converter's output is JSON at all.
+      struct raw_opts : glz::opts
+      {
+         bool raw_string = true;
+      };
+      struct unquoted_opts : glz::opts
+      {
+         bool unquoted = true;
+      };
+
+      const std::string payload = "a\"b\\c\nd"; // quote, backslash and a control byte
+      std::string buf;
+      buf.push_back(static_cast<char>((payload.size() << 4) | 10u)); // TEXTRAW
+      buf += payload;
+
+      const std::string expected = R"("a\"b\\c\nd")";
+      expect(glz::jsonb_to_json(buf).value() == expected);
+      expect(glz::jsonb_to_json<raw_opts{}>(buf).value() == expected);
+      expect(glz::jsonb_to_json<unquoted_opts{}>(buf).value() == expected);
+   };
+
+   "jsonb_to_json rejects unpaired surrogate escapes"_test = [] {
+      // RFC 8259 section 7's grammar allows a lone \uD800 and SQLite's json() passes one
+      // through, but Glaze's own reader rejects unpaired surrogates, so accepting one here
+      // would mean emitting a document that glz::read_json refuses. Staying consistent with
+      // the reader is the deliberate choice; this pins it so the divergence is not silent.
+      auto textj = [](const std::string& payload) {
+         std::string buf;
+         if (payload.size() <= 11) {
+            buf.push_back(static_cast<char>((payload.size() << 4) | 8u)); // TEXTJ
+         }
+         else {
+            buf.push_back(static_cast<char>((12u << 4) | 8u)); // u8_follows
+            buf.push_back(static_cast<char>(payload.size()));
+         }
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      expect(!textj("\\uD800").has_value()); // lone high surrogate
+      expect(!textj("\\uDC00").has_value()); // lone low surrogate
+      // A proper pair is kept as written: TEXTJ is copied out, not decoded and re-encoded.
+      expect(textj("\\uD83D\\uDE00").value() == R"("\uD83D\uDE00")");
+   };
+
+   "jsonb_to_json validates UTF-8 in every text arm"_test = [] {
+      // RFC 8259 section 8.1 requires JSON text to be UTF-8. A blob's text payload is someone
+      // else's bytes, so all four text types get checked rather than copied on faith.
+      auto scalar = [](uint8_t type_code, const std::string& payload) {
+         std::string buf;
+         buf.push_back(static_cast<char>((payload.size() << 4) | type_code));
+         buf += payload;
+         return glz::jsonb_to_json(buf);
+      };
+
+      const std::string lone_ff =
+         "a\xff"
+         "b"; // 0xFF never appears in well-formed UTF-8
+      const std::string truncated = "a\xc3"; // 2-byte sequence cut short by the payload end
+      const std::string valid =
+         "a\xc3\xa9"
+         "b"; // U+00E9 as a well-formed 2-byte sequence
+
+      for (const uint8_t tc : {uint8_t(7), uint8_t(8), uint8_t(9), uint8_t(10)}) {
+         expect(!scalar(tc, lone_ff).has_value());
+         expect(!scalar(tc, truncated).has_value());
+         expect(scalar(tc, valid).value() == "\"" + valid + "\"");
+      }
+
+      // Pure ASCII takes the accumulator fast path and skips the scan entirely.
+      expect(scalar(7, "plain").value() == R"("plain")");
+   };
+
+   "jsonb_to_json honors the validate_utf8 opt-out"_test = [] {
+      // Callers whose blobs come from a stage that already guarantees the encoding can turn
+      // the check off, exactly as on the JSON read path.
+      struct unchecked_opts : glz::opts
+      {
+         bool validate_utf8 = false;
+      };
+
+      std::string buf;
+      const std::string payload =
+         "a\xff"
+         "b";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 7u)); // TEXT
+      buf += payload;
+
+      expect(!glz::jsonb_to_json(buf).has_value());
+      expect(glz::jsonb_to_json<unchecked_opts{}>(buf).value() == "\"" + payload + "\"");
+   };
+
+   "jsonb TEXT5 \\xNN is a code point, not a byte"_test = [] {
+      // JSON5 "\xFF" denotes U+00FF, so it has to be UTF-8 encoded on decode. Pushing the raw
+      // byte would leave the string ill-formed. SQLite renders the same input as "ÿ".
+      std::string buf;
+      const std::string payload = "\\xFF";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 9u)); // TEXT5
+      buf += payload;
+
+      expect(glz::jsonb_to_json(buf).value() == "\"\xc3\xbf\"");
+
+      // The same decoder backs read_jsonb, so it gets the fix too.
+      std::string s{};
+      expect(!glz::read_jsonb(s, buf));
+      expect(s == "\xc3\xbf");
+
+      // Below U+0080 the encoding is still a single byte.
+      std::string ascii_buf;
+      const std::string ascii_payload = "\\x41";
+      ascii_buf.push_back(static_cast<char>((ascii_payload.size() << 4) | 9u));
+      ascii_buf += ascii_payload;
+      expect(glz::jsonb_to_json(ascii_buf).value() == R"("A")");
+   };
+
+   "jsonb runtime map keys needing escapes convert correctly"_test = [] {
+      // A map key is written by the string writer, so one containing a quote is stored as
+      // TEXTRAW rather than TEXT and survives the converter's key check. (Reflected glz::meta
+      // names are the caller's contract to keep valid and are written as TEXT unconditionally.)
+      std::map<std::string, int> m{{"q\"uote", 1}};
+      std::string blob{};
+      expect(!glz::write_jsonb(m, blob));
+      expect(glz::jsonb_to_json(blob).value() == R"({"q\"uote":1})");
+
+      std::map<std::string, int> back{};
+      expect(!glz::read_jsonb(back, blob));
+      expect(back == m);
    };
 
    "jsonb_to_json TEXT5 with \\x produces strict JSON"_test = [] {
@@ -2310,5 +2717,40 @@ suite exception_api_tests = [] {
    };
 };
 #endif
+
+// A variant whose `ids` array is shorter than its alternative list. That is a supported read-side
+// feature -- the first unlabeled alternative is the default for an unrecognized id -- so it is
+// reachable from a legal glz::meta. Writing the unlabeled alternative has no id to emit; indexing
+// ids_v there read past the end of a static array and emitted the adjacent static data as the tag
+// value (~4 GB read under ASan). The writer must report an error instead.
+namespace short_ids_guard
+{
+   struct labeled
+   {
+      int a{};
+   };
+   struct unlabeled
+   {
+      int b{};
+   };
+   using v_t = std::variant<labeled, unlabeled>;
+}
+
+template <>
+struct glz::meta<short_ids_guard::v_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 1> ids{"a"}; // 1 id, 2 alternatives
+};
+
+suite short_ids_write_guard = [] {
+   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
+      using namespace short_ids_guard;
+      std::string buffer{};
+      expect(bool(glz::write_jsonb(v_t{unlabeled{7}}, buffer)));
+      buffer.clear();
+      expect(not glz::write_jsonb(v_t{labeled{3}}, buffer)); // the labeled alternative is unaffected
+   };
+};
 
 int main() { return 0; }

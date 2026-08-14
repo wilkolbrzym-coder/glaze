@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
@@ -24,6 +25,13 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/variant.hpp"
+
+// Recursion depth: a fixarray or fixmap nesting level costs a single byte, so input alone can drive
+// the reader arbitrarily deep and overflow the stack. Every reader that reads an array or map length
+// and then descends into the entries takes one level with glz::depth_guard, and skip_value<MSGPACK>
+// does the same, which bounds the descent at max_recursive_depth_limit and reports
+// exceeded_max_recursive_depth instead of crashing. A reader that delegates to another reader (a
+// reflectable struct defers to the tuple reader) leaves the level to that reader.
 
 namespace glz::msgpack::detail
 {
@@ -129,7 +137,7 @@ namespace glz::msgpack::detail
       if (!read_str_length(ctx, tag, it, end, len)) {
          return false;
       }
-      if ((it + len) > end) [[unlikely]] {
+      if (static_cast<size_t>(end - it) < len) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -146,7 +154,7 @@ namespace glz::msgpack::detail
       if (!read_bin_length(ctx, tag, it, end, len)) {
          return false;
       }
-      if ((it + len) > end) [[unlikely]] {
+      if (static_cast<size_t>(end - it) < len) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -369,7 +377,12 @@ namespace glz
             return;
          }
 
-         for (size_t byte_i{}, i{}; byte_i < num_bytes && it < end; ++byte_i, ++it) {
+         if (static_cast<size_t>(end - it) < num_bytes) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
             uint8_t byte = static_cast<uint8_t>(*it);
             for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
                value[i] = (byte >> bit_i) & uint8_t(1);
@@ -514,6 +527,12 @@ namespace glz
       }
    };
 
+   // The four string specializations below are mutually exclusive, which matters beyond avoiding an
+   // ambiguity: leaving two of them viable for one type forces the compiler to partially order
+   // constrained partial specializations, and normalizing these concepts for that subsumption check
+   // is costly enough to exhaust clang 22's stack (see issue #2742, and the note in write.hpp).
+   // `string_t` stays disjoint from the other three via its `!string_view_t` and `!is_static_string`
+   // clauses, so keep any new string specialization here exclusive as well.
    template <string_t T>
    struct from<MSGPACK, T>
    {
@@ -560,6 +579,29 @@ namespace glz
       }
    };
 
+   // Fixed-size std::array<char, N>: read the string into the buffer, bounds-checked,
+   // zero-filling any unused tail so a shorter payload yields a deterministic buffer.
+   template <array_char_t T>
+   struct from<MSGPACK, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         std::string_view sv{};
+         if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
+            return;
+         }
+         if (sv.size() > value.size()) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         std::memcpy(value.data(), sv.data(), sv.size());
+         if (sv.size() < value.size()) {
+            std::memset(value.data() + sv.size(), 0, value.size() - sv.size());
+         }
+      }
+   };
+
    template <glaze_object_t T>
       requires(!custom_read<T>)
    struct from<MSGPACK, T>
@@ -580,6 +622,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          if constexpr (check_structs_as_arrays(Opts)) {
             size_t len{};
             if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
@@ -731,6 +778,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;
@@ -739,7 +791,13 @@ namespace glz
          if constexpr (!Opts.partial_read) {
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
-               value.reserve(len);
+               // Each map entry is a key plus a value, so it occupies at least two bytes on the
+               // wire and a valid len can never exceed the bytes remaining. Cap the reservation
+               // against the input size to avoid an allocation bomb from a tiny header (e.g. map32
+               // claiming 2^32-1 entries); the loop below still parses every entry and reports
+               // unexpected_end on truncated input.
+               const size_t remaining = size_t(end - it);
+               value.reserve(len < remaining ? len : remaining);
             }
 
             for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
@@ -778,6 +836,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -815,6 +878,9 @@ namespace glz
                   }
                   const size_t len = payload.size();
                   if constexpr (resizable<std::remove_cvref_t<Range>>) {
+                     if (exceeds_capacity(value, len, ctx)) [[unlikely]] {
+                        return;
+                     }
                      value.clear();
                      if constexpr (has_reserve<std::remove_cvref_t<Range>>) {
                         value.reserve(len);
@@ -840,15 +906,29 @@ namespace glz
             }
          }
 
+         // Placed after the binary-range branch above, which is flat and returns before this point.
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
 
          if constexpr (emplace_backable<std::decay_t<Value>>) {
+            if (exceeds_capacity(value, len, ctx)) [[unlikely]] {
+               return;
+            }
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
-               value.reserve(len);
+               // Each element occupies at least one byte on the wire, so a valid len can never
+               // exceed the bytes remaining. Cap the reservation against the input size to avoid an
+               // allocation bomb from a tiny header (e.g. array32 claiming 2^32-1 elements); the
+               // loop below still parses every element and reports unexpected_end on truncated input.
+               const size_t remaining = size_t(end - it);
+               value.reserve(len < remaining ? len : remaining);
             }
             for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                value.emplace_back();
@@ -887,6 +967,9 @@ namespace glz
             return;
          }
          value.type = type;
+         if (exceeds_capacity(value.data, len, ctx)) [[unlikely]] {
+            return;
+         }
          value.data.resize(len);
          if (len > 0) {
             std::memcpy(value.data.data(), it, len);
@@ -990,6 +1073,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1014,6 +1102,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1043,6 +1136,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1106,6 +1204,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1131,6 +1234,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
@@ -1156,6 +1264,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;
@@ -1184,6 +1297,11 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;

@@ -74,6 +74,32 @@ suite repe_to_jsonrpc_request_tests = [] {
       expect(jsonrpc_str.find("Invalid request") != std::string::npos) << jsonrpc_str;
       expect(jsonrpc_str.find("REPE body must be JSON format") != std::string::npos) << jsonrpc_str;
    };
+
+   "method_with_quote_cannot_inject_members"_test = [] {
+      // The method comes verbatim from the untrusted REPE query. A method that
+      // contains a quote must stay inside the JSON string rather than break out
+      // and add sibling members to the emitted request.
+      repe::message msg{};
+      msg.query = R"(add","id":1337,"params":["INJECTED"],"x":")";
+      msg.body = R"([1,2,3])";
+      msg.header.id = 42;
+      msg.header.body_format = repe::body_format::JSON;
+      msg.header.notify = false;
+
+      auto jsonrpc_str = repe::to_jsonrpc_request(msg);
+      expect(
+         jsonrpc_str ==
+         R"({"jsonrpc":"2.0","method":"add\",\"id\":1337,\"params\":[\"INJECTED\"],\"x\":\"","params":[1,2,3],"id":42})")
+         << jsonrpc_str;
+
+      auto parsed = glz::read_json<glz::generic>(jsonrpc_str);
+      expect(parsed.has_value()) << jsonrpc_str;
+      if (parsed) {
+         auto& obj = parsed->get_object();
+         expect(obj.at("method").get<std::string>() == msg.query) << jsonrpc_str;
+         expect(not obj.contains("x")) << jsonrpc_str;
+      }
+   };
 };
 
 suite repe_to_jsonrpc_response_tests = [] {
@@ -176,6 +202,63 @@ suite jsonrpc_to_repe_request_tests = [] {
       expect(msg.has_value());
       expect(msg->header.id == 999);
       expect(msg->header.notify == false);
+   };
+
+   "missing_version_is_rejected"_test = [] {
+      std::string jsonrpc = R"({"method":"test","params":[],"id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(!msg.has_value());
+      expect(msg.error() == "Missing 'jsonrpc' member") << msg.error();
+   };
+
+   "unsupported_version_is_rejected"_test = [] {
+      std::string jsonrpc = R"({"jsonrpc":"1.0","method":"test","params":[],"id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(!msg.has_value());
+      expect(msg.error() == R"(Unsupported 'jsonrpc' version: "1.0")") << msg.error();
+   };
+
+   "unsupported_version_is_escaped"_test = [] {
+      // The version is echoed into the error, and a bridge is liable to forward that error into a
+      // JSON-RPC response, so it must not be able to close the string it lands in.
+      //
+      // The version is read as a string_view, so it views the buffer's raw bytes rather than the
+      // decoded value: `a\"b`, four characters. Writing that back escapes both the backslash and
+      // the quote, which is why the expected form is doubled.
+      std::string jsonrpc = R"({"jsonrpc":"a\"b","method":"test","id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(!msg.has_value());
+      expect(msg.error() == R"(Unsupported 'jsonrpc' version: "a\\\"b")") << msg.error();
+      // The point of the escaping: no bare quote survives to terminate the string it is spliced into.
+      expect(msg.error().find(R"(\")") != std::string::npos) << msg.error();
+   };
+
+   "missing_method_is_rejected"_test = [] {
+      // Without this the absent method would name "", and the caller would be handed a well formed
+      // REPE message querying "/" that it cannot tell apart from one the client actually wrote.
+      std::string jsonrpc = R"({"jsonrpc":"2.0","params":[],"id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(!msg.has_value());
+      expect(msg.error() == "Missing 'method' member") << msg.error();
+   };
+
+   "bare_id_is_not_a_request"_test = [] {
+      auto msg = repe::from_jsonrpc_request(R"({"id":1})");
+      expect(!msg.has_value());
+      expect(msg.error() == "Missing 'jsonrpc' member") << msg.error();
+   };
+
+   "explicit_empty_method_is_converted"_test = [] {
+      // Absence is the error, not emptiness: an explicitly empty method still converts.
+      std::string jsonrpc = R"({"jsonrpc":"2.0","method":"","params":[],"id":1})";
+
+      auto msg = repe::from_jsonrpc_request(jsonrpc);
+      expect(msg.has_value());
+      expect(msg->query == "/") << msg->query;
    };
 };
 

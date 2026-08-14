@@ -28,6 +28,67 @@ namespace asio
 
 using namespace ut;
 
+suite http_date_tests = [] {
+   "formats_imf_fixdate"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{1994} / month{11} / day{6}} + hours{8} + minutes{49} + seconds{37};
+      expect(glz::detail::format_http_date(time) == "Sun, 06 Nov 1994 08:49:37 GMT");
+   };
+
+   "unix_epoch"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds epoch{seconds{0}};
+      expect(glz::detail::format_http_date(epoch) == "Thu, 01 Jan 1970 00:00:00 GMT");
+   };
+
+   "y2k"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{2000} / month{1} / day{1}};
+      expect(glz::detail::format_http_date(time) == "Sat, 01 Jan 2000 00:00:00 GMT");
+   };
+
+   "leap_day"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{2024} / month{2} / day{29}} + hours{12} + minutes{0} + seconds{0};
+      expect(glz::detail::format_http_date(time) == "Thu, 29 Feb 2024 12:00:00 GMT");
+   };
+
+   "end_of_year"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{2023} / month{12} / day{31}} + hours{23} + minutes{59} + seconds{59};
+      expect(glz::detail::format_http_date(time) == "Sun, 31 Dec 2023 23:59:59 GMT");
+   };
+
+   "single_digit_day"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{2025} / month{3} / day{5}} + hours{7} + minutes{30} + seconds{15};
+      expect(glz::detail::format_http_date(time) == "Wed, 05 Mar 2025 07:30:15 GMT");
+   };
+
+   "all_weekdays_covered"_test = [] {
+      // 2024-01-01 is a Monday, test Mon through Sun
+      using namespace std::chrono;
+      const std::array<std::string_view, 7> expected_days = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+      for (uint32_t i = 0; i < 7; ++i) {
+         const sys_seconds time = sys_days{year{2024} / month{1} / day{1 + i}};
+         const auto result = glz::detail::format_http_date(time);
+         expect(result.substr(0, 3) == expected_days[i]) << "day offset " << i;
+      }
+   };
+
+   "all_months_covered"_test = [] {
+      using namespace std::chrono;
+      const std::array<std::string_view, 12> expected_months = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+      for (uint32_t m = 1; m <= 12; ++m) {
+         const sys_seconds time = sys_days{year{2024} / month{m} / day{15}};
+         const auto result = glz::detail::format_http_date(time);
+         // Month name starts at position 8 in "Xxx, DD Mon YYYY HH:MM:SS GMT"
+         expect(result.substr(8, 3) == expected_months[m - 1]) << "month " << m;
+      }
+   };
+};
+
 // Test data structures
 struct AsyncResult
 {
@@ -674,8 +735,8 @@ suite response_building_tests = [] {
 
       expect(&chained_res == &res) << "Response methods should return reference for chaining\n";
       expect(res.status_code == 201) << "Status should be set correctly\n";
-      expect(res.response_headers.at("x-custom") == "value") << "Custom header should be set\n";
-      expect(res.response_headers.at("content-type") == "application/json") << "Content-Type should be set\n";
+      expect(res.response_headers.first_value("x-custom") == "value") << "Custom header should be set\n";
+      expect(res.response_headers.first_value("content-type") == "application/json") << "Content-Type should be set\n";
       expect(res.response_body == "test body") << "Body should be set correctly\n";
    };
 
@@ -686,7 +747,8 @@ suite response_building_tests = [] {
       res.json(data);
 
       expect(!res.response_body.empty()) << "JSON serialization should produce content\n";
-      expect(res.response_headers.at("content-type") == "application/json") << "Should set JSON content type\n";
+      expect(res.response_headers.first_value("content-type") == "application/json")
+         << "Should set JSON content type\n";
 
       // Verify serialization worked
       TestData deserialized;
@@ -821,7 +883,7 @@ suite response_middleware_tests = [] {
       auto response_hook = [&captured_content_type](const glz::request&, const glz::response& res) {
          auto it = res.response_headers.find("content-type");
          if (it != res.response_headers.end()) {
-            captured_content_type = it->second;
+            captured_content_type = it->value;
          }
       };
 
@@ -1092,7 +1154,7 @@ struct raw_http_client
    struct http_response
    {
       int status_code = 0;
-      std::unordered_map<std::string, std::string> headers;
+      glz::http_headers headers;
       std::string body;
    };
 
@@ -1157,11 +1219,10 @@ struct raw_http_client
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
 
-            // Convert name to lowercase for easier lookup
-            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
-            resp.headers[name] = value;
+            const bool is_content_length = glz::striequal(name, "content-length");
+            resp.headers.add(std::move(name), value);
 
-            if (name == "content-length") {
+            if (is_content_length) {
                content_length = std::stoul(value);
             }
          }
@@ -1205,20 +1266,8 @@ struct keepalive_test_server
       setup_routes();
 
       try {
-         for (uint16_t test_port = 19080; test_port < 19200; ++test_port) {
-            try {
-               server_.bind("127.0.0.1", test_port);
-               port_ = test_port;
-               break;
-            }
-            catch (...) {
-               continue;
-            }
-         }
-
-         if (port_ == 0) {
-            return false;
-         }
+         server_.bind("127.0.0.1", 0);
+         port_ = server_.port();
 
          running_ = true;
 
@@ -1273,11 +1322,17 @@ struct keepalive_test_server
       server_.get("/echo-connection", [](const glz::request& req, glz::response& res) {
          auto conn_it = req.headers.find("connection");
          if (conn_it != req.headers.end()) {
-            res.body("Connection: " + conn_it->second);
+            res.body("Connection: " + conn_it->value);
          }
          else {
             res.body("Connection: (none)");
          }
+      });
+
+      server_.get("/set-cookies", [](const glz::request&, glz::response& res) {
+         res.add_header("Set-Cookie", "session=abc; Path=/; HttpOnly")
+            .add_header("Set-Cookie", "theme=dark; Path=/")
+            .body("OK");
       });
    }
 };
@@ -1328,13 +1383,13 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "keep-alive") << "Connection should be keep-alive\n";
+            expect(conn_header->value == "keep-alive") << "Connection should be keep-alive\n";
          }
 
          auto ka_header = resp->headers.find("keep-alive");
          expect(ka_header != resp->headers.end()) << "Keep-Alive header should be present\n";
          if (ka_header != resp->headers.end()) {
-            expect(ka_header->second.find("timeout=30") != std::string::npos) << "Should contain timeout value\n";
+            expect(ka_header->value.find("timeout=30") != std::string::npos) << "Should contain timeout value\n";
          }
       }
 
@@ -1357,7 +1412,7 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "close") << "Connection should be close\n";
+            expect(conn_header->value == "close") << "Connection should be close\n";
          }
       }
 
@@ -1382,7 +1437,7 @@ suite keepalive_behavior_tests = [] {
          auto conn_header = resp->headers.find("connection");
          expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
          if (conn_header != resp->headers.end()) {
-            expect(conn_header->second == "close") << "Server should respect client's close request\n";
+            expect(conn_header->value == "close") << "Server should respect client's close request\n";
          }
       }
 
@@ -1428,7 +1483,7 @@ suite keepalive_behavior_tests = [] {
       if (resp1.has_value()) {
          auto conn_header = resp1->headers.find("connection");
          if (conn_header != resp1->headers.end()) {
-            expect(conn_header->second == "keep-alive") << "First request should keep alive\n";
+            expect(conn_header->value == "keep-alive") << "First request should keep alive\n";
          }
       }
 
@@ -1438,7 +1493,7 @@ suite keepalive_behavior_tests = [] {
       if (resp2.has_value()) {
          auto conn_header = resp2->headers.find("connection");
          if (conn_header != resp2->headers.end()) {
-            expect(conn_header->second == "close") << "Second request should close (at limit)\n";
+            expect(conn_header->value == "close") << "Second request should close (at limit)\n";
          }
       }
 
@@ -1461,8 +1516,40 @@ suite keepalive_behavior_tests = [] {
          auto ka_header = resp->headers.find("keep-alive");
          expect(ka_header != resp->headers.end()) << "Keep-Alive header should be present\n";
          if (ka_header != resp->headers.end()) {
-            expect(ka_header->second.find("timeout=45") != std::string::npos) << "Should contain timeout\n";
-            expect(ka_header->second.find("max=100") != std::string::npos) << "Should contain max\n";
+            expect(ka_header->value.find("timeout=45") != std::string::npos) << "Should contain timeout\n";
+            expect(ka_header->value.find("max=100") != std::string::npos) << "Should contain max\n";
+         }
+      }
+
+      client.close();
+      server.stop();
+   };
+};
+
+suite repeated_response_header_tests = [] {
+   "server_sends_repeated_set_cookie_fields"_test = [] {
+      keepalive_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      auto resp = client.send_request("GET", "/set-cookies", "127.0.0.1:" + std::to_string(server.port()));
+      expect(resp.has_value()) << "Should receive response\n";
+
+      if (resp.has_value()) {
+         expect(resp->status_code == 200) << "Status should be 200\n";
+         expect(resp->headers.count("Set-Cookie") == 2) << "Both Set-Cookie fields should reach the wire\n";
+
+         std::vector<std::string> cookies;
+         for (auto value : resp->headers.values("Set-Cookie")) {
+            cookies.emplace_back(value);
+         }
+
+         expect(cookies.size() == 2);
+         if (cookies.size() == 2) {
+            expect(cookies[0] == "session=abc; Path=/; HttpOnly") << "First cookie should keep its position\n";
+            expect(cookies[1] == "theme=dark; Path=/") << "Second cookie should keep its position\n";
          }
       }
 

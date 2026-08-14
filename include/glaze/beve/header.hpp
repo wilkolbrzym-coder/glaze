@@ -6,10 +6,14 @@
 #include <array>
 #include <bit>
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <type_traits>
 
+#include "glaze/concepts/container_concepts.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
 
@@ -24,6 +28,38 @@ namespace glz
       else [[likely]] {
          return false;
       }
+   }
+
+   // Bounds-checks a typed-array body of `count` elements of `element_size` bytes (element_size >= 1),
+   // optionally preceded by `padding` alignment bytes, against the bytes remaining in [it, end).
+   // Callers maintain it <= end (every advance is bounds-checked), so end - it is non-negative.
+   // Returns true and sets unexpected_end when the body does not fit.
+   //
+   // On 64-bit, int_from_compressed caps wire counts at 2^48 and element_size <= 128, so
+   // padding + count * element_size <= ~2^55 cannot overflow size_t: the fit is a single multiply
+   // and compare against end - it (which, unlike it + offset, is never out-of-bounds pointer
+   // arithmetic), so the 64-bit path pays nothing for the 32-bit safety. On 32-bit that product
+   // overflows size_t -- wrapping small so an oversized array would slip past the check -- so there
+   // the fit is tested as count > (remaining - padding) / element_size, a division that cannot
+   // overflow.
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool typed_array_out_of_bounds(is_context auto& ctx, auto&& it, auto&& end,
+                                                                  size_t count, size_t element_size,
+                                                                  size_t padding = 0) noexcept
+   {
+      const uint64_t available = uint64_t(end - it);
+      if constexpr (sizeof(size_t) > sizeof(uint32_t)) {
+         if (available < padding + count * element_size) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return true;
+         }
+      }
+      else {
+         if (available < padding || count > (available - padding) / element_size) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return true;
+         }
+      }
+      return false;
    }
 
    // Byteswaps a numeric value in-place for little-endian wire format compatibility.
@@ -104,6 +140,94 @@ namespace glz
    constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
 
    inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
+
+   // Types that BEVE encodes as elements of a numeric typed array.
+   //
+   // std::byte is serialized identically to a uint8_t (an unsigned 8-bit value): the
+   // numeric formulas below produce byte_count == 0, an unsigned type, and a u8 typed-array
+   // header for it, exactly matching uint8_t. It is the only byte_like type that is not
+   // already num_t (uint8_t and unsigned char are integral), so the numeric typed-array
+   // code paths must opt it in explicitly. This keeps an array of std::byte compact (a
+   // typed u8 array) and consistent with how a scalar std::byte is encoded (a u8 number),
+   // instead of an inflated generic array that stores a type header per element.
+   template <class T>
+   concept beve_num_t = num_t<T> || std::same_as<std::remove_cvref_t<T>, std::byte>;
+
+   // A std::chrono::duration / steady-or-high-res time point is bit-compatible with its
+   // `rep` (a single arithmetic member, no padding), so an array of them can be packed into
+   // a numeric typed array of the rep -- byte-identical to an array of the rep itself, and
+   // far more compact than a generic array (which writes a type tag per element). These
+   // helpers map an element type to that wire `rep` type and convert between the two.
+   //
+   // The typed-array fast paths take that bit-compatibility literally: both sides bulk-memcpy
+   // between the element storage and the wire bytes, and the zero-copy span read aliases the
+   // buffer as an array of elements. Every implementation stores a duration as exactly one
+   // `rep` member, but the standard specifies that member as exposition-only, so the property
+   // is asserted rather than assumed -- a violation would silently emit corrupt bytes instead
+   // of failing to compile.
+   template <class T, class Rep>
+   concept beve_rep_layout_compatible = sizeof(T) == sizeof(Rep) && std::is_trivially_copyable_v<T>;
+
+   template <class V>
+   struct beve_num_array_value
+   {
+      using type = std::remove_cvref_t<V>;
+   };
+   template <is_duration V>
+   struct beve_num_array_value<V>
+   {
+      using type = typename std::remove_cvref_t<V>::rep;
+      static_assert(beve_rep_layout_compatible<std::remove_cvref_t<V>, type>,
+                    "BEVE typed-array packing requires std::chrono::duration to be a trivially copyable "
+                    "wrapper the size of its rep");
+   };
+   template <is_count_time_point V>
+   struct beve_num_array_value<V>
+   {
+      using type = typename std::remove_cvref_t<V>::rep;
+      static_assert(beve_rep_layout_compatible<std::remove_cvref_t<V>, type>,
+                    "BEVE typed-array packing requires std::chrono::time_point to be a trivially copyable "
+                    "wrapper the size of its rep");
+   };
+   template <class V>
+   using beve_num_array_value_t = typename beve_num_array_value<V>::type;
+
+   // True when V lays out as a numeric typed-array element: a number/byte, or a chrono type
+   // that reduces to one.
+   template <class V>
+   concept beve_num_array_t = beve_num_t<beve_num_array_value_t<V>>;
+
+   // Extract the wire `rep` value from an element (identity for plain numbers).
+   template <class V>
+   GLZ_ALWAYS_INLINE constexpr auto beve_num_array_extract(const V& x) noexcept
+   {
+      using D = std::remove_cvref_t<V>;
+      if constexpr (is_duration<D>) {
+         return x.count();
+      }
+      else if constexpr (is_count_time_point<D>) {
+         return x.time_since_epoch().count();
+      }
+      else {
+         return x;
+      }
+   }
+
+   // Construct an element from a wire `rep` value (identity for plain numbers).
+   template <class V>
+   GLZ_ALWAYS_INLINE constexpr std::remove_cvref_t<V> beve_num_array_construct(beve_num_array_value_t<V> nv) noexcept
+   {
+      using D = std::remove_cvref_t<V>;
+      if constexpr (is_duration<D>) {
+         return D(nv);
+      }
+      else if constexpr (is_count_time_point<D>) {
+         return D(typename D::duration(nv));
+      }
+      else {
+         return nv;
+      }
+   }
 
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
    {

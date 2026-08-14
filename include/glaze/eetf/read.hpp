@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glaze/core/chrono.hpp>
+#include <glaze/core/context.hpp>
 #include <glaze/core/read.hpp>
 #include <glaze/core/reflect.hpp>
 
@@ -47,10 +49,7 @@ namespace glz
                   return false;
                }
 
-               if ((it + header.second) > end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return false;
-               }
+               if (check_invalid_offset(ctx, it, end, header.second)) return false;
 
                std::advance(it, header.second);
             }
@@ -142,12 +141,22 @@ namespace glz
       }
    };
 
+   // Recursion depth: a nested EETF term costs a handful of bytes, so input alone can drive the
+   // readers arbitrarily deep and overflow the stack. Every container reader below takes one level
+   // with glz::depth_guard, bounding the descent at max_recursive_depth_limit. Note that skipping is
+   // delegated to ei_skip_term, whose own recursion happens inside erl_interface and cannot be
+   // bounded from here.
    template <readable_array_t T>
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          decode_sequence<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
                                std::forward<It1>(end));
       }
@@ -244,15 +253,17 @@ namespace glz
             return;
          }
 
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
+            return;
+         }
+
          auto [fields_count, index] = decode_tuple_header(ctx, it);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
-         if (it + index > end) {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
+         if (check_invalid_offset(ctx, it, end, index)) return;
 
          it += index;
 
@@ -285,6 +296,11 @@ namespace glz
          }
 
          if (invalid_end(ctx, it, end)) {
+            return;
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 
@@ -380,6 +396,11 @@ namespace glz
          using Key = typename T::key_type;
 
          if (invalid_end(ctx, it, end)) [[unlikely]] {
+            return;
+         }
+
+         depth_guard guard{ctx};
+         if (!guard) [[unlikely]] {
             return;
          }
 

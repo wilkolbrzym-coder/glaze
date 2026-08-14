@@ -66,6 +66,25 @@ namespace glz
          return buf;
       }
 
+      // Reported when query_length + body_length overflow the 64-bit message length,
+      // so no meaningful "expected" total can be formed (see repe::checked_message_length).
+      inline std::string_view build_length_overflow_error(uint64_t query_length, uint64_t body_length)
+      {
+         auto& buf = error_buffer();
+         buf = "REPE length overflow: query_length ";
+         auto n = buf.size();
+         buf.resize(n + 24);
+         auto* end = glz::to_chars(buf.data() + n, query_length);
+         buf.resize(size_t(end - buf.data()));
+         buf.append(" + body_length ");
+         n = buf.size();
+         buf.resize(n + 24);
+         end = glz::to_chars(buf.data() + n, body_length);
+         buf.resize(size_t(end - buf.data()));
+         buf.append(" exceed uint64_t");
+         return buf;
+      }
+
       inline std::string_view build_magic_error(uint16_t spec)
       {
          auto& buf = error_buffer();
@@ -93,6 +112,30 @@ namespace glz
 
 namespace glz
 {
+   // Every buffer the registry parses comes from a caller: a wire span, an FFI pointer, or a view
+   // into the caller's string. None of them can be assumed to carry the '\0' sentinel a
+   // null_terminated read relies on when it drops its end checks, so the registry reads with that
+   // option off no matter what the user asked for. The bound belongs here, where the buffer shape
+   // is known, rather than in every caller that hands the registry bytes it does not own.
+   template <auto Opts>
+   inline constexpr auto registry_read_opts = [] {
+      auto o = Opts;
+      if constexpr (requires { o.null_terminated = false; }) {
+         o.null_terminated = false;
+      }
+      return o;
+   }();
+
+   // The syntax check that decides between a parse error and an invalid request has to run under
+   // the same rules as the read that failed, so it extends the registry's options rather than
+   // falling back to the defaults glz::validate_json is fixed to.
+   template <auto Opts>
+   struct registry_validate_opts : std::decay_t<decltype(Opts)>
+   {
+      bool validate_skipped = true;
+      bool validate_trailing_whitespace = true;
+   };
+
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <auto Opts = opts{}, uint32_t Proto = REPE>
    struct registry
@@ -100,9 +143,27 @@ namespace glz
       // procedure for REPE protocol (zero-copy state_view)
       using procedure = std::function<void(repe::state_view&)>; // RPC method
 
+      static constexpr auto read_opts = registry_read_opts<Opts>;
+      static_assert(!check_null_terminated(read_opts),
+                    "The registry parses buffers it does not own and cannot assume a '\\0' follows "
+                    "them, so its options must allow null_terminated to be turned off. An options "
+                    "struct that fixes it (static constexpr bool null_terminated = true) would "
+                    "leave the registry reading past the caller's buffer.");
+
       static constexpr auto protocol = Proto;
 
       typename protocol_storage<Proto>::type endpoints{};
+
+      // A batch answers every element it holds, so the response grows with the product of the batch
+      // length and the size of what each element reads -- a bounded request can ask for an unbounded
+      // answer. Nothing in the request caps that, so the server has to. Raise it for a service whose
+      // legitimate batches are larger than this, or lower it to keep a hostile one cheap; a batch
+      // that would exceed it is abandoned rather than truncated, so a client never mistakes a
+      // partial answer for a complete one. Single requests are not subject to it, because one
+      // request yields one response -- note that this bounds a response by the size of the
+      // registered data, which a caller can itself grow where writable members are registered, and
+      // not by the size of the request.
+      size_t max_batch_response_size{rpc::default_max_batch_response_size};
 
       void clear() { endpoints.clear(); }
 
@@ -124,7 +185,7 @@ namespace glz
             }
          }();
 
-         using impl = registry_impl<Opts, Proto>;
+         using impl = registry_impl<read_opts, Proto>;
 
          for_each<N>([&]<auto I>() {
             decltype(auto) func = [&]() -> decltype(auto) {
@@ -243,7 +304,7 @@ namespace glz
          requires(glaze_object_t<T> || reflectable<T>)
       void on(T& value)
       {
-         using impl = registry_impl<Opts, Proto>;
+         using impl = registry_impl<read_opts, Proto>;
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
             impl::register_endpoint(root, value, *this);
@@ -257,7 +318,7 @@ namespace glz
          requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
       void on(glz::merge<Ts...>& merged)
       {
-         using impl = registry_impl<Opts, Proto>;
+         using impl = registry_impl<read_opts, Proto>;
 
          // Register root endpoint with the merged object - this handles ""
          impl::register_merge_endpoint(root, merged, *this);
@@ -296,8 +357,9 @@ namespace glz
          }
 
          // Length validation - REPE spec requires length = 48 + query_length + body_length
-         const uint64_t expected_length = sizeof(repe::header) + in.header.query_length + in.header.body_length;
-         if (in.header.length != expected_length) {
+         // (overflow-safe: query_length/body_length are attacker-controlled 64-bit fields)
+         uint64_t expected_length{};
+         if (!repe::checked_message_length(in.header, expected_length) || in.header.length != expected_length) {
             out.header.ec = error_code::invalid_header;
             out.header.id = in.header.id; // Echo back the original ID
             write_error(detail::build_length_error(expected_length, in.header.length));
@@ -374,9 +436,16 @@ namespace glz
                      resp.set_error(result.ec, detail::build_magic_error(hdr.spec));
                   }
                   else {
-                     // Length mismatch
-                     const uint64_t expected = sizeof(repe::header) + hdr.query_length + hdr.body_length;
-                     resp.set_error(result.ec, detail::build_length_error(expected, hdr.length));
+                     // Length mismatch, or query/body lengths that overflow the total
+                     // (overflow-safe: query_length/body_length are attacker-controlled).
+                     uint64_t expected{};
+                     if (repe::checked_message_length(hdr, expected)) {
+                        resp.set_error(result.ec, detail::build_length_error(expected, hdr.length));
+                     }
+                     else {
+                        resp.set_error(result.ec,
+                                       detail::build_length_overflow_error(hdr.query_length, hdr.body_length));
+                     }
                   }
                }
                else {
@@ -402,8 +471,15 @@ namespace glz
             return;
          }
 
-         // If request has an error, just echo it back
+         // If request has an error, just echo it back -- unless it is a notification, whose sender
+         // has said it will not read a reply, so answering one desynchronizes the connection: the
+         // client takes the echo as the answer to its next call. The header parsed and validated
+         // cleanly to reach here, so its notify bit can be trusted, which is what separates this
+         // from the malformed-header paths above.
          if (bool(req.hdr.ec)) {
+            if (req.is_notify()) {
+               return; // Silent ignore for a notification that carries an error (buffer stays empty)
+            }
             resp.reset(req);
             resp.set_error(req.hdr.ec);
             return;
@@ -441,16 +517,15 @@ namespace glz
 
          if (it != json_request.end() && *it == '[') {
             // Batch request
-            auto batch_requests = glz::read_json<std::vector<glz::raw_json_view>>(json_request);
-            if (!batch_requests) {
+            std::vector<glz::raw_json_view> batch_requests{};
+            if (const auto ec = glz::read<read_opts>(batch_requests, json_request); ec) {
                return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
-                      write_json(format_error(batch_requests.error(), json_request)).value_or("null") +
-                      R"(},"id":null})";
+                      write_json(format_error(ec, json_request)).value_or("null") + R"(},"id":null})";
             }
-            if (batch_requests->empty()) {
+            if (batch_requests.empty()) {
                return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":"Empty batch"},"id":null})";
             }
-            return process_batch(*batch_requests);
+            return process_batch(batch_requests);
          }
 
          // Single request
@@ -463,50 +538,65 @@ namespace glz
       std::optional<std::string> process_single_request(std::string_view json_request)
          requires(Proto == JSONRPC)
       {
-         auto request = glz::read_json<rpc::generic_request_t>(json_request);
-         if (!request.has_value()) {
+         rpc::request_envelope_t request{};
+         if (const auto read_ec = glz::read<read_opts>(request, json_request); read_ec) {
             // Check if it's a JSON syntax error vs schema error
-            if (glz::validate_json(json_request)) {
+            static constexpr registry_validate_opts<read_opts> validate_opts{{read_opts}};
+            glz::skip skip_value{};
+            context validate_ctx{};
+            if (glz::read<validate_opts>(skip_value, json_request, validate_ctx)) {
                // JSON is syntactically invalid - return Parse error (-32700)
                return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
-                      write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":null})";
+                      write_json(format_error(read_ec, json_request)).value_or("null") + R"(},"id":null})";
             }
             // Valid JSON but invalid request structure - return Invalid Request (-32600)
-            auto id = glz::get_as_json<rpc::id_t, "/id">(json_request);
+            auto id = glz::get_as_json<rpc::id_t, "/id", read_opts>(json_request);
             std::string id_json = id.has_value() ? glz::write_json(id.value()).value_or("null") : "null";
             return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
-                   write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":)" + id_json +
-                   "}";
+                   write_json(format_error(read_ec, json_request)).value_or("null") + R"(},"id":)" + id_json + "}";
          }
 
-         auto& req = request.value();
+         auto& req = request;
 
-         // Validate version
-         if (req.version != rpc::supported_version) {
+         const auto invalid_request = [&req](const std::string& data) {
             std::string id_json = glz::write_json(req.id).value_or("null");
             return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
-                   write_json("Invalid version: " + std::string(req.version)).value_or("null") + R"(},"id":)" +
-                   id_json + "}";
+                   write_json(data).value_or("null") + R"(},"id":)" + id_json + "}";
+         };
+
+         // `jsonrpc` and `method` are both required members, and an absent one cannot be allowed to
+         // fall through to a default: an absent version would pass for 2.0, and an absent method
+         // names "", which is the root endpoint -- so `{"id":1}` would answer with the whole
+         // registered object rather than being rejected.
+         if (!req.version) {
+            return invalid_request("Missing 'jsonrpc' member");
          }
+         if (*req.version != rpc::supported_version) {
+            return invalid_request("Invalid version: " + std::string(*req.version));
+         }
+         if (!req.method) {
+            return invalid_request("Missing 'method' member");
+         }
+         const std::string_view method_name = *req.method;
 
          // Check if this is a notification (id is null)
          bool is_notification = std::holds_alternative<glz::generic::null_t>(req.id);
 
          // Look up the endpoint - try direct lookup first (handles methods that already start with /)
-         auto it = endpoints.find(req.method);
+         auto it = endpoints.find(method_name);
          if (it == endpoints.end()) {
-            if (!req.method.empty()) {
+            if (!method_name.empty()) {
                // Try with leading slash using stack buffer for common case
                char buf[256];
-               if (req.method.size() < sizeof(buf) - 1) {
+               if (method_name.size() < sizeof(buf) - 1) {
                   buf[0] = '/';
-                  std::memcpy(buf + 1, req.method.data(), req.method.size());
-                  it = endpoints.find(std::string_view{buf, req.method.size() + 1});
+                  std::memcpy(buf + 1, method_name.data(), method_name.size());
+                  it = endpoints.find(std::string_view{buf, method_name.size() + 1});
                }
                else {
                   // Fallback for very long method names
                   std::string method_path = "/";
-                  method_path += req.method;
+                  method_path += method_name;
                   it = endpoints.find(method_path);
                }
             }
@@ -520,7 +610,7 @@ namespace glz
                }
                std::string id_json = glz::write_json(req.id).value_or("null");
                return R"({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":)" +
-                      write_json(req.method).value_or("null") + R"(},"id":)" + id_json + "}";
+                      write_json(method_name).value_or("null") + R"(},"id":)" + id_json + "}";
             }
          }
 
@@ -560,6 +650,16 @@ namespace glz
             auto response = process_single_request(req.str);
             if (response.has_value()) {
                total_size += response->size() + 1; // +1 for comma
+               // Checked as the batch is walked rather than after it, so the elements past the
+               // limit are never run and what they would have answered with is never built. The
+               // element that trips it has already been built, so the peak is the limit plus one
+               // response rather than the limit exactly. The elements already run keep their
+               // effects -- a JSON RPC batch is not a transaction -- but the caller is told the
+               // batch failed rather than handed a partial array it cannot distinguish from a
+               // complete one.
+               if (total_size > max_batch_response_size) {
+                  return R"({"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error","data":"Batch response exceeds max_batch_response_size"},"id":null})";
+               }
                responses.push_back(std::move(*response));
             }
          }

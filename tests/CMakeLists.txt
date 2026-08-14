@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v1.1.0
+  GIT_TAG v1.2.1
   GIT_SHALLOW TRUE
 )
 
@@ -34,6 +34,8 @@ option(glaze_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSan
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
 target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glaze::asio)
+# scratch_directory.hpp, included by the suites that write files to isolate themselves
+target_include_directories(glz_test_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(MSVC)
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj)
@@ -58,6 +60,7 @@ endif()
 add_library(glz_test_exceptions INTERFACE)
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_23)
 target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze glaze::asio)
+target_include_directories(glz_test_exceptions INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 if(MSVC)
     target_compile_options(glz_test_exceptions INTERFACE /GR- /bigobj)
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
@@ -78,9 +81,11 @@ add_subdirectory(ordered_small_map_test)
 add_subdirectory(ordered_map_test)
 add_subdirectory(csv_test)
 add_subdirectory(eigen_test)
+add_subdirectory(embedded_null_test)
 add_subdirectory(example_json)
 add_subdirectory(exceptions_test)
 add_subdirectory(float_write_test)
+add_subdirectory(size_optimization_test)
 add_subdirectory(inplace_vector)
 option(glaze_BUILD_PERFORMANCE_TESTS "Build performance tests" ON)
 if(glaze_BUILD_PERFORMANCE_TESTS)
@@ -107,6 +112,7 @@ add_subdirectory(yaml_conformance)
 add_subdirectory(msgpack_test)
 add_subdirectory(ostream_buffer_test)
 add_subdirectory(istream_buffer_test)
+add_subdirectory(streaming_view_rejection)
 
 # simple_float_test runs exhaustive tests over all 2^32 float values
 # Disabled by default - run via dedicated CI workflow in Release mode

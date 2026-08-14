@@ -3,11 +3,13 @@
 
 #include "glaze/msgpack.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <chrono>
 #include <compare>
 #include <cstddef>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <list>
@@ -28,6 +30,66 @@ using namespace ut;
 
 namespace
 {
+   // Minimal fixed-capacity string, enough to satisfy glz::static_string_t
+   struct fixed_string_t
+   {
+      static constexpr auto glaze_static_string = true;
+
+      using value_type = char;
+      using size_type = size_t;
+
+      operator std::string_view() const { return {buffer, length}; }
+
+      const char* data() const { return buffer; }
+      size_t size() const { return length; }
+      static constexpr size_t max_size() { return sizeof(buffer); }
+
+      void assign(const char* v, size_t n)
+      {
+         length = (std::min)(max_size(), n);
+         std::memcpy(buffer, v, length);
+      }
+
+      void resize(size_t n) { length = (std::min)(max_size(), n); }
+
+      size_t length{};
+      char buffer[8]{};
+   };
+
+   static_assert(glz::static_string_t<fixed_string_t>);
+   static_assert(not glz::string_t<fixed_string_t>);
+
+   // A legacy-style buffer string that reaches str_t through `operator const char*` rather than a
+   // string_view conversion. Its bounds are authoritative; the conversion stops at the first null.
+   struct legacy_string_t
+   {
+      using value_type = char;
+      using size_type = size_t;
+
+      operator const char*() const { return buffer; }
+
+      const char* data() const { return buffer; }
+      size_t size() const { return length; }
+
+      void assign(const char* v, size_t n)
+      {
+         length = (std::min)(sizeof(buffer), n);
+         std::memcpy(buffer, v, length);
+      }
+
+      void resize(size_t n) { length = (std::min)(sizeof(buffer), n); }
+
+      bool operator==(const legacy_string_t& other) const
+      {
+         return length == other.length && std::memcmp(buffer, other.buffer, length) == 0;
+      }
+
+      size_t length{};
+      char buffer[16]{};
+   };
+
+   static_assert(glz::string_t<legacy_string_t>);
+
    template <class T>
    void expect_roundtrip_equal(const T& original)
    {
@@ -407,6 +469,269 @@ struct glz::to<Format, mp_fc_variant>
    }
 };
 
+// Regression coverage for https://github.com/stephenberry/glaze/issues/2647
+// Fixed std::array<char, N> must round trip (previously its read was undefined).
+struct mp_char_array_rec
+{
+   std::array<char, 8> name{};
+   int id{};
+};
+
+suite msgpack_char_array_tests = [] {
+   "msgpack std::array<char, N> round trips"_test = [] {
+      std::array<char, 16> src{'h', 'e', 'l', 'l', 'o'};
+      std::string buffer{};
+      expect(not glz::write_msgpack(src, buffer));
+      std::array<char, 16> dst{};
+      expect(not glz::read_msgpack(dst, buffer));
+      expect(dst == src);
+   };
+
+   "msgpack std::array<char, N> zero-fills and rejects oversize"_test = [] {
+      std::string short_src = "abc";
+      std::string buffer{};
+      expect(not glz::write_msgpack(short_src, buffer));
+      std::array<char, 8> dst{'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z'};
+      expect(not glz::read_msgpack(dst, buffer));
+      expect(std::string_view(dst.data(), 3) == "abc");
+      for (size_t i = 3; i < dst.size(); ++i) {
+         expect(dst[i] == '\0');
+      }
+
+      std::string big_src = "0123456789";
+      std::string big_buffer{};
+      expect(not glz::write_msgpack(big_src, big_buffer));
+      std::array<char, 4> small{};
+      expect(bool(glz::read_msgpack(small, big_buffer)));
+   };
+
+   "msgpack std::array<char, N> as a struct member"_test = [] {
+      mp_char_array_rec src{};
+      src.name = {'h', 'i'};
+      src.id = 7;
+      std::string buffer{};
+      expect(not glz::write_msgpack(src, buffer));
+      mp_char_array_rec dst{};
+      expect(not glz::read_msgpack(dst, buffer));
+      expect(dst.name == src.name);
+      expect(dst.id == src.id);
+   };
+};
+
+// Records the largest single allocation request so a test can assert that an array/map reserve was
+// bounded by the input rather than by an attacker-controlled wire count.
+inline size_t g_largest_alloc_count = 0;
+
+template <class T>
+struct recording_allocator
+{
+   using value_type = T;
+
+   recording_allocator() = default;
+   template <class U>
+   recording_allocator(const recording_allocator<U>&) noexcept
+   {}
+
+   T* allocate(std::size_t n)
+   {
+      if (n > g_largest_alloc_count) {
+         g_largest_alloc_count = n;
+      }
+      return std::allocator<T>{}.allocate(n);
+   }
+   void deallocate(T* p, std::size_t n) noexcept { std::allocator<T>{}.deallocate(p, n); }
+
+   template <class U>
+   bool operator==(const recording_allocator<U>&) const noexcept
+   {
+      return true;
+   }
+   template <class U>
+   bool operator!=(const recording_allocator<U>&) const noexcept
+   {
+      return false;
+   }
+};
+
+// Regression guard for the array/map reserve amplification fix. An array32/map32 header carries an
+// element count read straight off the wire; before the fix the reader reserved that many slots
+// unconditionally, so a tiny payload claiming far more elements than the input could possibly contain
+// drove an allocation sized by the wire count rather than the input. The reservation is now capped at
+// the bytes remaining, so the reader must never request an allocation larger than the input and must
+// return unexpected_end on the truncated body.
+//
+// The behavioral assertion (unexpected_end) cannot by itself tell the fix from the bug: both the
+// capped and the un-capped reader report unexpected_end on a truncated body. The recording allocator
+// is what pins the bug, by observing the size the reader actually asked for.
+//
+// The claimed count is a large-but-safely-allocatable value rather than the maximal 2^32-1. It is
+// still vastly larger than any of these few-byte payloads could justify (every element needs at least
+// one wire byte), so on un-patched code the recorded request blows past the input-size bound and the
+// assertion fails. But it is only a few MB, so the un-patched path fails by a clean assertion on every
+// platform instead of std::terminate-ing: a 2^32-1 reserve of vector<double> is a ~34 GB request that
+// throws bad_alloc out of the noexcept op on any config where it cannot be served lazily (strict
+// overcommit, cgroup-limited, 32-bit, or ASAN builds), aborting the whole test binary rather than
+// reporting a failure.
+inline constexpr size_t amplified_count = 1'000'000; // wire count, far beyond what any payload below backs
+suite msgpack_reserve_amplification_tests = [] {
+   // array32 tag (0xdd) followed by a big-endian uint32 count of 1,000,000 (0x000F4240), no element data.
+   const std::string array32_bomb{char(0xdd), char(0x00), char(0x0f), char(0x42), char(0x40)};
+   // map32 tag (0xdf) followed by a big-endian uint32 count of 1,000,000 (0x000F4240), no entry data.
+   const std::string map32_bomb{char(0xdf), char(0x00), char(0x0f), char(0x42), char(0x40)};
+
+   "msgpack array32 reserve is bounded by the input, not the wire count"_test = [&] {
+      g_largest_alloc_count = 0;
+      std::vector<double, recording_allocator<double>> v{};
+      const auto ec = glz::read_msgpack(v, array32_bomb);
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end, got: " << glz::format_error(ec, array32_bomb);
+      // No element data follows the header, so remaining == 0 and the cap holds the reservation to
+      // the buffer size. Without the cap this would be amplified_count.
+      expect(g_largest_alloc_count <= array32_bomb.size())
+         << "reserve requested " << g_largest_alloc_count << " elements for a " << array32_bomb.size()
+         << "-byte payload (wire count was " << amplified_count << ")";
+   };
+
+   "msgpack array32 amplification guard is element-type agnostic"_test = [&] {
+      std::vector<int> v{};
+      const auto ec = glz::read_msgpack(v, array32_bomb);
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end, got: " << glz::format_error(ec, array32_bomb);
+   };
+
+   "msgpack map32 reserve is bounded by the input, not the wire count"_test = [&] {
+      g_largest_alloc_count = 0;
+      // unordered_map exposes reserve() (std::map does not), so this exercises the capped map path.
+      std::unordered_map<std::string, double, std::hash<std::string>, std::equal_to<std::string>,
+                         recording_allocator<std::pair<const std::string, double>>>
+         m{};
+      const auto ec = glz::read_msgpack(m, map32_bomb);
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end, got: " << glz::format_error(ec, map32_bomb);
+      // The reservation must stay a small constant tied to the input, not the amplified_count wire
+      // count. Unlike the vector case, unordered_map implementations pre-allocate a baseline bucket
+      // array (e.g. the MSVC STL starts at 16), so an exact input-size bound does not hold here. A
+      // generous ceiling still cleanly separates a bounded reservation from the wire-count-sized bug.
+      constexpr size_t sane_bucket_bound = 1024;
+      expect(g_largest_alloc_count < sane_bucket_bound)
+         << "reserve requested " << g_largest_alloc_count << " buckets for a " << map32_bomb.size()
+         << "-byte payload (wire count was " << amplified_count << ")";
+   };
+
+   "msgpack array reserve clamps to remaining bytes, not the wire count"_test = [&] {
+      // The zero-body bombs above only ever exercise reserve(0) on the patched path. This case drives
+      // the cap's min(len, remaining) with a NON-ZERO remaining: an array32 claiming amplified_count
+      // elements followed by 8 one-byte elements (positive fixints) and then truncated. The reader may
+      // reserve up to the 8 trailing bytes, never the wire count, then walks the present elements and
+      // reports unexpected_end on the missing remainder.
+      std::string payload{char(0xdd), char(0x00), char(0x0f), char(0x42), char(0x40)};
+      for (char i = 0; i < 8; ++i) {
+         payload.push_back(i); // positive fixint -> one wire byte each
+      }
+      g_largest_alloc_count = 0;
+      std::vector<double, recording_allocator<double>> v{};
+      const auto ec = glz::read_msgpack(v, payload);
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end, got: " << glz::format_error(ec, payload);
+      // Bounded by a small multiple of the 8-byte body (reserve(8) plus at most one growth step),
+      // never the amplified_count wire count. A generous ceiling separates the two unambiguously
+      // without coupling to a specific growth policy.
+      constexpr size_t sane_bound = 1024;
+      expect(g_largest_alloc_count < sane_bound)
+         << "reserve requested " << g_largest_alloc_count
+         << " elements; expected a small bound tied to the 8-byte body, not " << amplified_count;
+   };
+
+   "msgpack reserve cap leaves valid arrays intact"_test = [] {
+      const std::vector<double> original{1.0, 2.0, 3.0};
+      std::string buffer{};
+      expect(not glz::write_msgpack(original, buffer));
+      std::vector<double> decoded{};
+      expect(not glz::read_msgpack(decoded, buffer));
+      expect(decoded == original);
+   };
+};
+
+// A variant whose `ids` array is shorter than its alternative list. That is a supported read-side
+// feature -- the first unlabeled alternative is the default for an unrecognized id -- so it is
+// reachable from a legal glz::meta. Writing the unlabeled alternative has no id to emit; indexing
+// ids_v there read past the end of a static array and emitted the adjacent static data as the tag
+// value (~4 GB read under ASan). The writer must report an error instead.
+namespace short_ids_guard
+{
+   struct labeled
+   {
+      int a{};
+   };
+   struct unlabeled
+   {
+      int b{};
+   };
+   using v_t = std::variant<labeled, unlabeled>;
+}
+
+template <>
+struct glz::meta<short_ids_guard::v_t>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr std::array<std::string_view, 1> ids{"a"}; // 1 id, 2 alternatives
+};
+
+suite short_ids_write_guard = [] {
+   "writing an alternative with no declared id errors instead of reading out of bounds"_test = [] {
+      using namespace short_ids_guard;
+      std::string buffer{};
+      expect(bool(glz::write_msgpack(v_t{unlabeled{7}}, buffer)));
+      buffer.clear();
+      expect(not glz::write_msgpack(v_t{labeled{3}}, buffer)); // the labeled alternative is unaffected
+   };
+};
+
+namespace msgpack_depth
+{
+   struct tree_node
+   {
+      std::vector<tree_node> children{};
+   };
+
+   // Structs are written as arrays, so every level is fixarray(1) for the struct plus fixarray(1)
+   // for its member: two bytes of input per level of nesting.
+   inline std::string nested_tree(size_t levels)
+   {
+      std::string b;
+      for (size_t i = 0; i < levels; ++i) {
+         b.push_back(char(0x91));
+         b.push_back(char(0x91));
+      }
+      b.push_back(char(0x91));
+      b.push_back(char(0x90)); // innermost node, no children
+      return b;
+   }
+}
+
+suite msgpack_recursion_depth_limit = [] {
+   using namespace msgpack_depth;
+
+   "a hostile nest is rejected rather than overflowing the stack"_test = [] {
+      // 100k levels is 200 KB of input against a default 8 MB stack (1 MB on Windows).
+      tree_node deep_out{};
+      expect(glz::read_msgpack(deep_out, nested_tree(100'000)) == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "nesting within the limit still reads"_test = [] {
+      tree_node shallow_out{};
+      expect(not glz::read_msgpack(shallow_out, nested_tree(100)));
+
+      tree_node* cur = &shallow_out;
+      size_t levels = 0;
+      while (not cur->children.empty()) {
+         cur = &cur->children.front();
+         ++levels;
+      }
+      expect(levels == 100) << levels;
+   };
+};
+
 int main()
 {
    // Only the write side is exercised here: MessagePack passes its type-tag byte
@@ -444,6 +769,92 @@ int main()
       auto ec = glz::read_msgpack(decoded, std::string_view{buffer});
       expect(!ec);
       expect(decoded == original);
+   };
+
+   "msgpack embedded null string roundtrip"_test = [] {
+      // msgpack strings are length prefixed rather than terminated, so a null byte is ordinary
+      // payload. This is what the msgpack_roundtrip_string fuzzer generates.
+      const std::string original("a\0b", 3);
+      expect_roundtrip_equal(original);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa3"
+                                            "a\0b",
+                                            4));
+
+      expect_roundtrip_equal(std::string_view{original});
+   };
+
+   "msgpack string length boundaries"_test = [] {
+      // fixstr holds up to 31 bytes, then str8, str16, and str32 take over
+      for (size_t size : {size_t(0), size_t(31), size_t(32), size_t(255), size_t(256), size_t(65535), size_t(65536)}) {
+         const std::string original(size, 'x');
+         expect_roundtrip_equal(original);
+
+         auto encoded = glz::write_msgpack(original);
+         expect(encoded.has_value());
+
+         // header width: fixstr 1, str8 2, str16 3, str32 5
+         const size_t header = size < 32 ? 1 : (size < 256 ? 2 : (size < 65536 ? 3 : 5));
+         expect(encoded.value().size() == header + size) << "unexpected header width for size " << size;
+      }
+   };
+
+   "msgpack string bounds beat conversion"_test = [] {
+      // Writing must use the type's own bounds, not its `operator const char*`, or an embedded null
+      // truncates the payload while reading still restores the full length recorded in the header.
+      legacy_string_t original{};
+      original.assign("a\0b", 3);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa3"
+                                            "a\0b",
+                                            4));
+
+      expect_roundtrip_equal(original);
+   };
+
+   "msgpack static string roundtrip"_test = [] {
+      fixed_string_t original{};
+      original.assign("static", 6);
+
+      auto encoded = glz::write_msgpack(original);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa6"
+                                            "static"));
+
+      fixed_string_t decoded{};
+      auto ec = glz::read_msgpack(decoded, std::string_view{encoded.value()});
+      expect(!ec);
+      expect(std::string_view{decoded} == "static");
+   };
+
+   "msgpack char pointer write"_test = [] {
+      const char* text = "pointer";
+      auto encoded = glz::write_msgpack(text);
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa7"
+                                            "pointer"));
+
+      // A null pointer must serialize as an empty string rather than dereferencing null
+      const char* empty = nullptr;
+      auto null_encoded = glz::write_msgpack(empty);
+      expect(null_encoded.has_value());
+      expect(null_encoded.value() == std::string("\xa0"));
+   };
+
+   "msgpack char array write"_test = [] {
+      auto encoded = glz::write_msgpack("array");
+      expect(encoded.has_value());
+      expect(encoded.value() == std::string("\xa5"
+                                            "array"));
+
+      auto array_encoded = glz::write_msgpack(std::array<char, 5>{'a', 'r', 'r', 'a', 'y'});
+      expect(array_encoded.has_value());
+      expect(array_encoded.value() == std::string("\xa5"
+                                                  "array"));
    };
 
    "msgpack container roundtrip"_test = [] {
@@ -781,6 +1192,24 @@ int main()
       expect_roundtrip_equal(mask);
    };
 
+   "msgpack bitset rejects truncated payload"_test = [] {
+      // The bin header declares num_bytes of packed bits, but the buffer is cut
+      // short so fewer payload bytes are present. The reader must report
+      // unexpected_end rather than silently leaving the missing bits at zero.
+      std::bitset<16> mask{0b10101010'01010101};
+      std::string buffer;
+      expect(!glz::write_msgpack(mask, buffer));
+
+      std::bitset<16> out{};
+      const auto ec = glz::read_msgpack(out, std::string_view{buffer}.substr(0, buffer.size() - 1));
+      expect(ec.ec == glz::error_code::unexpected_end)
+         << "expected unexpected_end on truncated bitset payload, got: " << glz::format_error(ec, buffer);
+
+      std::bitset<16> out2{};
+      const auto ec2 = glz::read_msgpack(out2, std::string_view{buffer}.substr(0, buffer.size() - 2));
+      expect(ec2.ec == glz::error_code::unexpected_end) << "expected unexpected_end on missing bitset payload";
+   };
+
    "msgpack ext container roundtrip"_test = [] {
       std::vector<glz::msgpack::ext> payloads{
          glz::msgpack::ext{1, {std::byte{0x01}, std::byte{0x02}}},
@@ -877,6 +1306,23 @@ int main()
       ec = glz::read_msgpack(decoded, buffer);
       expect(!ec);
       expect(decoded == epoch);
+   };
+
+   "chrono duration roundtrip"_test = [] {
+      using namespace std::chrono;
+      auto check = [](auto v) {
+         std::string buffer{};
+         expect(not glz::write_msgpack(v, buffer));
+         decltype(v) decoded{};
+         expect(not glz::read_msgpack(decoded, buffer));
+         expect(decoded == v);
+      };
+      check(seconds{3600});
+      check(milliseconds{12345});
+      check(seconds{-42});
+      check(nanoseconds{987654321});
+      check(duration<double, std::milli>{123.5});
+      check(duration<int64_t, std::ratio<1, 60>>{90});
    };
 
    "timestamp in struct"_test = [] {

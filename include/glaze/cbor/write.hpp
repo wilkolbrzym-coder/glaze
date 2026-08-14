@@ -355,14 +355,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         const sv str = [&]() -> const sv {
-            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-               return value ? value : "";
-            }
-            else {
-               return sv{value};
-            }
-         }();
+         const sv str = str_view<T>(value);
 
          if (!cbor_detail::encode_arg(ctx, cbor::major::tstr, str.size(), b, ix)) [[unlikely]] {
             return;
@@ -380,9 +373,12 @@ namespace glz
       }
    };
 
-   // Byte strings (std::vector<std::byte>, std::span<std::byte>, etc.)
+   // Byte strings - any contiguous byte-like range (std::vector<std::byte>, std::vector<uint8_t>,
+   // std::array<std::byte, N>, std::array<uint8_t, N>, std::span<std::byte>, std::span<uint8_t>, ...).
+   // std::byte, unsigned char, and uint8_t ranges all encode as a CBOR byte string (major type 2),
+   // so they share a single specialization (see glz::contiguous_byte_range / byte_like).
    template <class T>
-      requires(std::same_as<typename T::value_type, std::byte> && !str_t<T>)
+      requires(contiguous_byte_range<std::remove_cvref_t<T>> && !str_t<T>)
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -403,74 +399,11 @@ namespace glz
       }
    };
 
-   // std::vector<uint8_t> as byte string
-   template <>
-   struct to<CBOR, std::vector<uint8_t>> final
-   {
-      template <auto Opts>
-      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, value.size(), b, ix)) [[unlikely]] {
-            return;
-         }
-
-         const auto n = value.size();
-         if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
-            return;
-         }
-         if (n) {
-            std::memcpy(&b[ix], value.data(), n);
-            ix += n;
-         }
-      }
-   };
-
-   // std::array<std::byte, N> as byte string
-   template <size_t N>
-   struct to<CBOR, std::array<std::byte, N>> final
-   {
-      template <auto Opts>
-      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         if (!cbor_detail::encode_arg_cx<N>(ctx, cbor::major::bstr, b, ix)) [[unlikely]] {
-            return;
-         }
-
-         if (!ensure_space(ctx, b, ix + N + write_padding_bytes)) [[unlikely]] {
-            return;
-         }
-         if constexpr (N > 0) {
-            std::memcpy(&b[ix], value.data(), N);
-            ix += N;
-         }
-      }
-   };
-
-   // std::array<uint8_t, N> as byte string
-   template <size_t N>
-   struct to<CBOR, std::array<uint8_t, N>> final
-   {
-      template <auto Opts>
-      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         if (!cbor_detail::encode_arg_cx<N>(ctx, cbor::major::bstr, b, ix)) [[unlikely]] {
-            return;
-         }
-
-         if (!ensure_space(ctx, b, ix + N + write_padding_bytes)) [[unlikely]] {
-            return;
-         }
-         if constexpr (N > 0) {
-            std::memcpy(&b[ix], value.data(), N);
-            ix += N;
-         }
-      }
-   };
-
    // Arrays (std::vector, std::array, std::deque, etc.)
    // Note: eigen_t types have their own specialization in glaze/ext/eigen.hpp
+   // Contiguous byte-like ranges are excluded here; they are written as CBOR byte strings above.
    template <writable_array_t T>
-      requires(!eigen_t<T>)
+      requires(!eigen_t<T> && !contiguous_byte_range<std::remove_cvref_t<T>>)
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -478,8 +411,10 @@ namespace glz
       {
          using V = range_value_t<std::remove_cvref_t<T>>;
 
-         // Use RFC 8746 typed arrays for numeric types (bulk memcpy)
-         if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T>) {
+         // Use RFC 8746 typed arrays for numeric types (bulk memcpy). A numeric type RFC 8746 has no
+         // tag for -- long double, where it is an extended format -- falls through to the generic
+         // array below and is written element by element.
+         if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T> && cbor::typed_array::taggable<V>) {
             // Write the tag for this type using native endianness
             constexpr uint64_t tag = cbor::typed_array::native_tag<V>();
             if (!cbor_detail::encode_arg(ctx, cbor::major::tag, tag, b, ix)) [[unlikely]] {
@@ -503,7 +438,7 @@ namespace glz
                ix += byte_len;
             }
          }
-         else if constexpr (complex_t<V> && contiguous<T>) {
+         else if constexpr (complex_t<V> && contiguous<T> && cbor::typed_array::taggable_scalar<V>) {
             // Complex array: tag 43001 with interleaved typed array [r0, i0, r1, i1, ...]
             // std::complex<T> stores data as [real, imag] pairs contiguously
             using Scalar = typename V::value_type;
@@ -991,26 +926,27 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         using Variant = std::decay_t<decltype(value)>;
+         // The active alternative is taken from the variant itself rather than recovered by matching
+         // the visited type against the alternative list: the index is what the reader consumes, and a
+         // type match is ambiguous for a variant that repeats an alternative type.
+         const size_t index = value.index();
 
-         std::visit(
-            [&](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
+         // A valueless variant has no alternative to name, and variant_npos is not an index any
+         // reader could resolve. Reject it here rather than emitting an unreadable array.
+         if (index >= std::variant_size_v<std::remove_cvref_t<decltype(value)>>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
 
-               static constexpr uint64_t index = []<size_t... I>(std::index_sequence<I...>) {
-                  return ((std::is_same_v<V, std::variant_alternative_t<I, Variant>> * I) + ...);
-               }(std::make_index_sequence<std::variant_size_v<Variant>>{});
+         // Encode variant as array [index, value]
+         if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
+            return;
+         }
+         if (!cbor_detail::encode_arg(ctx, cbor::major::uint, index, b, ix)) [[unlikely]] {
+            return;
+         }
 
-               // Encode variant as array [index, value]
-               if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
-                  return;
-               }
-               if (!cbor_detail::encode_arg(ctx, cbor::major::uint, index, b, ix)) [[unlikely]] {
-                  return;
-               }
-               serialize<CBOR>::op<Opts>(v, ctx, b, ix);
-            },
-            value);
+         std::visit([&](auto&& v) { serialize<CBOR>::op<Opts>(v, ctx, b, ix); }, value);
       }
    };
 
@@ -1145,17 +1081,8 @@ namespace glz
       }
    };
 
-   // std::chrono::duration - bare numeric count in the duration's native units
-   template <is_duration T>
-   struct to<CBOR, T> final
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         using Rep = typename std::remove_cvref_t<T>::rep;
-         to<CBOR, Rep>::template op<Opts>(value.count(), ctx, b, ix);
-      }
-   };
+   // std::chrono::duration - serialized generically (as the bare rep count) by the
+   // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    // system_clock::time_point - tag 0 (RFC 3339 date/time string)
    template <is_system_time_point T>
@@ -1255,31 +1182,8 @@ namespace glz
       }
    };
 
-   // steady_clock::time_point - bare count in native duration (epoch is implementation-defined)
-   template <is_steady_time_point T>
-   struct to<CBOR, T> final
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         to<CBOR, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
-      }
-   };
-
-   // high_resolution_clock::time_point when it's a distinct type (rare)
-   template <is_high_res_time_point T>
-   struct to<CBOR, T> final
-   {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         to<CBOR, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
-      }
-   };
+   // steady_clock / high_resolution_clock time_points: serialized generically (as the bare
+   // count) by the to<uint32_t Format, is_count_time_point T> specialization in core/chrono.hpp.
 
    // epoch_time wrapper - RFC 8949 §3.4.2 tag 1 (epoch-based date/time).
    // Per §3.4.2 the tag 1 content MUST be an unsigned/negative integer (major types 0 or 1)

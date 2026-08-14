@@ -17,11 +17,30 @@
 
 #include "glaze/json/generic.hpp"
 #include "glaze/net/http.hpp"
+#include "glaze/net/http_headers.hpp"
 #include "glaze/net/url.hpp"
 #include "glaze/util/key_transformers.hpp"
 
+// To deconflict Windows.h, which defines a DELETE macro that collides with the
+// http_method::DELETE used in the route helpers below. http.hpp's own undef is
+// include-guarded, so it does not re-run when a later include (e.g. asio via
+// http_client.hpp) pulls in Windows.h before this header is parsed.
+#ifdef DELETE
+#undef DELETE
+#endif
+
 namespace glz
 {
+   namespace detail
+   {
+      struct request_line
+      {
+         http_method method;
+         std::string_view target;
+         bool is_http11;
+      };
+   }
+
    // Request context object
    struct request
    {
@@ -30,7 +49,7 @@ namespace glz
       std::string path{}; // Path component only (without query string)
       std::unordered_map<std::string, std::string> params{}; // Path parameters (e.g., :id)
       std::unordered_map<std::string, std::string> query{}; // Query parameters (e.g., ?limit=10)
-      std::unordered_map<std::string, std::string> headers{};
+      glz::http_headers headers{};
       std::string body{};
       std::string remote_ip{};
       uint16_t remote_port{};
@@ -57,7 +76,7 @@ namespace glz
       };
 
       int status_code = 200;
-      std::unordered_map<std::string, std::string> response_headers{};
+      glz::http_headers response_headers{};
       std::string response_body{};
       uint8_t user_headers_set{};
 
@@ -67,23 +86,43 @@ namespace glz
          return *this;
       }
 
+      // Replaces any existing field with this name.
+      //
+      // A field-name or field-value carrying CR or LF would terminate the field on
+      // the wire, letting attacker-influenced data inject extra headers or a body
+      // (CWE-113); header_field_has_crlf carries the full rationale. Rejecting it
+      // here keeps it out of the container and, crucially, skips the
+      // mark_user_supplied bookkeeping below - see that function for why the order
+      // of these two lines is load-bearing. The wire serializers keep an
+      // independent drop as a backstop for fields that bypass this setter.
       inline response& header(std::string_view name, std::string_view value)
       {
-         // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-         std::string key(name);
-         for (auto& c : key) c = ascii_tolower(c);
+         if (header_field_has_crlf(name, value)) [[unlikely]] {
+            return *this;
+         }
 
-         // Track which default headers the user has set
-         if (key == "content-length")
-            user_headers_set |= has_content_length;
-         else if (key == "date")
-            user_headers_set |= has_date;
-         else if (key == "server")
-            user_headers_set |= has_server;
-         else if (key == "connection")
-            user_headers_set |= has_connection;
+         mark_user_supplied(name);
+         response_headers.set(std::string(name), std::string(value));
+         return *this;
+      }
 
-         response_headers[std::move(key)] = std::string(value);
+      // Appends instead of replacing, for names that can repeat like Set-Cookie.
+      // Content-Length and Transfer-Encoding are replaced regardless: a second one leaves
+      // the body length ambiguous and opens response smuggling (RFC 9112 6.3).
+      inline response& add_header(std::string_view name, std::string_view value)
+      {
+         if (header_field_has_crlf(name, value)) [[unlikely]] {
+            return *this;
+         }
+
+         mark_user_supplied(name);
+
+         if (header_field_frames_body(name)) [[unlikely]] {
+            response_headers.set(std::string(name), std::string(value));
+         }
+         else {
+            response_headers.add(std::string(name), std::string(value));
+         }
          return *this;
       }
 
@@ -138,7 +177,7 @@ namespace glz
          user_headers_set = 0;
       }
 
-      inline response& content_type(std::string_view type) { return header("content-type", type); }
+      inline response& content_type(std::string_view type) { return header("Content-Type", type); }
 
       // JSON response helper using Glaze
       template <class T = glz::generic>
@@ -150,6 +189,24 @@ namespace glz
             response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
          }
          return *this;
+      }
+
+     private:
+      // Records that the handler supplied one of the headers the wire serializer
+      // would otherwise generate, so the serializer leaves it alone. Only reached
+      // once the field has passed the CR/LF check: a field dropped there must not
+      // set its flag, or a rejected Content-Length or Connection would suppress
+      // the auto-generated counterpart and leave the response unframed.
+      void mark_user_supplied(std::string_view name) noexcept
+      {
+         if (glz::striequal(name, "content-length"))
+            user_headers_set |= has_content_length;
+         else if (glz::striequal(name, "date"))
+            user_headers_set |= has_date;
+         else if (glz::striequal(name, "server"))
+            user_headers_set |= has_server;
+         else if (glz::striequal(name, "connection"))
+            user_headers_set |= has_connection;
       }
    };
 
@@ -314,6 +371,38 @@ namespace glz
          }
 
          return segments;
+      }
+
+      /**
+       * @brief Detect a ".." path-traversal component in a decoded capture.
+       *
+       * Returns true when `path` contains a ".." segment delimited by a
+       * separator or a string boundary. Percent-decoding happens after the
+       * target is split on literal '/', so a "%2e%2e%2f" sequence only becomes
+       * a "../" here; a capture carrying such a segment can climb out of a base
+       * directory once a handler resolves it as a filesystem path.
+       *
+       * Both '/' and '\\' are treated as separators: on Windows the backslash
+       * is a path separator too, so a "%2e%2e%5c" ("..\") capture traverses the
+       * same way and an encoded backslash would otherwise slip past a '/'-only
+       * check. A backslash is a legal byte in a POSIX filename, but a capture
+       * bound for a filesystem join is exactly the case guarded here, so the
+       * traversal reading wins over the rare literal-backslash name.
+       */
+      static bool has_dot_dot_segment(std::string_view path) noexcept
+      {
+         size_t start = 0;
+         while (true) {
+            const size_t sep = path.find_first_of("/\\", start);
+            const size_t seg_len = (sep == std::string_view::npos ? path.size() : sep) - start;
+            if (seg_len == 2 && path[start] == '.' && path[start + 1] == '.') {
+               return true;
+            }
+            if (sep == std::string_view::npos) {
+               return false;
+            }
+            start = sep + 1;
+         }
       }
 
       /**
@@ -508,14 +597,21 @@ namespace glz
          }
 
          if (node->parameter_child) {
-            std::string param_name = node->parameter_child->parameter_name;
-            params[param_name] = url_decode(segment);
+            std::string decoded = url_decode(segment);
 
-            if (match_node(node->parameter_child.get(), segments, index + 1, method, params, result)) {
-               return true;
+            // A ":param" captures a single segment; refuse a decoded ".."
+            // component so the value cannot escape a base directory when a
+            // handler treats it as a path.
+            if (!has_dot_dot_segment(decoded)) {
+               std::string param_name = node->parameter_child->parameter_name;
+               params[param_name] = std::move(decoded);
+
+               if (match_node(node->parameter_child.get(), segments, index + 1, method, params, result)) {
+                  return true;
+               }
+
+               params.erase(param_name);
             }
-
-            params.erase(param_name);
          }
 
          if (node->wildcard_child) {
@@ -523,6 +619,13 @@ namespace glz
             for (size_t i = index; i < segments.size(); i++) {
                if (i > index) full_capture += "/";
                full_capture += url_decode(segments[i]);
+            }
+
+            // The capture is joined from decoded segments, so a "%2e%2e%2f" in
+            // the request only resolves to a ".." here; refuse it so a mount
+            // like "/files/*path" cannot be walked outside its base directory.
+            if (has_dot_dot_segment(full_capture)) {
+               return false;
             }
 
             const auto& wildcard_name = node->wildcard_child->parameter_name;

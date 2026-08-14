@@ -194,18 +194,8 @@ namespace glz
    // std::chrono serialization
    // ============================================
 
-   // Duration: serialize as count
-   template <is_duration T>
-      requires(not custom_write<T>)
-   struct to<TOML, T>
-   {
-      template <auto Opts, class B>
-      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
-      {
-         using Rep = typename std::remove_cvref_t<T>::rep;
-         to<TOML, Rep>::template op<Opts>(value.count(), ctx, b, ix);
-      }
-   };
+   // Duration: serialized generically (as the bare rep count) by the
+   // to<uint32_t Format, is_duration T> specialization in core/chrono.hpp.
 
    // system_clock::time_point: serialize as TOML native datetime (RFC 3339)
    // TOML datetimes are NOT quoted - they're native values
@@ -405,36 +395,8 @@ namespace glz
       }
    };
 
-   // steady_clock::time_point: serialize as count in the time_point's native duration
-   template <is_steady_time_point T>
-      requires(not custom_write<T>)
-   struct to<TOML, T>
-   {
-      template <auto Opts, class B>
-      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
-      {
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         const auto count = value.time_since_epoch().count();
-         to<TOML, Rep>::template op<Opts>(count, ctx, b, ix);
-      }
-   };
-
-   // high_resolution_clock::time_point when it's a distinct type (rare)
-   template <is_high_res_time_point T>
-      requires(not custom_write<T>)
-   struct to<TOML, T>
-   {
-      template <auto Opts, class B>
-      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
-      {
-         // Treat like steady_clock - serialize as count since epoch is implementation-defined
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         using Rep = typename Duration::rep;
-         const auto count = value.time_since_epoch().count();
-         to<TOML, Rep>::template op<Opts>(count, ctx, b, ix);
-      }
-   };
+   // steady_clock / high_resolution_clock time_points: serialized generically (as the bare
+   // count) by the to<uint32_t Format, is_count_time_point T> specialization in core/chrono.hpp.
 
    template <class T>
       requires str_t<T> || char_t<T>
@@ -448,11 +410,8 @@ namespace glz
                if constexpr (char_t<T>) {
                   return sv{&value, 1};
                }
-               else if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                  return value ? value : "";
-               }
                else {
-                  return sv{value};
+                  return str_view<T>(value);
                }
             }();
             if (!ensure_space(ctx, b, ix + str.size() + write_padding_bytes)) [[unlikely]] {
@@ -491,14 +450,7 @@ namespace glz
          }
          else {
             if constexpr (check_raw_string(Opts)) {
-               const sv str = [&]() -> const sv {
-                  if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                     return value ? value : "";
-                  }
-                  else {
-                     return sv{value};
-                  }
-               }();
+               const sv str = str_view<T>(value);
 
                if (!ensure_space(ctx, b, ix + 8 + str.size() + write_padding_bytes)) [[unlikely]] {
                   return;
@@ -516,14 +468,11 @@ namespace glz
             }
             else {
                const sv str = [&]() -> const sv {
-                  if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                     return value ? value : "";
-                  }
-                  else if constexpr (array_char_t<T>) {
+                  if constexpr (array_char_t<T>) {
                      return sv{value.data(), value.size()};
                   }
                   else {
-                     return sv{value};
+                     return str_view<T>(value);
                   }
                }();
                const auto n = str.size();

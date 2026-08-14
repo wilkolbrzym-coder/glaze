@@ -10,6 +10,7 @@
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"
 #include "glaze/thread/threadpool.hpp"
+#include "scratch_directory.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -34,6 +35,11 @@ struct glz::meta<my_struct>
       "arr", &T::arr //
    );
 };
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"exceptions_test"};
 
 suite starter = [] {
    "example"_test = [] {
@@ -146,6 +152,50 @@ suite basic_types = [] {
 
    "bool read invalid"_test = [] {
       expect(throws([] { [[maybe_unused]] bool val = glz::ex::read_json<bool>("tru"); }));
+   };
+};
+
+struct generic_read_struct
+{
+   int field{};
+};
+
+suite generic_read_tests = [] {
+   "generic read valid"_test = [] {
+      const auto generic = glz::ex::read_json<glz::generic_u64>(R"({"field":42})");
+      const auto value = glz::ex::read_json<generic_read_struct>(generic);
+      expect(value.field == 42);
+   };
+
+   "generic read into object formats exception"_test = [] {
+      const auto generic = glz::ex::read_json<glz::generic_u64>(R"({"field":"invalid"})");
+      generic_read_struct value{};
+      try {
+         glz::ex::read_json(value, generic);
+         expect(false) << "expected glz::ex::read_json to throw";
+      }
+      catch (const std::runtime_error& error) {
+         expect(std::string_view{error.what()} ==
+                "read_json error: 1:10: parse_number_failure\n"
+                "   {\"field\":\"invalid\"}\n"
+                "            ^")
+            << error.what();
+      }
+   };
+
+   "generic read value formats exception"_test = [] {
+      const auto generic = glz::ex::read_json<glz::generic_u64>(R"({"field":"invalid"})");
+      try {
+         [[maybe_unused]] auto value = glz::ex::read_json<generic_read_struct>(generic);
+         expect(false) << "expected glz::ex::read_json to throw";
+      }
+      catch (const std::runtime_error& error) {
+         expect(std::string_view{error.what()} ==
+                "read_json error: 1:10: parse_number_failure\n"
+                "   {\"field\":\"invalid\"}\n"
+                "            ^")
+            << error.what();
+      }
    };
 };
 

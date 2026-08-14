@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/seek.hpp"
@@ -573,41 +574,19 @@ namespace glz
       }
    };
 
-   template <string_t T>
-   struct to<MSGPACK, T>
-   {
-      template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
-      {
-         const std::string_view str{value.data(), value.size()};
-         if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
-            return;
-         }
-         msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix);
-      }
-   };
-
-   template <static_string_t T>
-   struct to<MSGPACK, T>
-   {
-      template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
-      {
-         const std::string_view str{value.data(), value.size()};
-         if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
-            return;
-         }
-         msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix);
-      }
-   };
-
+   // Every string-like type shares this one specialization, using the same idiom as BEVE and CBOR.
+   // Splitting `string_t` and `static_string_t` out into their own specializations makes several
+   // of them viable for the same type, which forces the compiler to partially order constrained
+   // partial specializations. Normalizing these disjunction-heavy concepts for that subsumption
+   // check is costly enough that clang 22 exhausts its stack on it (see issue #2742).
    template <str_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         const std::string_view str{value};
+         const sv str = str_view<T>(value);
+
          if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
             return;
          }
@@ -1062,6 +1041,14 @@ namespace glz
             return;
          }
          static constexpr auto ids = ids_v<T>;
+         // `ids` may declare fewer entries than the variant has alternatives -- the readers treat the
+         // first unlabeled alternative as the default for an unrecognized id -- so an alternative past
+         // the end of `ids` has no id to write. Indexing there reads past a static array.
+         if (value.index() >= ids.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            ctx.custom_error_message = variant_ids_string_v<T>;
+            return;
+         }
          if (!msgpack::detail::write_str_header(ctx, ids[value.index()].size(), b, ix)) [[unlikely]] {
             return;
          }

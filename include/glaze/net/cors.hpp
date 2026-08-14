@@ -95,10 +95,16 @@ namespace glz
          }
       }
 
-      // If no specific origins are configured or "*" is present, allow all
-      if ((config.allowed_origins.empty() && !config.allowed_origins_validator) ||
-          std::find(config.allowed_origins.begin(), config.allowed_origins.end(), "*") !=
-             config.allowed_origins.end()) {
+      // A wildcard ("*") or an unset origin list grants every origin, but only when
+      // credentials are disabled. The CORS spec forbids "*" with credentials, and the
+      // middleware reflects the request origin when credentials are on, so honoring the
+      // wildcard there would echo any origin back next to
+      // Access-Control-Allow-Credentials: true and let any site read authenticated
+      // responses. With credentials enabled, fall through to the exact-match check.
+      const bool wildcard =
+         std::find(config.allowed_origins.begin(), config.allowed_origins.end(), "*") != config.allowed_origins.end();
+      if (!config.allow_credentials &&
+          ((config.allowed_origins.empty() && !config.allowed_origins_validator) || wildcard)) {
          return true;
       }
 
@@ -138,7 +144,7 @@ namespace glz
          std::string origin;
          auto origin_it = req.headers.find("origin");
          if (origin_it != req.headers.end()) {
-            origin = origin_it->second;
+            origin = origin_it->value;
          }
 
          // Check if this is a preflight request (OPTIONS method with specific headers)
@@ -183,7 +189,7 @@ namespace glz
                }
                else if (auto requested_headers = req.headers.find("access-control-request-headers");
                         requested_headers != req.headers.end()) {
-                  res.header("Access-Control-Allow-Headers", requested_headers->second);
+                  res.header("Access-Control-Allow-Headers", requested_headers->value);
                }
 
                // Add max age

@@ -11,6 +11,7 @@
 #include <string>
 #include <utility>
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -33,31 +34,9 @@ namespace glz
       // decode_json_escape, decode_json5_escape, and decode_text moved to text_decode.hpp
       // so the JSONB→JSON converter can reuse them.
 
-      // RAII guard that bumps ctx.depth on entry to a container reader and pops it on
-      // destruction. Errors with exceeded_max_recursive_depth if the cap (256) would be
-      // exceeded — deeply nested blobs can stack-overflow otherwise, and untrusted blobs
-      // (e.g. from user-supplied SQLite JSONB columns) are a real DoS vector.
-      template <class Ctx>
-      struct depth_guard
-      {
-         Ctx& ctx;
-         bool entered = false;
-
-         depth_guard(Ctx& c) : ctx(c)
-         {
-            if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
-               ctx.error = error_code::exceeded_max_recursive_depth;
-               return;
-            }
-            ++ctx.depth;
-            entered = true;
-         }
-         ~depth_guard()
-         {
-            if (entered) --ctx.depth;
-         }
-         explicit operator bool() const noexcept { return entered; }
-      };
+      // Container readers guard recursion depth with the shared glz::depth_guard
+      // (core/context.hpp): deeply nested blobs can stack-overflow otherwise, and untrusted
+      // blobs (e.g. from user-supplied SQLite JSONB columns) are a real DoS vector.
 
       // Parse a JSONB integer payload (INT or INT5) and store into target.
       template <class T>
@@ -294,6 +273,19 @@ namespace glz
             jsonb_detail::parse_float_payload(ctx, tc, reinterpret_cast<const char*>(it), static_cast<size_t>(sz), tmp);
             if (bool(ctx.error)) [[unlikely]]
                return;
+            // A float payload may hold NaN, +/-Inf (e.g. a JSON5 "NaN"/"Infinity" sentinel) or a
+            // finite value outside T's range; casting any of those to an integer is undefined
+            // behavior, so reject anything not representable as T before converting. The upper
+            // bound is exclusive at max(T) + 1, which is an exact power of two in double, whereas
+            // static_cast<double>(max(T)) rounds up past the true maximum for 64-bit integer types
+            // and would let that boundary value slip through. NaN fails both comparisons, so it is
+            // rejected here as well.
+            constexpr double lowest = static_cast<double>((std::numeric_limits<T>::lowest)());
+            constexpr double upper_exclusive = static_cast<double>((std::numeric_limits<T>::max)() / 2 + 1) * 2.0;
+            if (!(tmp >= lowest && tmp < upper_exclusive)) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
             value = static_cast<T>(tmp);
             it += sz;
          }
@@ -420,7 +412,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         jsonb_detail::depth_guard g{ctx};
+         depth_guard g{ctx};
          if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
@@ -481,7 +473,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         jsonb_detail::depth_guard g{ctx};
+         depth_guard g{ctx};
          if (!g) return;
          using Key = typename std::remove_cvref_t<T>::key_type;
          static_assert(str_t<Key> || std::same_as<Key, std::string>,
@@ -536,7 +528,7 @@ namespace glz
       template <auto Opts>
       static void op(T& value, is_context auto& ctx, auto& it, auto end)
       {
-         jsonb_detail::depth_guard g{ctx};
+         depth_guard g{ctx};
          if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
@@ -718,7 +710,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         jsonb_detail::depth_guard g{ctx};
+         depth_guard g{ctx};
          if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
@@ -744,7 +736,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         jsonb_detail::depth_guard g{ctx};
+         depth_guard g{ctx};
          if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
@@ -789,7 +781,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         jsonb_detail::depth_guard g{ctx};
+         depth_guard g{ctx};
          if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
@@ -907,7 +899,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         jsonb_detail::depth_guard g{ctx};
+         depth_guard g{ctx};
          if (!g) return;
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
@@ -1086,7 +1078,13 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         jsonb_detail::depth_guard g{ctx};
+         // Inside op() rather than at class scope: read_supported is `requires { from<Format, T>{}; }`,
+         // so a class-scope assert turns that feature probe into a hard error instead of `false`.
+         static_assert(content_v<T>.empty(),
+                       "Adjacent variant tagging (glz::meta `content`) is implemented for JSON and "
+                       "BEVE but not yet for JSONB. Reading this variant as JSONB would silently "
+                       "expect the internally tagged shape, so it is rejected here instead.");
+         depth_guard g{ctx};
          if (!g) return;
 
          if (it >= end) [[unlikely]] {

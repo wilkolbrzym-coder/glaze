@@ -489,6 +489,12 @@ namespace glz
    struct reflect<T>
    {
       static constexpr auto size = 0;
+
+      template <size_t I>
+      using elem = std::nullptr_t;
+
+      template <size_t I>
+      using type = std::nullptr_t;
    };
 
    // The type of the field before get_member is applied
@@ -3444,6 +3450,26 @@ namespace glz
       { reflect<T>::size } -> std::convertible_to<std::size_t>;
    };
 
+   namespace detail
+   {
+      template <class T, uint32_t Format, size_t I>
+      struct write_diagnostics
+      {
+         using field_type = field_t<T, I>;
+         static_assert(is_any_function_ptr<field_type> || always_skipped<field_type> || write_supported<field_type, Format>,
+                       "[glaze] Compilation Error: Struct member is not serializable/write supported!");
+         static constexpr bool value = true;
+      };
+
+      template <class T, uint32_t Format, size_t I>
+      struct read_diagnostics
+      {
+         using field_type = field_t<T, I>;
+         static_assert(is_any_function_ptr<field_type> || always_skipped<field_type> || read_supported<field_type, Format>,
+                       "[glaze] Compilation Error: Struct member is not deserializable/read supported!");
+         static constexpr bool value = true;
+      };
+   }
    // ---------------------------------------------------------------------------------------------
    // Variant tagging representation
    //

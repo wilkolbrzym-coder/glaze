@@ -271,6 +271,37 @@ namespace glz
    // cases explicitly.
    // ==========================================================================
 
+   // --- Nullable / Null / Variant support for BSON concept checks ------------
+   template <always_null_t T>
+   struct to<BSON, T>
+   {
+      static constexpr uint8_t type_code = bson::type::null;
+      template <auto Opts>
+      static void op(auto&&, is_context auto&&, auto&&, auto&) noexcept {}
+   };
+
+   template <nullable_like T>
+   struct to<BSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+      {
+         if (value) {
+            serialize<BSON>::template op<Opts>(*value, ctx, b, ix);
+         }
+      }
+   };
+
+   template <is_variant T>
+   struct to<BSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
+      {
+         std::visit([&](auto&& alt) { serialize<BSON>::template op<Opts>(alt, ctx, b, ix); }, value);
+      }
+   };
+
    // --- Boolean --------------------------------------------------------------
    template <>
    struct to<BSON, bool>
@@ -711,6 +742,17 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<BSON, T>
    {
+      static_assert([]() {
+         constexpr bool ok = []<size_t... I>(std::index_sequence<I...>) {
+            return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || write_supported<field_t<T, I>, BSON>) && ...);
+         }(std::make_index_sequence<reflect<T>::size>{});
+         if constexpr (!ok) {
+            []<size_t... I>(std::index_sequence<I...>) {
+               (..., void(detail::write_diagnostics<T, BSON, I>::value));
+            }(std::make_index_sequence<reflect<T>::size>{});
+         }
+         return ok;
+      }(), "One of the object's members is not serializable. Check if member's type has glz::meta or is reflectable.");
       static constexpr uint8_t type_code = bson::type::document;
       static constexpr auto N = reflect<T>::size;
 

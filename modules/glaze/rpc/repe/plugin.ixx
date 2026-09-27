@@ -4,14 +4,20 @@
 // Pure C plugin interface for ABI stability
 // Plugins export these symbols with C linkage
 // Request/response data uses REPE binary format
-
-#pragma once
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+// glz:header path="glaze/rpc/repe/plugin.h"
+// glz:header std=<stdint.h>
+// glz:header project_imports=ignore
+export module glaze.rpc.repe.plugin;
+import std;
+import glaze.core.basic_types;
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+export extern "C" {
+#endif
+
+// glz:emit std
 
 // Current plugin interface version - increment when ABI changes
 #define REPE_PLUGIN_INTERFACE_VERSION 3
@@ -20,7 +26,7 @@ extern "C" {
 typedef struct repe_buffer
 {
    const char* data;
-   uint64_t size;
+   glz::uint64_t size;
 } repe_buffer;
 
 // Result codes for plugin operations
@@ -45,7 +51,7 @@ typedef struct repe_plugin_data
 //
 // NOTE: This is kept as a standalone function (not in the struct) for ABI safety.
 // The version must be checked BEFORE interpreting the struct layout.
-uint32_t repe_plugin_interface_version(void);
+glz::uint32_t repe_plugin_interface_version(void);
 
 // ---------------------------------------------------------------------------
 // Plugin Information (required)
@@ -101,7 +107,7 @@ void repe_plugin_shutdown(void);
 //
 // WARNING: Do not store the returned buffer pointer for later use.
 // The memory will be overwritten by subsequent calls.
-repe_buffer repe_plugin_call(const char* request, uint64_t request_size);
+repe_buffer repe_plugin_call(const char* request, glz::uint64_t request_size);
 
 #ifdef __cplusplus
 }

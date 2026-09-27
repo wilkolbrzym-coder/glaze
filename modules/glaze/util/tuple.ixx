@@ -2,6 +2,11 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/tuple.hpp"
 // glz:header std=<tuple>
+// glz:header include="glaze/reflection/get_name.hpp"
+// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.tuple;
 
 import std;

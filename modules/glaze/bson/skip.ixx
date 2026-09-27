@@ -2,9 +2,13 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/bson/skip.hpp"
 // glz:header std=<bit>
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
+// glz:header include="glaze/bson/header.hpp"
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 export module glaze.bson.skip;
 
 import glaze.bson.header;
@@ -13,13 +17,10 @@ import glaze.core.context;
 import glaze.core.opts;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::int32_t;
-using std::uint8_t;
-using std::uint32_t;
-using std::size_t;
 
 // Skip a single BSON value given its element type byte. Used by the struct
 // and map readers to drop over unknown keys, and by the deprecated-type
@@ -29,9 +30,9 @@ using std::size_t;
 namespace glz::bson_detail
 {
    template <class It, class End>
-   GLZ_ALWAYS_INLINE bool skip_bytes(is_context auto& ctx, It& it, const End& end, size_t n) noexcept
+   GLZ_ALWAYS_INLINE bool skip_bytes(is_context auto& ctx, It& it, const End& end, glz::size_t n) noexcept
    {
-      if (static_cast<size_t>(end - it) < n) [[unlikely]] {
+      if (static_cast<glz::size_t>(end - it) < n) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
@@ -43,23 +44,23 @@ namespace glz::bson_detail
    // when the consumer needs the length before deciding what to do with the
    // body).
    template <class It, class End>
-   GLZ_ALWAYS_INLINE bool peek_le_int32(is_context auto& ctx, It it, const End& end, int32_t& out) noexcept
+   GLZ_ALWAYS_INLINE bool peek_le_int32(is_context auto& ctx, It it, const End& end, glz::int32_t& out) noexcept
    {
       if ((end - it) < 4) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
-      int32_t v{};
+      glz::int32_t v{};
       std::memcpy(&v, it, 4);
       if constexpr (std::endian::native == std::endian::big) {
-         v = static_cast<int32_t>(std::byteswap(static_cast<uint32_t>(v)));
+         v = static_cast<glz::int32_t>(std::byteswap(static_cast<glz::uint32_t>(v)));
       }
       out = v;
       return true;
    }
 
    template <class It, class End>
-   GLZ_ALWAYS_INLINE bool read_le_int32(is_context auto& ctx, It& it, const End& end, int32_t& out) noexcept
+   GLZ_ALWAYS_INLINE bool read_le_int32(is_context auto& ctx, It& it, const End& end, glz::int32_t& out) noexcept
    {
       if (!peek_le_int32(ctx, it, end, out)) [[unlikely]] {
          return false;
@@ -94,7 +95,7 @@ namespace glz
    struct skip_value<BSON>
    {
       template <auto Opts, class It, class End>
-      static void op(uint8_t type_byte, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(glz::uint8_t type_byte, is_context auto& ctx, It& it, const End& end) noexcept
       {
          using namespace bson;
          switch (type_byte) {
@@ -130,13 +131,13 @@ namespace glz
          case type::string:
          case type::javascript:
          case type::symbol: {
-            int32_t len{};
+            glz::int32_t len{};
             if (!bson_detail::read_le_int32(ctx, it, end, len)) return;
             if (len < 1) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-            (void)bson_detail::skip_bytes(ctx, it, end, static_cast<size_t>(len));
+            (void)bson_detail::skip_bytes(ctx, it, end, static_cast<glz::size_t>(len));
             return;
          }
 
@@ -144,26 +145,26 @@ namespace glz
          case type::array: {
             // The length prefix *includes* itself. Skip the rest, plus
             // the trailing null byte that the prefix already accounts for.
-            int32_t len{};
+            glz::int32_t len{};
             if (!bson_detail::peek_le_int32(ctx, it, end, len)) return;
             if (len < 5) [[unlikely]] {
                // Minimum: 4-byte length + 0x00 terminator.
                ctx.error = error_code::syntax_error;
                return;
             }
-            (void)bson_detail::skip_bytes(ctx, it, end, static_cast<size_t>(len));
+            (void)bson_detail::skip_bytes(ctx, it, end, static_cast<glz::size_t>(len));
             return;
          }
 
          case type::binary: {
-            int32_t len{};
+            glz::int32_t len{};
             if (!bson_detail::read_le_int32(ctx, it, end, len)) return;
             if (len < 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
             // One-byte subtype follows, then `len` payload bytes.
-            (void)bson_detail::skip_bytes(ctx, it, end, 1 + static_cast<size_t>(len));
+            (void)bson_detail::skip_bytes(ctx, it, end, 1 + static_cast<glz::size_t>(len));
             return;
          }
 
@@ -174,26 +175,26 @@ namespace glz
 
          case type::db_pointer: {
             // String (length-prefixed UTF-8 + null) + 12-byte ObjectId.
-            int32_t len{};
+            glz::int32_t len{};
             if (!bson_detail::read_le_int32(ctx, it, end, len)) return;
             if (len < 1) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-            if (!bson_detail::skip_bytes(ctx, it, end, static_cast<size_t>(len) + 12)) return;
+            if (!bson_detail::skip_bytes(ctx, it, end, static_cast<glz::size_t>(len) + 12)) return;
             return;
          }
 
          case type::code_w_scope: {
             // Total int32 length includes itself, the string, and the scope
             // document. Skip the whole thing in one go.
-            int32_t len{};
+            glz::int32_t len{};
             if (!bson_detail::peek_le_int32(ctx, it, end, len)) return;
             if (len < 4) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-            (void)bson_detail::skip_bytes(ctx, it, end, static_cast<size_t>(len));
+            (void)bson_detail::skip_bytes(ctx, it, end, static_cast<glz::size_t>(len));
             return;
          }
 

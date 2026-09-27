@@ -1,24 +1,31 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/rpc/repe/buffer.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstring>
+// glz:header std=<optional>
+// glz:header std=<span>
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/rpc/repe/header.hpp"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit std
 
-#include <cstddef>
-#include <cstring>
-#include <optional>
-#include <span>
+// glz:emit project
 
-#include "glaze/core/reflect.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/rpc/repe/header.hpp"
+export module glaze.rpc.repe.buffer;
 
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
+import std;
 
-namespace glz::repe
+import glaze.core.basic_types;
+import glaze.core.reflect;
+import glaze.json.read;
+import glaze.rpc.repe.header;
+
+
+export namespace glz::repe
 {
    // ============================================================
    // Header utilities
@@ -48,7 +55,7 @@ namespace glz::repe
    inline void encode_error(const error_code ec, message& msg, ErrorMessage&& error_message)
    {
       msg.header.ec = ec;
-      if (error_message.size() > (std::numeric_limits<uint32_t>::max)()) {
+      if (error_message.size() > (std::numeric_limits<glz::uint32_t>::max)()) {
          return;
       }
       if (error_message.empty()) {
@@ -152,7 +159,7 @@ namespace glz::repe
    /// @param size Size of data in bytes
    /// @param msg Output message
    /// @return error_code::none on success, appropriate error on failure
-   inline error_code from_buffer(const char* data, size_t size, message& msg)
+   inline error_code from_buffer(const char* data, glz::size_t size, message& msg)
    {
       if (size < sizeof(header)) {
          return error_code::invalid_header;
@@ -171,11 +178,11 @@ namespace glz::repe
       }
 
       // Validate sizes (overflow-safe: query_length/body_length are attacker-controlled)
-      uint64_t expected_size{};
+      glz::uint64_t expected_size{};
       if (!checked_message_length(msg.header, expected_size)) {
          return error_code::invalid_header;
       }
-      if (uint64_t(size) < expected_size) {
+      if (glz::uint64_t(size) < expected_size) {
          return error_code::invalid_body;
       }
 
@@ -204,7 +211,7 @@ namespace glz::repe
    /// @param size Size of data in bytes
    /// @param hdr Output header
    /// @return error_code::none on success
-   inline error_code parse_header(const char* data, size_t size, header& hdr)
+   inline error_code parse_header(const char* data, glz::size_t size, header& hdr)
    {
       if (size < sizeof(header)) {
          return error_code::invalid_header;
@@ -229,7 +236,7 @@ namespace glz::repe
    /// @param data Pointer to wire-format data
    /// @param size Size of data in bytes
    /// @return The query string, or empty string on error
-   inline std::string_view extract_query(const char* data, size_t size)
+   inline std::string_view extract_query(const char* data, glz::size_t size)
    {
       if (size < sizeof(header)) {
          return {};
@@ -249,7 +256,7 @@ namespace glz::repe
          return {};
       }
 
-      return {data + sizeof(header), static_cast<size_t>(hdr.query_length)};
+      return {data + sizeof(header), static_cast<glz::size_t>(hdr.query_length)};
    }
 
    /// Extract just the query string from string_view
@@ -266,7 +273,7 @@ namespace glz::repe
    inline bool is_notify(std::span<const char> data) noexcept
    {
       if (data.size() < sizeof(header)) return false;
-      uint8_t notify{};
+      glz::uint8_t notify{};
       std::memcpy(&notify, data.data() + offsetof(header, notify), sizeof(notify));
       return notify != 0;
    }
@@ -274,10 +281,10 @@ namespace glz::repe
    /// Extract message ID without full deserialization
    /// @param data Span of raw message bytes
    /// @return The message ID, or 0 if data is too small
-   inline uint64_t extract_id(std::span<const char> data) noexcept
+   inline glz::uint64_t extract_id(std::span<const char> data) noexcept
    {
       if (data.size() < sizeof(header)) return 0;
-      uint64_t id{};
+      glz::uint64_t id{};
       std::memcpy(&id, data.data() + offsetof(header, id), sizeof(id));
       return id;
    }
@@ -289,8 +296,8 @@ namespace glz::repe
    {
       if (data.size() < sizeof(header)) return error_code::invalid_header;
 
-      uint16_t spec{};
-      uint8_t version{};
+      glz::uint16_t spec{};
+      glz::uint8_t version{};
       std::memcpy(&spec, data.data() + offsetof(header, spec), sizeof(spec));
       std::memcpy(&version, data.data() + offsetof(header, version), sizeof(version));
 
@@ -305,7 +312,7 @@ namespace glz::repe
    /// @param error_message The error message text
    /// @param id Optional message ID to include in response
    template <class ErrorMessage>
-   inline void encode_error_buffer(error_code ec, std::string& buffer, ErrorMessage&& error_message, uint64_t id = 0)
+   inline void encode_error_buffer(error_code ec, std::string& buffer, ErrorMessage&& error_message, glz::uint64_t id = 0)
    {
       header hdr{};
       hdr.spec = repe_magic;
@@ -331,7 +338,7 @@ namespace glz::repe
    /// @param message The error message text
    /// @param id Optional message ID
    /// @return String containing the complete error response
-   inline std::string make_error_response(error_code ec, std::string_view message, uint64_t id = 0)
+   inline std::string make_error_response(error_code ec, std::string_view message, glz::uint64_t id = 0)
    {
       std::string buffer;
       encode_error_buffer(ec, buffer, message, id);

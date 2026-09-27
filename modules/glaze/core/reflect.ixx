@@ -14,7 +14,10 @@
 // glz:header include="glaze/core/common.hpp" group=mid
 // glz:header include="glaze/reflection/get_name.hpp" group=mid
 // glz:header include="glaze/reflection/to_tuple.hpp" group=mid
+// glz:header std=<initializer_list> group=init_list
 // glz:header project_imports=ignore
+module;
+#include <initializer_list>
 export module glaze.core.reflect;
 
 import std;
@@ -1447,7 +1450,7 @@ namespace glz
    }
 }
 
-#include <initializer_list>
+// glz:emit init_list
 
 // glz:emit mid
 

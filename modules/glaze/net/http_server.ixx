@@ -1,49 +1,65 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/net/http_server.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<array>
+// glz:header std=<atomic>
+// glz:header std=<cctype>
+// glz:header std=<charconv>
+// glz:header std=<chrono>
+// glz:header std=<condition_variable>
+// glz:header std=<cstdint>
+// glz:header std=<cstdio>
+// glz:header std=<cstring>
+// glz:header std=<expected>
+// glz:header std=<functional>
+// glz:header std=<glaze/glaze.hpp>
+// glz:header std=<iostream>
+// glz:header std=<mutex>
+// glz:header std=<optional>
+// glz:header std=<source_location>
+// glz:header std=<thread>
+// glz:header std=<unordered_map>
+// glz:header include="glaze/ext/glaze_asio.hpp"
+// glz:header include="glaze/net/cors.hpp"
+// glz:header include="glaze/net/http.hpp"
+// glz:header include="glaze/net/http_router.hpp"
+// glz:header include="glaze/net/openapi.hpp"
+// glz:header include="glaze/net/websocket_connection.hpp"
+// glz:header include="glaze/util/compare.hpp"
+// glz:header include="glaze/util/itoa.hpp"
+// glz:header include="glaze/util/key_transformers.hpp"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit std
 
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cctype>
-#include <charconv>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <expected>
-#include <functional>
-#include <glaze/glaze.hpp>
-#include <iostream>
-#include <mutex>
-#include <optional>
-#include <source_location>
-#include <thread>
-#include <unordered_map>
-
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/net/cors.hpp"
-#include "glaze/net/http.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/net/openapi.hpp"
-#include "glaze/net/websocket_connection.hpp"
-#include "glaze/util/compare.hpp"
-#include "glaze/util/itoa.hpp"
-#include "glaze/util/key_transformers.hpp"
+// glz:emit project
 
 // To deconflict Windows.h
 #ifdef DELETE
 #undef DELETE
 #endif
 
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::size_t;
+export module glaze.net.http_server;
 
-namespace glz
+import std;
+
+import glaze.core.basic_types;
+import glaze.net.cors;
+import glaze.net.http;
+import glaze.net.http_router;
+import glaze.net.openapi;
+import glaze.net.websocket_connection;
+import glaze.util.compare;
+import glaze.util.itoa;
+import glaze.util.key_transformers;
+
+#include "glaze/ext/glaze_asio.hpp"
+#include <glaze/glaze.hpp>
+
+
+export namespace glz
 {
    namespace detail
    {
@@ -62,14 +78,14 @@ namespace glz
          char buffer[64];
          const auto size = std::snprintf(
             buffer, sizeof(buffer), "%.*s, %02u %.*s %04d %02u:%02u:%02u GMT",
-            int32_t(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(), uint32_t(date.day()),
-            int32_t(months[uint32_t(date.month()) - 1].size()), months[uint32_t(date.month()) - 1].data(),
-            int32_t(date.year()), uint32_t(time_of_day.hours().count()), uint32_t(time_of_day.minutes().count()),
-            uint32_t(time_of_day.seconds().count()));
-         if (size < 0 || size_t(size) >= sizeof(buffer)) {
+            glz::int32_t(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(), glz::uint32_t(date.day()),
+            glz::int32_t(months[glz::uint32_t(date.month()) - 1].size()), months[glz::uint32_t(date.month()) - 1].data(),
+            glz::int32_t(date.year()), glz::uint32_t(time_of_day.hours().count()), glz::uint32_t(time_of_day.minutes().count()),
+            glz::uint32_t(time_of_day.seconds().count()));
+         if (size < 0 || glz::size_t(size) >= sizeof(buffer)) {
             return {};
          }
-         return {buffer, size_t(size)};
+         return {buffer, glz::size_t(size)};
       }
 
       // Type trait to detect SSL streams
@@ -89,14 +105,14 @@ namespace glz
          // the range 0 to 255, separated by ".")
          // IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
 
-         constexpr size_t min_ipv4_length = 7; // "x.x.x.x"
-         constexpr size_t max_ipv4_length = 15; // "xxx.xxx.xxx.xxx"
+         constexpr glz::size_t min_ipv4_length = 7; // "x.x.x.x"
+         constexpr glz::size_t max_ipv4_length = 15; // "xxx.xxx.xxx.xxx"
 
          if (address.size() < min_ipv4_length || address.size() > max_ipv4_length) {
             return false;
          }
 
-         size_t pos = 0;
+         glz::size_t pos = 0;
 
          // An IPv4 address contains exactly 4 octets separated by '.' (ignoring legacy forms)
          for (int octet_index = 0; octet_index < 4; ++octet_index) {
@@ -104,9 +120,9 @@ namespace glz
                return false;
             }
 
-            size_t octet_start = pos;
-            uint32_t octet_value = 0;
-            uint32_t digit_count = 0;
+            glz::size_t octet_start = pos;
+            glz::uint32_t octet_value = 0;
+            glz::uint32_t digit_count = 0;
 
             while (pos < address.size() && address[pos] != '.') {
                char ch = address[pos];
@@ -116,7 +132,7 @@ namespace glz
                   return false;
                }
 
-               octet_value = (octet_value * 10) + static_cast<uint32_t>(ch - '0');
+               octet_value = (octet_value * 10) + static_cast<glz::uint32_t>(ch - '0');
                ++digit_count;
                ++pos;
 
@@ -167,7 +183,7 @@ namespace glz
          return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
       }
 
-      inline bool count_ipv6_pieces(std::string_view text, size_t& piece_count) noexcept
+      inline bool count_ipv6_pieces(std::string_view text, glz::size_t& piece_count) noexcept
       {
          piece_count = 0;
 
@@ -177,10 +193,10 @@ namespace glz
             return true;
          }
 
-         size_t pos = 0;
+         glz::size_t pos = 0;
 
          while (pos < text.size()) {
-            size_t digit_count = 0;
+            glz::size_t digit_count = 0;
 
             // Parse one explicit IPv6 piece.
             // RFC 3986 grammar name:
@@ -229,22 +245,22 @@ namespace glz
 
       inline bool is_valid_ipv6_address(std::string_view address) noexcept
       {
-         constexpr size_t min_ipv6_length = 2; // "::"
-         constexpr size_t max_ipv6_length = 45; // "xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:255.255.255.255"
+         constexpr glz::size_t min_ipv6_length = 2; // "::"
+         constexpr glz::size_t max_ipv6_length = 45; // "xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:255.255.255.255"
 
          if (address.size() < min_ipv6_length || address.size() > max_ipv6_length) {
             return false;
          }
 
          std::string_view ipv6_part = address;
-         size_t ipv4_tail_piece_count = 0;
+         glz::size_t ipv4_tail_piece_count = 0;
 
          // RFC 3986 describes IPv6 format in Section 3.2.2, stating that the last
          // 32 bits of an IPv6 address (2 last parts) can be an IPv4 address
          bool has_ipv4_tail = address.find('.') != std::string_view::npos;
          if (has_ipv4_tail) {
             // Find the last IPv6 separator before the IPv4 tail
-            size_t tail_separator_pos = address.rfind(':');
+            glz::size_t tail_separator_pos = address.rfind(':');
             if (tail_separator_pos == std::string_view::npos) {
                return false;
             }
@@ -256,7 +272,7 @@ namespace glz
                return false;
             }
 
-            size_t ipv6_part_size = tail_separator_pos;
+            glz::size_t ipv6_part_size = tail_separator_pos;
 
             // For cases such as "::xxx.x.x.x" we check if there is a compression
             // token and do not count it as a part of IPv6
@@ -269,7 +285,7 @@ namespace glz
             ipv6_part = address.substr(0, ipv6_part_size);
          }
 
-         size_t compression_pos = ipv6_part.find("::");
+         glz::size_t compression_pos = ipv6_part.find("::");
          if (compression_pos != std::string_view::npos) {
             std::string_view left_part = ipv6_part.substr(0, compression_pos);
             std::string_view right_part = ipv6_part.substr(compression_pos + 2);
@@ -281,8 +297,8 @@ namespace glz
                return false;
             }
 
-            size_t left_piece_count = 0;
-            size_t right_piece_count = 0;
+            glz::size_t left_piece_count = 0;
+            glz::size_t right_piece_count = 0;
 
             if (!count_ipv6_pieces(left_part, left_piece_count)) {
                return false;
@@ -292,14 +308,14 @@ namespace glz
                return false;
             }
 
-            size_t piece_count = left_piece_count + right_piece_count + ipv4_tail_piece_count;
+            glz::size_t piece_count = left_piece_count + right_piece_count + ipv4_tail_piece_count;
 
             // Address must not have 8 pieces if compression token is present
             return piece_count < 8;
          }
 
          // No compression token present, just count all of the IPv6 pieces
-         size_t piece_count = 0;
+         glz::size_t piece_count = 0;
          if (!count_ipv6_pieces(ipv6_part, piece_count)) {
             return false;
          }
@@ -361,11 +377,11 @@ namespace glz
          // For dotted text form used in Host, the maximum length without
          // a trailing root dot is 253 characters:
          // 63 "." 63 "." 63 "." 61
-         constexpr size_t max_host_name_length = 253;
+         constexpr glz::size_t max_host_name_length = 253;
 
          // RFC 1035, Section 2.3.1:
          // Labels must be 63 characters or less.
-         constexpr size_t max_dns_label_length = 63;
+         constexpr glz::size_t max_dns_label_length = 63;
 
          if (hostname.empty()) {
             return false;
@@ -383,7 +399,7 @@ namespace glz
             return false;
          }
 
-         size_t dns_label_length = 0;
+         glz::size_t dns_label_length = 0;
          char prev_char = '\0';
 
          for (char ch : hostname) {
@@ -457,16 +473,16 @@ namespace glz
             return true;
          }
 
-         constexpr uint32_t min_port = 1;
-         constexpr uint32_t max_port = 65535;
-         uint32_t port_value = 0;
+         constexpr glz::uint32_t min_port = 1;
+         constexpr glz::uint32_t max_port = 65535;
+         glz::uint32_t port_value = 0;
 
          for (char ch : port_str) {
             if (ch < '0' || ch > '9') [[unlikely]] {
                return false;
             }
 
-            port_value = (port_value * 10) + static_cast<uint32_t>(ch - '0');
+            port_value = (port_value * 10) + static_cast<glz::uint32_t>(ch - '0');
 
             if (port_value > max_port) [[unlikely]] {
                return false;
@@ -499,7 +515,7 @@ namespace glz
 
          // URI Host inside brackets must be interpreted as an IPv6 literal
          if (uri_host.starts_with('[')) {
-            size_t closing_bracket_pos = uri_host.find(']');
+            glz::size_t closing_bracket_pos = uri_host.find(']');
             if (closing_bracket_pos == std::string_view::npos) {
                return false;
             }
@@ -534,7 +550,7 @@ namespace glz
          // RFC 9110, Section 4.2.3:
          // If the port is equal to the default port for a scheme, the normal
          // form is to omit the port subcomponent.
-         size_t port_delimiter_pos = authority.find(':');
+         glz::size_t port_delimiter_pos = authority.find(':');
          if (port_delimiter_pos != std::string_view::npos) {
             // Only one port delimiter is allowed
             if (authority.find(':', port_delimiter_pos + 1) != std::string_view::npos) {
@@ -632,7 +648,7 @@ namespace glz
             return false;
          }
 
-         size_t pos = 0;
+         glz::size_t pos = 0;
          while (pos != path.size()) {
             char ch = path[pos];
 
@@ -679,7 +695,7 @@ namespace glz
             return true;
          }
 
-         size_t pos = 0;
+         glz::size_t pos = 0;
          while (pos < query.size()) {
             char ch = query[pos];
 
@@ -720,7 +736,7 @@ namespace glz
          std::string_view absolute_path = origin;
          std::string_view query;
 
-         size_t query_separator_pos = origin.find('?', 1);
+         glz::size_t query_separator_pos = origin.find('?', 1);
          bool has_query_params = query_separator_pos != std::string_view::npos;
 
          if (has_query_params) {
@@ -811,7 +827,7 @@ namespace glz
             // defines absolute-URI = scheme ":" hier-part [ "?" query ], with
             // no fragment allowed, so a '#' anywhere in the target must fail
             // validation, which it does in the authority/path/query checks
-            size_t authority_end = target.find_first_of("/?");
+            glz::size_t authority_end = target.find_first_of("/?");
             bool ends_with_authority = authority_end == std::string_view::npos;
 
             // RFC 3986, Section 3.3:
@@ -858,7 +874,7 @@ namespace glz
             return std::unexpected(400);
          }
 
-         size_t first_space = request_line.find(' ');
+         glz::size_t first_space = request_line.find(' ');
          bool starts_with_space = first_space == 0;
 
          if (first_space == std::string_view::npos || starts_with_space) {
@@ -883,7 +899,7 @@ namespace glz
             return std::unexpected(501);
          }
 
-         size_t second_space = request_line.find(' ', first_space + 1);
+         glz::size_t second_space = request_line.find(' ', first_space + 1);
          if (second_space == std::string_view::npos) {
             return std::unexpected(400);
          }
@@ -976,7 +992,7 @@ namespace glz
 
       // Get remote endpoint info
       virtual std::string remote_address() const = 0;
-      virtual uint16_t remote_port() const = 0;
+      virtual glz::uint16_t remote_port() const = 0;
 
       // Check if headers have been sent
       virtual bool is_headers_sent() const = 0;
@@ -1183,7 +1199,7 @@ namespace glz
          return "";
       }
 
-      uint16_t remote_port() const override
+      glz::uint16_t remote_port() const override
       {
          if (socket_) {
             try {
@@ -1238,7 +1254,7 @@ namespace glz
          }
          else {
             // For TCP sockets, use async_receive with message_peek for more responsive detection
-            auto buffer = std::make_shared<std::array<uint8_t, 1>>();
+            auto buffer = std::make_shared<std::array<glz::uint8_t, 1>>();
             socket_->async_receive(
                asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
                   if (ec && self->disconnect_handler_) {
@@ -1404,7 +1420,7 @@ namespace glz
        * the connection is closed. Set to 0 to disable timeout (not recommended).
        * Default: 60 seconds
        */
-      uint32_t keep_alive_timeout = 60;
+      glz::uint32_t keep_alive_timeout = 60;
 
       /**
        * @brief Maximum requests allowed per connection
@@ -1413,7 +1429,7 @@ namespace glz
        * Connection: close and closes the connection. Set to 0 for unlimited.
        * Default: 0 (unlimited)
        */
-      uint32_t max_requests_per_connection = 0;
+      glz::uint32_t max_requests_per_connection = 0;
 
       /**
        * @brief Maximum allowed request body size in bytes
@@ -1425,7 +1441,7 @@ namespace glz
        * Set to 0 for no limit.
        * Default: 100 MB
        */
-      size_t max_request_body_size = http_default_max_body_size;
+      glz::size_t max_request_body_size = http_default_max_body_size;
    };
 
    // Server implementation using non-blocking asio with WebSocket support
@@ -1602,7 +1618,7 @@ namespace glz
          // is destroyed first, that holds.
       }
 
-      inline http_server& bind(std::string_view address, uint16_t port)
+      inline http_server& bind(std::string_view address, glz::uint16_t port)
       {
          try {
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(address), port);
@@ -1614,9 +1630,9 @@ namespace glz
          return *this;
       }
 
-      inline http_server& bind(uint16_t port) { return bind("0.0.0.0", port); }
+      inline http_server& bind(glz::uint16_t port) { return bind("0.0.0.0", port); }
 
-      inline uint16_t port(asio::error_code& ec) const
+      inline glz::uint16_t port(asio::error_code& ec) const
       {
          if (!acceptor) {
             ec = asio::error::not_connected;
@@ -1629,7 +1645,7 @@ namespace glz
          return endpoint.port();
       }
 
-      inline uint16_t port() const
+      inline glz::uint16_t port() const
       {
          if (!acceptor) {
             throw std::runtime_error("Server not bound");
@@ -1681,7 +1697,7 @@ namespace glz
        * io_thread.join();
        * @endcode
        */
-      inline void start(std::optional<size_t> num_threads = std::nullopt)
+      inline void start(std::optional<glz::size_t> num_threads = std::nullopt)
       {
          if (running || !acceptor) {
             return;
@@ -1690,7 +1706,7 @@ namespace glz
          running = true;
 
          // Determine number of threads
-         size_t actual_threads;
+         glz::size_t actual_threads;
          if (num_threads.has_value()) {
             // Use the explicitly specified value (including 0)
             actual_threads = *num_threads;
@@ -1708,7 +1724,7 @@ namespace glz
          // Start worker threads (unless explicitly set to 0)
          if (io_context && actual_threads > 0) {
             threads.reserve(actual_threads);
-            for (size_t i = 0; i < actual_threads; ++i) {
+            for (glz::size_t i = 0; i < actual_threads; ++i) {
                threads.emplace_back([this] {
                   io_context->run();
                   // Don't report errors during shutdown
@@ -1988,10 +2004,10 @@ namespace glz
             for (const auto& [route_path, method_handlers] : root_router.normal_routes.routes) {
                // Convert router path /:param to OpenAPI path /{param}
                std::string openapi_path = route_path;
-               size_t pos = 0;
+               glz::size_t pos = 0;
                while ((pos = openapi_path.find(':', pos)) != std::string::npos) {
                   openapi_path.replace(pos, 1, "{");
-                  size_t end_pos = openapi_path.find('/', pos);
+                  glz::size_t end_pos = openapi_path.find('/', pos);
                   if (end_pos == std::string::npos) {
                      openapi_path.push_back('}');
                   }
@@ -2288,7 +2304,7 @@ namespace glz
        * @param timeout_seconds Seconds to wait for a new request before closing
        * @return Reference to this server for method chaining
        */
-      inline http_server& keep_alive_timeout(uint32_t timeout_seconds)
+      inline http_server& keep_alive_timeout(glz::uint32_t timeout_seconds)
       {
          conn_config_.keep_alive_timeout = timeout_seconds;
          return *this;
@@ -2300,7 +2316,7 @@ namespace glz
        * @param max_requests Maximum requests before closing (0 = unlimited)
        * @return Reference to this server for method chaining
        */
-      inline http_server& max_requests_per_connection(uint32_t max_requests)
+      inline http_server& max_requests_per_connection(glz::uint32_t max_requests)
       {
          conn_config_.max_requests_per_connection = max_requests;
          return *this;
@@ -2309,13 +2325,13 @@ namespace glz
       // Set maximum request body size in bytes (0 = unlimited).
       // Requests exceeding this are rejected with HTTP 413.
       // Must be configured before starting the server; not safe to change while serving.
-      inline http_server& max_request_body_size(size_t max_size)
+      inline http_server& max_request_body_size(glz::size_t max_size)
       {
          conn_config_.max_request_body_size = max_size;
          return *this;
       }
 
-      size_t max_request_body_size() const { return conn_config_.max_request_body_size; }
+      glz::size_t max_request_body_size() const { return conn_config_.max_request_body_size; }
 
       /**
        * @brief Wait for a shutdown signal
@@ -2368,12 +2384,12 @@ namespace glz
       {
          socket_type socket;
          std::string read_buf; // Flat read buffer (capacity reused across keep-alive)
-         size_t buf_len = 0; // Valid data in read_buf[0..buf_len)
-         size_t buf_consumed = 0; // Bytes consumed for current request (shifted on next request)
+         glz::size_t buf_len = 0; // Valid data in read_buf[0..buf_len)
+         glz::size_t buf_consumed = 0; // Bytes consumed for current request (shifted on next request)
          request request_;
          asio::ip::tcp::endpoint remote_endpoint;
          asio::steady_timer idle_timer;
-         uint32_t request_count = 0;
+         glz::uint32_t request_count = 0;
          bool should_close = false;
          response response_; // Persists across keep-alive requests to reuse capacity
          std::string header_buf; // Persists across keep-alive requests to reuse capacity
@@ -2386,7 +2402,7 @@ namespace glz
       };
 
       // Helper for executing wrapping middleware chain
-      void execute_middleware_chain(size_t index, request& req, response& res, const handler& h)
+      void execute_middleware_chain(glz::size_t index, request& req, response& res, const handler& h)
       {
          if (index >= wrapping_middlewares_.size()) {
             h(req, res);
@@ -2486,7 +2502,7 @@ namespace glz
       struct parse_result
       {
          parse_status status = parse_status::incomplete;
-         size_t headers_end = 0; // Byte offset past the final \r\n\r\n
+         glz::size_t headers_end = 0; // Byte offset past the final \r\n\r\n
          bool is_http_11 = false;
       };
 
@@ -2564,7 +2580,7 @@ namespace glz
          conn->request_.headers.clear();
 
          // --- Parse request line ---
-         size_t request_line_end = data.find("\r\n");
+         glz::size_t request_line_end = data.find("\r\n");
          if (request_line_end == std::string_view::npos) return result; // incomplete
 
          std::string_view request_line_str = data.substr(0, request_line_end);
@@ -2582,7 +2598,7 @@ namespace glz
          result.is_http_11 = request_line->is_http11;
 
          // --- Parse headers line by line (single pass) ---
-         size_t pos = request_line_end + 2;
+         glz::size_t pos = request_line_end + 2;
          auto& headers = conn->request_.headers;
          bool host_header_parsed = false;
 
@@ -2628,7 +2644,7 @@ namespace glz
             }
 
             // Find end of this header line
-            size_t line_end = data.find("\r\n", pos);
+            glz::size_t line_end = data.find("\r\n", pos);
             if (line_end == std::string_view::npos) return result; // incomplete
 
             // Parse header name:value
@@ -2730,22 +2746,22 @@ namespace glz
          }
 
          // Body bytes in the buffer start at headers_end
-         const size_t body_offset = result.headers_end;
-         const size_t available_body = conn->buf_len - body_offset;
+         const glz::size_t body_offset = result.headers_end;
+         const glz::size_t available_body = conn->buf_len - body_offset;
 
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
-            const size_t initial_body_size = (std::min)(content_length, available_body);
+            const glz::size_t initial_body_size = (std::min)(content_length, available_body);
             if (initial_body_size > 0) {
                std::memcpy(conn->request_.body.data(), &conn->read_buf[body_offset], initial_body_size);
             }
             // Track consumed bytes (headers + body taken from buffer)
             conn->buf_consumed = body_offset + initial_body_size;
 
-            const size_t missing_bytes = content_length - initial_body_size;
+            const glz::size_t missing_bytes = content_length - initial_body_size;
             if (missing_bytes > 0) {
                asio::async_read(conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
-                                asio::transfer_exactly(missing_bytes), [this, conn](std::error_code ec, size_t) {
+                                asio::transfer_exactly(missing_bytes), [this, conn](std::error_code ec, glz::size_t) {
                                    if (ec) {
                                       error_handler(ec, std::source_location::current());
                                       return;
@@ -2767,7 +2783,7 @@ namespace glz
       static bool ci_contains(std::string_view haystack, std::string_view needle)
       {
          if (needle.size() > haystack.size()) return false;
-         for (size_t i = 0; i <= haystack.size() - needle.size(); ++i) {
+         for (glz::size_t i = 0; i <= haystack.size() - needle.size(); ++i) {
             if (glz::striequal(haystack.substr(i, needle.size()), needle)) {
                return true;
             }
@@ -2923,7 +2939,7 @@ namespace glz
 
                   std::string allow_header;
                   allow_header.reserve(allowed_methods.size() * 8);
-                  for (size_t i = 0; i < allowed_methods.size(); ++i) {
+                  for (glz::size_t i = 0; i < allowed_methods.size(); ++i) {
                      if (i > 0) allow_header.append(", ");
                      allow_header.append(std::string{to_string(allowed_methods[i])});
                   }
@@ -3060,8 +3076,8 @@ namespace glz
          }
          else {
             h.append("HTTP/1.1 ");
-            auto* end = glz::to_chars(num_buf, static_cast<int32_t>(response.status_code));
-            h.append(num_buf, size_t(end - num_buf));
+            auto* end = glz::to_chars(num_buf, static_cast<glz::int32_t>(response.status_code));
+            h.append(num_buf, glz::size_t(end - num_buf));
             h.append(" ");
             h.append(get_status_message(response.status_code));
             h.append("\r\n");
@@ -3079,8 +3095,8 @@ namespace glz
 
          if (!(response.user_headers_set & response::has_content_length)) {
             h.append("Content-Length: ");
-            auto* end = glz::to_chars(num_buf, static_cast<uint64_t>(response.response_body.size()));
-            h.append(num_buf, size_t(end - num_buf));
+            auto* end = glz::to_chars(num_buf, static_cast<glz::uint64_t>(response.response_body.size()));
+            h.append(num_buf, glz::size_t(end - num_buf));
             h.append("\r\n");
          }
 
@@ -3105,11 +3121,11 @@ namespace glz
                if (conn_config_.keep_alive_timeout > 0) {
                   h.append("Keep-Alive: timeout=");
                   auto* end = glz::to_chars(num_buf, conn_config_.keep_alive_timeout);
-                  h.append(num_buf, size_t(end - num_buf));
+                  h.append(num_buf, glz::size_t(end - num_buf));
                   if (conn_config_.max_requests_per_connection > 0) {
                      h.append(", max=");
                      end = glz::to_chars(num_buf, conn_config_.max_requests_per_connection);
-                     h.append(num_buf, size_t(end - num_buf));
+                     h.append(num_buf, glz::size_t(end - num_buf));
                   }
                   h.append("\r\n");
                }
@@ -3149,7 +3165,7 @@ namespace glz
                                  conn->request_.body.clear();
                                  conn->response_.clear();
 
-                                 size_t leftover = conn->buf_len - conn->buf_consumed;
+                                 glz::size_t leftover = conn->buf_len - conn->buf_consumed;
                                  if (leftover > 0) {
                                     std::memmove(conn->read_buf.data(), &conn->read_buf[conn->buf_consumed], leftover);
                                  }
@@ -3297,7 +3313,7 @@ namespace glz
       // Uses enable_shared_from_this to avoid circular reference memory leaks
       template <typename T>
       void send_periodic_data(std::shared_ptr<streaming_connection_interface> conn, std::function<T()> data_generator,
-                              std::chrono::milliseconds interval, size_t max_events = 0)
+                              std::chrono::milliseconds interval, glz::size_t max_events = 0)
       {
          if (!conn || !conn->is_open()) return;
 
@@ -3307,11 +3323,11 @@ namespace glz
             std::shared_ptr<asio::steady_timer> timer;
             std::function<T()> data_generator;
             std::chrono::milliseconds interval;
-            size_t max_events;
-            size_t counter = 0;
+            glz::size_t max_events;
+            glz::size_t counter = 0;
 
             periodic_sender(std::shared_ptr<streaming_connection_interface> c, std::function<T()> gen,
-                            std::chrono::milliseconds intv, size_t max_ev)
+                            std::chrono::milliseconds intv, glz::size_t max_ev)
                : conn(std::move(c)),
                  timer(std::make_shared<asio::steady_timer>(conn->get_executor())),
                  data_generator(std::move(gen)),

@@ -5,17 +5,16 @@
 // sweet32 and sweet64 hash algorithms using SWAR (8 bytes at a time)
 // Developed by Stephen Berry
 // glz:header path="glaze/hash/sweethash.hpp"
+// glz:header std=<concepts>
 // glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
+// glz:header project_imports=ignore
 export module glaze.hash.sweethash;
 
 import std;
+import glaze.core.basic_types;
 
-using std::size_t;
-using std::uint8_t;
-using std::uint32_t;
-using std::uint64_t;
 
 export namespace glz::sweethash
 {
@@ -27,14 +26,14 @@ export namespace glz::sweethash
    };
 
    // Prime constants for mixing
-   inline constexpr uint64_t prime1 = 0x9E3779B97F4A7C15ull; // Golden ratio derived
-   inline constexpr uint64_t prime2 = 0xC6A4A7935BD1E995ull; // Used in MurmurHash64
-   inline constexpr uint64_t prime3 = 0x94D049BB133111EBull;
-   inline constexpr uint64_t prime4 = 0xBF58476D1CE4E5B9ull;
-   inline constexpr uint64_t prime5 = 0x165667B19E3779F9ull;
+   inline constexpr glz::uint64_t prime1 = 0x9E3779B97F4A7C15ull; // Golden ratio derived
+   inline constexpr glz::uint64_t prime2 = 0xC6A4A7935BD1E995ull; // Used in MurmurHash64
+   inline constexpr glz::uint64_t prime3 = 0x94D049BB133111EBull;
+   inline constexpr glz::uint64_t prime4 = 0xBF58476D1CE4E5B9ull;
+   inline constexpr glz::uint64_t prime5 = 0x165667B19E3779F9ull;
 
    // Mix function for 64-bit values
-   [[nodiscard]] inline constexpr uint64_t mix64(uint64_t v) noexcept
+   [[nodiscard]] inline constexpr glz::uint64_t mix64(glz::uint64_t v) noexcept
    {
       v = v ^ (v >> 33);
       v = v * prime2;
@@ -44,14 +43,14 @@ export namespace glz::sweethash
    }
 
    // sweet64: 64-bit hash function
-   [[nodiscard]] inline uint64_t sweet64(const void* data, size_t len, uint64_t seed = prime1) noexcept
+   [[nodiscard]] inline glz::uint64_t sweet64(const void* data, glz::size_t len, glz::uint64_t seed = prime1) noexcept
    {
-      const uint8_t* p = static_cast<const uint8_t*>(data);
+      const glz::uint8_t* p = static_cast<const glz::uint8_t*>(data);
 
       // For inputs <= 8 bytes, we have at most 64 bits of input
       // Return bytes directly with seed - minimal perfect hash
       if (len <= 8) {
-         uint64_t v = 0;
+         glz::uint64_t v = 0;
          switch (len) {
          case 8:
             std::memcpy(&v, p, 8);
@@ -84,18 +83,18 @@ export namespace glz::sweethash
          return v ^ seed ^ (len + 1);
       }
 
-      uint64_t h = (seed ^ prime4) + (len * prime1);
-      const uint8_t* const end = p + len;
+      glz::uint64_t h = (seed ^ prime4) + (len * prime1);
+      const glz::uint8_t* const end = p + len;
 
       // For large inputs (>= 32 bytes), use 4-lane parallel processing
       if (len >= 32) {
-         uint64_t h1 = h;
-         uint64_t h2 = (seed * prime2) ^ prime3;
-         uint64_t h3 = (seed * prime3) ^ prime4;
-         uint64_t h4 = (seed * prime4) ^ prime5;
+         glz::uint64_t h1 = h;
+         glz::uint64_t h2 = (seed * prime2) ^ prime3;
+         glz::uint64_t h3 = (seed * prime3) ^ prime4;
+         glz::uint64_t h4 = (seed * prime4) ^ prime5;
 
          do {
-            uint64_t k1, k2, k3, k4;
+            glz::uint64_t k1, k2, k3, k4;
             std::memcpy(&k1, p, 8);
             std::memcpy(&k2, p + 8, 8);
             std::memcpy(&k3, p + 16, 8);
@@ -130,7 +129,7 @@ export namespace glz::sweethash
 
       // Process remaining 8-byte chunks
       while (len >= 8) {
-         uint64_t k;
+         glz::uint64_t k;
          std::memcpy(&k, p, 8);
          k = k * prime2;
          k = k ^ (k >> 47);
@@ -142,7 +141,7 @@ export namespace glz::sweethash
 
       // Process remaining 1-7 bytes by reading last 8 bytes (overlapping)
       if (len > 0) {
-         uint64_t k;
+         glz::uint64_t k;
          std::memcpy(&k, end - 8, 8);
          k = k * prime2;
          k = k ^ (k >> 47);
@@ -154,14 +153,14 @@ export namespace glz::sweethash
    }
 
    // sweet32: 32-bit hash function
-   [[nodiscard]] inline uint32_t sweet32(const void* data, size_t len,
-                                         uint32_t seed = static_cast<uint32_t>(prime1)) noexcept
+   [[nodiscard]] inline glz::uint32_t sweet32(const void* data, glz::size_t len,
+                                         glz::uint32_t seed = static_cast<glz::uint32_t>(prime1)) noexcept
    {
-      const uint8_t* p = static_cast<const uint8_t*>(data);
+      const glz::uint8_t* p = static_cast<const glz::uint8_t*>(data);
 
       // For inputs <= 8 bytes, use simple hash (tail handler requires len >= 9)
       if (len <= 8) {
-         uint64_t v = 0;
+         glz::uint64_t v = 0;
          switch (len) {
          case 8:
             std::memcpy(&v, p, 8);
@@ -191,22 +190,22 @@ export namespace glz::sweethash
             break;
          }
          v = v ^ seed ^ (len + 1);
-         return static_cast<uint32_t>(v) ^ static_cast<uint32_t>(v >> 32);
+         return static_cast<glz::uint32_t>(v) ^ static_cast<glz::uint32_t>(v >> 32);
       }
 
       // Full hash for inputs > 8 bytes
-      uint64_t seed64 = (static_cast<uint64_t>(seed) << 32) | static_cast<uint64_t>(seed);
-      uint64_t h = (seed64 ^ prime4) + (len * prime1);
-      const uint8_t* const end = p + len;
+      glz::uint64_t seed64 = (static_cast<glz::uint64_t>(seed) << 32) | static_cast<glz::uint64_t>(seed);
+      glz::uint64_t h = (seed64 ^ prime4) + (len * prime1);
+      const glz::uint8_t* const end = p + len;
 
       if (len >= 32) {
-         uint64_t h1 = h;
-         uint64_t h2 = (seed64 * prime2) ^ prime3;
-         uint64_t h3 = (seed64 * prime3) ^ prime4;
-         uint64_t h4 = (seed64 * prime4) ^ prime5;
+         glz::uint64_t h1 = h;
+         glz::uint64_t h2 = (seed64 * prime2) ^ prime3;
+         glz::uint64_t h3 = (seed64 * prime3) ^ prime4;
+         glz::uint64_t h4 = (seed64 * prime4) ^ prime5;
 
          do {
-            uint64_t k1, k2, k3, k4;
+            glz::uint64_t k1, k2, k3, k4;
             std::memcpy(&k1, p, 8);
             std::memcpy(&k2, p + 8, 8);
             std::memcpy(&k3, p + 16, 8);
@@ -240,7 +239,7 @@ export namespace glz::sweethash
       }
 
       while (len >= 8) {
-         uint64_t k;
+         glz::uint64_t k;
          std::memcpy(&k, p, 8);
          k = k * prime2;
          k = k ^ (k >> 47);
@@ -251,7 +250,7 @@ export namespace glz::sweethash
       }
 
       if (len > 0) {
-         uint64_t k;
+         glz::uint64_t k;
          std::memcpy(&k, end - 8, 8);
          k = k * prime2;
          k = k ^ (k >> 47);
@@ -260,18 +259,18 @@ export namespace glz::sweethash
       }
 
       h = mix64(h);
-      return static_cast<uint32_t>(h) ^ static_cast<uint32_t>(h >> 32);
+      return static_cast<glz::uint32_t>(h) ^ static_cast<glz::uint32_t>(h >> 32);
    }
 
    // Convenience overloads for string-like types
    template <contiguous_range T>
-   [[nodiscard]] inline uint64_t sweet64(const T& s, uint64_t seed = prime1) noexcept
+   [[nodiscard]] inline glz::uint64_t sweet64(const T& s, glz::uint64_t seed = prime1) noexcept
    {
       return sweet64(static_cast<const void*>(s.data()), s.size(), seed);
    }
 
    template <contiguous_range T>
-   [[nodiscard]] inline uint32_t sweet32(const T& s, uint32_t seed = static_cast<uint32_t>(prime1)) noexcept
+   [[nodiscard]] inline glz::uint32_t sweet32(const T& s, glz::uint32_t seed = static_cast<glz::uint32_t>(prime1)) noexcept
    {
       return sweet32(static_cast<const void*>(s.data()), s.size(), seed);
    }

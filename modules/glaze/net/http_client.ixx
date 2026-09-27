@@ -1,42 +1,58 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/net/http_client.hpp"
+// glz:header std=<atomic>
+// glz:header std=<chrono>
+// glz:header std=<concepts>
+// glz:header std=<cstdlib>
+// glz:header std=<expected>
+// glz:header std=<functional>
+// glz:header std=<future>
+// glz:header std=<glaze/glaze.hpp>
+// glz:header std=<iostream>
+// glz:header std=<limits>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<optional>
+// glz:header std=<shared_mutex>
+// glz:header std=<source_location>
+// glz:header std=<thread>
+// glz:header std=<unordered_map>
+// glz:header std=<vector>
+// glz:header include="glaze/ext/glaze_asio.hpp"
+// glz:header include="glaze/net/http_router.hpp"
+// glz:header include="glaze/util/env.hpp"
+// glz:header include="glaze/util/itoa.hpp"
+// glz:header include="glaze/util/key_transformers.hpp"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit std
 
-#include <atomic>
-#include <chrono>
-#include <concepts>
-#include <cstdlib>
-#include <expected>
-#include <functional>
-#include <future>
-#include <glaze/glaze.hpp>
-#include <iostream>
-#include <limits>
-#include <memory>
-#include <mutex>
-#include <optional>
-#include <shared_mutex>
-#include <source_location>
-#include <thread>
-#include <unordered_map>
-#include <vector>
-
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/util/env.hpp"
-#include "glaze/util/itoa.hpp"
-#include "glaze/util/key_transformers.hpp"
+// glz:emit project
 
 #ifdef GLZ_ENABLE_SSL
 #include <openssl/ssl.h> // For SSL_set_tlsext_host_name
 #endif
 
-namespace glz
+export module glaze.net.http_client;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.net.http_router;
+import glaze.util.itoa;
+import glaze.util.key_transformers;
+
+#include "glaze/ext/glaze_asio.hpp"
+#include "glaze/util/env.hpp"
+#include <glaze/glaze.hpp>
+
+export namespace glz
 {
-   inline int strncasecmp(const char* s1, const char* s2, size_t n)
+   inline int strncasecmp(const char* s1, const char* s2, glz::size_t n)
    {
-      for (size_t i = 0; i < n; ++i) {
+      for (glz::size_t i = 0; i < n; ++i) {
          unsigned char c1 = static_cast<unsigned char>(s1[i]);
          unsigned char c2 = static_cast<unsigned char>(s2[i]);
          if (c1 == '\0' || c2 == '\0') {
@@ -60,7 +76,7 @@ namespace glz
    {
       std::string protocol;
       std::string host;
-      uint16_t port;
+      glz::uint16_t port;
       std::string path;
    };
 
@@ -174,7 +190,7 @@ template <>
 struct std::is_error_code_enum<glz::http_client_error> : std::true_type
 {};
 
-namespace glz
+export namespace glz
 {
    namespace detail
    {
@@ -278,7 +294,7 @@ namespace glz
                port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
             auto* end = glz::to_chars(port_buf, url.port);
             request_str.push_back(':');
-            request_str.append(port_buf, static_cast<size_t>(end - port_buf));
+            request_str.append(port_buf, static_cast<glz::size_t>(end - port_buf));
          }
          request_str.append("\r\n");
          request_str.append("Connection: keep-alive\r\n");
@@ -438,7 +454,7 @@ namespace glz
       }
 
       // Find protocol
-      size_t protocol_end = url.find("://");
+      glz::size_t protocol_end = url.find("://");
       if (protocol_end == std::string_view::npos) {
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
@@ -449,12 +465,12 @@ namespace glz
       }
 
       // Process host, port and path
-      size_t host_start = protocol_end + 3;
+      glz::size_t host_start = protocol_end + 3;
       if (host_start >= url.size()) {
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
 
-      size_t host_end = url.find_first_of("/:", host_start);
+      glz::size_t host_end = url.find_first_of("/:", host_start);
       std::string host;
       std::string port_str;
       std::string path = "/";
@@ -464,8 +480,8 @@ namespace glz
       }
       else if (url[host_end] == ':') {
          host = std::string(url.substr(host_start, host_end - host_start));
-         size_t port_start = host_end + 1;
-         size_t port_end = url.find('/', port_start);
+         glz::size_t port_start = host_end + 1;
+         glz::size_t port_end = url.find('/', port_start);
 
          if (port_end == std::string_view::npos) {
             port_str = std::string(url.substr(port_start));
@@ -489,7 +505,7 @@ namespace glz
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
 
-      uint16_t port = 0;
+      glz::uint16_t port = 0;
       if (port_str.empty()) {
          port = (protocol == "https" || protocol == "wss") ? 443 : 80;
       }
@@ -499,7 +515,7 @@ namespace glz
             if (port_long <= 0 || port_long > 65535) {
                return std::unexpected(std::make_error_code(std::errc::invalid_argument));
             }
-            port = static_cast<uint16_t>(port_long);
+            port = static_cast<glz::uint16_t>(port_long);
          }
          catch (const std::exception&) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
@@ -571,7 +587,7 @@ namespace glz
       struct connection_key
       {
          std::string host;
-         uint16_t port;
+         glz::uint16_t port;
          bool is_https;
 
          bool operator==(const connection_key& other) const
@@ -582,9 +598,9 @@ namespace glz
 
       struct connection_key_hash
       {
-         size_t operator()(const connection_key& key) const
+         glz::size_t operator()(const connection_key& key) const
          {
-            return std::hash<std::string>{}(key.host) ^ (std::hash<uint16_t>{}(key.port) << 1) ^
+            return std::hash<std::string>{}(key.host) ^ (std::hash<glz::uint16_t>{}(key.port) << 1) ^
                    (std::hash<bool>{}(key.is_https) << 2);
          }
       };
@@ -627,7 +643,7 @@ namespace glz
       // Users on a lock-fallback platform can verify via
       // std::atomic<std::chrono::steady_clock::duration>::is_always_lock_free.
       std::atomic<std::chrono::steady_clock::duration> idle_timeout_{std::chrono::seconds(4)};
-      std::atomic<size_t> max_per_host_{10};
+      std::atomic<glz::size_t> max_per_host_{10};
       // Whether to actively peek a pooled TCP socket on acquire. When true (default), a
       // dead-on-arrival socket is detected before any request bytes go on the wire.
       // Disabling this is mainly useful for tests that want to deterministically exercise
@@ -678,7 +694,7 @@ namespace glz
       // released before any potentially blocking work (peek, close_socket -> SSL
       // shutdown). This is essential under concurrency: otherwise every acquire/return
       // would serialize behind the slowest socket teardown.
-      acquire_result acquire(const std::string& host, uint16_t port, bool is_https)
+      acquire_result acquire(const std::string& host, glz::uint16_t port, bool is_https)
       {
          connection_key key{host, port, is_https};
          const auto now = std::chrono::steady_clock::now();
@@ -740,12 +756,12 @@ namespace glz
       // Backwards-compatible wrapper: returns just the socket and discards the from_pool
       // flag. New internal code should call acquire() and use the from_pool flag to drive
       // retry behavior.
-      socket_variant get_connection(const std::string& host, uint16_t port, bool is_https)
+      socket_variant get_connection(const std::string& host, glz::uint16_t port, bool is_https)
       {
          return acquire(host, port, is_https).socket;
       }
 
-      void return_connection(const std::string& host, uint16_t port, bool is_https, socket_variant socket)
+      void return_connection(const std::string& host, glz::uint16_t port, bool is_https, socket_variant socket)
       {
          if (!detail::socket_is_open(socket)) {
             return;
@@ -769,8 +785,8 @@ namespace glz
 
       // Maximum number of idle connections kept per host. Excess connections are closed
       // when returned. Default is 10.
-      void set_max_connections_per_host(size_t n) { max_per_host_.store(n); }
-      size_t max_connections_per_host() const { return max_per_host_.load(); }
+      void set_max_connections_per_host(glz::size_t n) { max_per_host_.store(n); }
+      glz::size_t max_connections_per_host() const { return max_per_host_.load(); }
 
       // Whether to actively peek pooled TCP sockets on acquire to detect server-side
       // close before sending a request. Default is true. Disabling forces stale
@@ -895,7 +911,7 @@ namespace glz
       bool is_https{false}; // Track if this is an HTTPS connection
 
       // Constructor with optional buffer size limit and strategy
-      http_stream_connection(size_t max_buffer_size = 1024 * 1024,
+      http_stream_connection(glz::size_t max_buffer_size = 1024 * 1024,
                              stream_read_strategy read_strategy = stream_read_strategy::bulk_transfer)
          : buffer(std::make_shared<asio::streambuf>(max_buffer_size)), strategy(read_strategy)
       {}
@@ -943,7 +959,7 @@ namespace glz
       std::chrono::seconds timeout{std::chrono::seconds{30}};
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
       std::function<bool(int)> status_is_error{[](int status) { return status >= 400; }};
-      size_t max_buffer_size{1024 * 1024};
+      glz::size_t max_buffer_size{1024 * 1024};
    };
 
    // Stream request parameters struct
@@ -953,7 +969,7 @@ namespace glz
       std::string url;
       std::chrono::seconds timeout{std::chrono::seconds{30}};
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
-      size_t max_buffer_size{1024 * 1024};
+      glz::size_t max_buffer_size{1024 * 1024};
       std::string body;
       std::unordered_map<std::string, std::string> headers;
       http_connect_handler on_connect;
@@ -1082,8 +1098,8 @@ namespace glz
       // active connection pays the full connect + TLS handshake cost on each request.
       // For sustained concurrency above the default, raise this to at least your
       // observed steady-state per-host concurrency.
-      void set_pool_max_connections_per_host(size_t n) { connection_pool->set_max_connections_per_host(n); }
-      size_t pool_max_connections_per_host() const { return connection_pool->max_connections_per_host(); }
+      void set_pool_max_connections_per_host(glz::size_t n) { connection_pool->set_max_connections_per_host(n); }
+      glz::size_t pool_max_connections_per_host() const { return connection_pool->max_connections_per_host(); }
 
       // Whether to actively peek pooled TCP sockets on acquire (default true). Disabling
       // skips the syscall and forces stale connections to surface as request errors;
@@ -1296,16 +1312,16 @@ namespace glz
       // Set maximum response body size in bytes (0 = unlimited).
       // Responses exceeding this return http_client_error::response_too_large.
       // Must be configured before issuing requests; not safe to change while requests are in flight.
-      http_client& max_response_body_size(size_t max_size)
+      http_client& max_response_body_size(glz::size_t max_size)
       {
          max_response_body_size_ = max_size;
          return *this;
       }
 
-      size_t max_response_body_size() const { return max_response_body_size_; }
+      glz::size_t max_response_body_size() const { return max_response_body_size_; }
 
      private:
-      size_t max_response_body_size_ = http_default_max_body_size;
+      glz::size_t max_response_body_size_ = http_default_max_body_size;
       // For async operations only when no io_executor is provided
       std::shared_ptr<asio::io_context> async_io_context;
       asio::any_io_executor io_executor;
@@ -1319,10 +1335,10 @@ namespace glz
          // don't start worker threads when an io_executor was provided
          if (!async_io_context) return;
 
-         size_t num_threads = (std::max)(2u, std::thread::hardware_concurrency());
+         glz::size_t num_threads = (std::max)(2u, std::thread::hardware_concurrency());
          worker_threads.reserve(num_threads);
 
-         for (size_t i = 0; i < num_threads; ++i) {
+         for (glz::size_t i = 0; i < num_threads; ++i) {
             worker_threads.emplace_back([this]() {
                while (true) {
                   try {
@@ -1353,7 +1369,7 @@ namespace glz
       }
 
       std::shared_ptr<http_stream_connection> perform_stream_request(
-         const std::string& method, const url_parts& url, const std::string& body, size_t max_buffer_size,
+         const std::string& method, const url_parts& url, const std::string& body, glz::size_t max_buffer_size,
          const std::unordered_map<std::string, std::string>& headers, std::chrono::seconds timeout,
          stream_read_strategy strategy, std::function<bool(int)> status_is_error, http_data_handler on_data,
          http_error_handler on_error, http_connect_handler on_connect, http_disconnect_handler on_disconnect)
@@ -1596,7 +1612,7 @@ namespace glz
                         if (colon_pos != std::string::npos) {
                            std::string_view name = header_line.substr(0, colon_pos);
                            // Skip past ':' and any whitespace
-                           size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+                           glz::size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                            std::string_view value =
                               (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
@@ -1681,7 +1697,7 @@ namespace glz
                         line_view = line_view.substr(0, semi_pos);
                      }
 
-                     size_t chunk_size;
+                     glz::size_t chunk_size;
                      auto [ptr, parse_ec] =
                         std::from_chars(line_view.data(), line_view.data() + line_view.size(), chunk_size, 16);
 
@@ -1707,21 +1723,21 @@ namespace glz
             *connection->socket);
       }
 
-      void read_chunk_body(std::shared_ptr<http_stream_connection> connection, size_t chunk_size,
+      void read_chunk_body(std::shared_ptr<http_stream_connection> connection, glz::size_t chunk_size,
                            http_data_handler on_data, http_error_handler on_error,
                            http_disconnect_handler on_disconnect)
       {
          // A chunk size with no room for the trailing CRLF wraps chunk_size + 2 below, passes the
          // buffered-size check with a tiny length, and hands on_data a view of chunk_size bytes
          // over a few-byte buffer. Reject it as a malformed chunk.
-         if (chunk_size > (std::numeric_limits<size_t>::max)() - 2) [[unlikely]] {
+         if (chunk_size > (std::numeric_limits<glz::size_t>::max)() - 2) [[unlikely]] {
             on_error(std::make_error_code(std::errc::protocol_error));
             if (on_disconnect) on_disconnect();
             return;
          }
 
          // We need to read 'chunk_size' bytes of data, plus 2 bytes for the trailing CRLF.
-         size_t total_to_read = chunk_size + 2;
+         glz::size_t total_to_read = chunk_size + 2;
 
          // Check if we have enough data in the buffer already.
          if (connection->buffer->size() >= total_to_read) {
@@ -1836,7 +1852,7 @@ namespace glz
          }
 
          // Use async_read_some for immediate delivery of available data
-         constexpr size_t read_size = 8192;
+         constexpr glz::size_t read_size = 8192;
          std::visit(
             [&, this](auto& sock) {
                sock->async_read_some(connection->buffer->prepare(read_size), [this, connection, on_data, on_error,
@@ -1954,7 +1970,7 @@ namespace glz
             // Read response headers synchronously
             asio::streambuf response_buffer;
             asio::error_code ec;
-            size_t header_bytes = std::visit(
+            glz::size_t header_bytes = std::visit(
                [&](auto& sock) { return asio::read_until(*sock, response_buffer, "\r\n\r\n", ec); }, socket_var);
             if (ec) {
                detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
@@ -1988,7 +2004,7 @@ namespace glz
 
             // Parse headers from the view
             std::unordered_map<std::string, std::string> response_headers;
-            size_t content_length = 0;
+            glz::size_t content_length = 0;
             bool has_content_length = false;
             bool connection_close = false;
             bool is_chunked = false;
@@ -2005,7 +2021,7 @@ namespace glz
                auto colon_pos = header_line.find(':');
                if (colon_pos != std::string::npos) {
                   std::string_view name = header_line.substr(0, colon_pos);
-                  size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+                  glz::size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                   std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
                   if (name.length() == 14 && glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
@@ -2069,7 +2085,7 @@ namespace glz
                      chunk_size_str = chunk_size_str.substr(0, semi_pos);
                   }
 
-                  size_t chunk_size = 0;
+                  glz::size_t chunk_size = 0;
                   auto [ptr, parse_ec] = std::from_chars(chunk_size_str.data(),
                                                          chunk_size_str.data() + chunk_size_str.size(), chunk_size, 16);
                   if (parse_ec != std::errc{}) {
@@ -2108,16 +2124,16 @@ namespace glz
 
                   // A chunk size that leaves no room for the trailing CRLF wraps chunk_size + 2
                   // below and appends with a bogus length, so reject it as malformed.
-                  if (chunk_size > (std::numeric_limits<size_t>::max)() - 2) {
+                  if (chunk_size > (std::numeric_limits<glz::size_t>::max)() - 2) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
                      r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
                      return r;
                   }
 
                   // Read chunk data + trailing CRLF
-                  size_t total_needed = chunk_size + 2; // data + CRLF
+                  glz::size_t total_needed = chunk_size + 2; // data + CRLF
                   if (response_buffer.size() < total_needed) {
-                     size_t to_read = total_needed - response_buffer.size();
+                     glz::size_t to_read = total_needed - response_buffer.size();
                      std::visit(
                         [&](auto& sock) {
                            asio::read(*sock, response_buffer, asio::transfer_exactly(to_read), read_ec);
@@ -2165,9 +2181,9 @@ namespace glz
             }
             else {
                // Read body based on content-length
-               size_t body_in_buffer = response_buffer.size();
+               glz::size_t body_in_buffer = response_buffer.size();
                if (content_length > body_in_buffer) {
-                  size_t remaining_to_read = content_length - body_in_buffer;
+                  glz::size_t remaining_to_read = content_length - body_in_buffer;
                   asio::error_code read_ec;
                   std::visit(
                      [&](auto& sock) {
@@ -2502,7 +2518,7 @@ namespace glz
                         size_line = size_line.substr(0, semi_pos);
                      }
 
-                     size_t chunk_size = 0;
+                     glz::size_t chunk_size = 0;
                      auto [ptr, parse_ec] =
                         std::from_chars(size_line.data(), size_line.data() + size_line.size(), chunk_size, 16);
                      if (parse_ec != std::errc{}) {
@@ -2531,7 +2547,7 @@ namespace glz
 
       template <typename CompletionHandler>
       void async_read_chunk_data(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
-                                 std::shared_ptr<std::string> body, size_t chunk_size, const url_parts& url,
+                                 std::shared_ptr<std::string> body, glz::size_t chunk_size, const url_parts& url,
                                  bool use_https, int status_code,
                                  std::unordered_map<std::string, std::string> response_headers,
                                  CompletionHandler&& handler)
@@ -2545,13 +2561,13 @@ namespace glz
 
          // A chunk size that leaves no room for the trailing CRLF wraps chunk_size + 2 below
          // and appends with a bogus length, so reject it as malformed.
-         if (chunk_size > (std::numeric_limits<size_t>::max)() - 2) {
+         if (chunk_size > (std::numeric_limits<glz::size_t>::max)() - 2) {
             detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
             handler(std::unexpected(std::make_error_code(std::errc::protocol_error)));
             return;
          }
 
-         size_t total_needed = chunk_size + 2; // chunk data + trailing CRLF
+         glz::size_t total_needed = chunk_size + 2; // chunk data + trailing CRLF
 
          if (buffer->size() >= total_needed) {
             // Data already in buffer
@@ -2565,7 +2581,7 @@ namespace glz
             return;
          }
 
-         size_t to_read = total_needed - buffer->size();
+         glz::size_t to_read = total_needed - buffer->size();
          std::visit(
             [&, this](auto& sock) {
                asio::async_read(
@@ -2639,7 +2655,7 @@ namespace glz
 
       template <typename CompletionHandler>
       void parse_and_read_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
-                               size_t header_size, const url_parts& url, bool use_https, CompletionHandler&& handler)
+                               glz::size_t header_size, const url_parts& url, bool use_https, CompletionHandler&& handler)
       {
          std::string_view header_section{static_cast<const char*>(buffer->data().data()), header_size};
 
@@ -2660,7 +2676,7 @@ namespace glz
 
          // Parse all header fields from the view.
          std::unordered_map<std::string, std::string> response_headers;
-         size_t content_length = 0;
+         glz::size_t content_length = 0;
          bool has_content_length = false;
          bool connection_close = false;
          bool is_chunked = false;
@@ -2678,7 +2694,7 @@ namespace glz
             if (colon_pos != std::string::npos) {
                std::string_view name = header_line.substr(0, colon_pos);
                // Skip past ':' and any leading whitespace on the value.
-               size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+               glz::size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
                // A case-insensitive comparison is more robust for header names.
@@ -2727,8 +2743,8 @@ namespace glz
          }
          else {
             // Read the rest of the body based on content-length.
-            size_t body_already_in_buffer = buffer->size();
-            size_t remaining_to_read =
+            glz::size_t body_already_in_buffer = buffer->size();
+            glz::size_t remaining_to_read =
                (content_length > body_already_in_buffer) ? (content_length - body_already_in_buffer) : 0;
 
             std::visit(

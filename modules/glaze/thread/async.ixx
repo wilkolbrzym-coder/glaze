@@ -6,6 +6,9 @@
 // glz:header std=<shared_mutex>
 // glz:header std=<type_traits>
 // glz:header std=<utility>
+// glz:header include="glaze/core/traits.hpp"
+// glz:header include="glaze/util/type_traits.hpp"
+// glz:header project_imports=ignore
 export module glaze.thread.async;
 
 import std;

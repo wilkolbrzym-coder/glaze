@@ -4,6 +4,7 @@
 // glz:header include="glaze/core/common.hpp"
 // glz:header include="glaze/json/generic_fwd.hpp"
 // glz:header include="glaze/json/write.hpp"
+// glz:header include="glaze/core/seek.hpp" group=seek_include
 // glz:header project_imports=ignore
 export module glaze.json.generic;
 
@@ -20,6 +21,7 @@ import glaze.core.common;
 import glaze.core.context;
 import glaze.core.opts;
 import glaze.core.reflect;
+import glaze.core.seek;
 import glaze.util.expected;
 import glaze.util.string_literal;
 import glaze.core.basic_types;
@@ -145,7 +147,7 @@ export namespace glz
    }
 }
 
-#include "glaze/core/seek.hpp"
+// glz:emit seek_include
 
 export namespace glz
 {

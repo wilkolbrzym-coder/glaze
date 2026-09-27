@@ -1,29 +1,27 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/glaze_fast_float.hpp"
-// glz:header std=<charconv>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
+// glz:header include="glaze/util/fast_float.hpp"
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.glaze_fast_float;
+
+// This is an adapter to speed up the parsing portion of the fast_float conversion
 
 import std;
 
 import glaze.util.fast_float;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
-
-using std::int64_t;
-using std::uint64_t;
-using std::size_t;
-
-// This is an adapter to speed up the parsing portion of the fast_float conversion
 
 export namespace glz
 {
    // Assuming that you use no more than 19 digits, this will
    // parse an ASCII string.
    template <bool null_terminated, class UC>
-   GLZ_ALWAYS_INLINE constexpr glz::fast_float::parsed_number_string_t<UC> parse_number_string(UC const* p, UC const* pend) noexcept
+   GLZ_ALWAYS_INLINE constexpr glz::fast_float::parsed_number_string_t<UC> parse_number_string(UC const* p,
+                                                                                               UC const* pend) noexcept
    {
       using namespace glz::fast_float;
       static constexpr UC decimal_point = '.';
@@ -47,9 +45,9 @@ export namespace glz
       }
       UC const* const start_digits = p;
 
-      uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
+      glz::uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
 
-      uint64_t digit;
+      glz::uint64_t digit;
       if constexpr (null_terminated) {
          while ((digit = glz::fast_float::digit_value(*p)) <= 9) {
             // a multiplication by 10 is cheaper than an arbitrary integer
@@ -68,15 +66,15 @@ export namespace glz
       }
 
       UC const* const end_of_integer_part = p;
-      int64_t digit_count = int64_t(end_of_integer_part - start_digits);
-      answer.integer = glz::fast_float::span<const UC>(start_digits, size_t(digit_count));
+      glz::int64_t digit_count = glz::int64_t(end_of_integer_part - start_digits);
+      answer.integer = glz::fast_float::span<const UC>(start_digits, glz::size_t(digit_count));
 
       // at least 1 digit in integer part, without leading zeros
       if (digit_count == 0 || (start_digits[0] == UC('0') && digit_count > 1)) {
          return answer;
       }
 
-      int64_t exponent = 0;
+      glz::int64_t exponent = 0;
       const bool has_decimal_point = [&] {
          if constexpr (null_terminated) {
             return (*p == decimal_point);
@@ -105,7 +103,7 @@ export namespace glz
             }
          }
          exponent = before - p;
-         answer.fraction = glz::fast_float::span<const UC>(before, size_t(p - before));
+         answer.fraction = glz::fast_float::span<const UC>(before, glz::size_t(p - before));
          digit_count -= exponent;
       }
       // at least 1 digit in fractional part
@@ -113,7 +111,7 @@ export namespace glz
          return answer;
       }
 
-      int64_t exp_number = 0; // explicit exponential part
+      glz::int64_t exp_number = 0; // explicit exponential part
 
       if constexpr (null_terminated) {
          if ((UC('e') == *p) || (UC('E') == *p)) {
@@ -215,9 +213,9 @@ export namespace glz
             i = 0;
             p = answer.integer.ptr;
             UC const* int_end = p + answer.integer.len();
-            const uint64_t minimal_nineteen_digit_integer{1000000000000000000};
+            const glz::uint64_t minimal_nineteen_digit_integer{1000000000000000000};
             while ((i < minimal_nineteen_digit_integer) && (p != int_end)) {
-               i = i * 10 + uint64_t(*p - UC('0'));
+               i = i * 10 + glz::uint64_t(*p - UC('0'));
                ++p;
             }
             if (i >= minimal_nineteen_digit_integer) { // We have a big integers
@@ -227,7 +225,7 @@ export namespace glz
                p = answer.fraction.ptr;
                UC const* frac_end = p + answer.fraction.len();
                while ((i < minimal_nineteen_digit_integer) && (p != frac_end)) {
-                  i = i * 10 + uint64_t(*p - UC('0'));
+                  i = i * 10 + glz::uint64_t(*p - UC('0'));
                   ++p;
                }
                exponent = answer.fraction.ptr - p + exp_number;
@@ -255,4 +253,3 @@ export namespace glz
       return from_chars_advanced(pns, value);
    }
 }
-

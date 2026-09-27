@@ -1,6 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 // glz:header path="glaze/yaml/common.hpp"
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header include="glaze/yaml/opts.hpp"
 // glz:header project_imports=ignore
 module;
 
@@ -12,14 +15,18 @@ module;
 #include <unordered_map>
 #include <vector>
 
-#include "glaze/core/common.hpp"
-#include "glaze/util/parse.hpp"
-#include "glaze/yaml/opts.hpp"
+// glz:emit project
 // glz:emit std
 export module glaze.yaml.common;
 
 import std;
 import glaze.core.basic_types;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.error_category;
+import glaze.core.opts;
+import glaze.util.parse;
+import glaze.yaml.opts;
 
 export namespace glz::yaml
 {

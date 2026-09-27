@@ -25,6 +25,7 @@ import glaze.core.basic_types;
 
 import glaze.core.buffer_traits;
 import glaze.core.chrono;
+import glaze.core.context;
 import glaze.core.custom_meta;
 import glaze.core.opts;
 import glaze.core.reflect;

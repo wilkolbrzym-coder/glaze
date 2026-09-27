@@ -1,15 +1,17 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 // glz:header path="glaze/yaml/opts.hpp"
+// glz:header include="<glaze/core/opts.hpp>"
 // glz:header project_imports=ignore
 module;
 
-#include <glaze/core/opts.hpp>
+// glz:emit project
 // glz:emit std
 export module glaze.yaml.opts;
 
 import std;
 import glaze.core.basic_types;
+import glaze.core.opts;
 
 export namespace glz::yaml
 {

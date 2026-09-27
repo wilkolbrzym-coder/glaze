@@ -1,17 +1,21 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 // glz:header path="glaze/yaml/skip.hpp"
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/yaml/common.hpp"
 // glz:header project_imports=ignore
 module;
 
-#include "glaze/core/context.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/yaml/common.hpp"
+// glz:emit project
 // glz:emit std
 export module glaze.yaml.skip;
 
 import std;
 import glaze.core.basic_types;
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.yaml.common;
 
 export namespace glz::yaml
 {

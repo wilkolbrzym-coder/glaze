@@ -41,8 +41,16 @@ name: modules-tests
 #          minor, so each Windows leg asserts cl >= 19.40 and that
 #          %VCToolsInstallDir%\modules\modules.json exists; per-minor legs would
 #          need a self-hosted or container image and are not possible here.
+#          windows-11-arm is a best-effort arm64 leg: it depends on the MSVC
+#          dev-env action locating an arm64 VS toolset on that image.
 #   GCC    12, 13, 14 on ubuntu-24.04 (header-only; see above). GCC 15+ is not in
 #          the ubuntu-24.04 archive and would need a newer base image/container.
+#
+# ARM64   The arm64 legs use GitHub-hosted runners: ubuntu-24.04-arm for the
+#          Linux module tests, macos-14/15 for the Apple Silicon header smoke and
+#          windows-11-arm for the MSVC compile check. These must be available to
+#          the repository; if they are not, remove the arm64 entries from the
+#          plan job's lists rather than leaving a leg that can never run.
 #
 # REDUCED VS FULL MATRIX
 #   pull_request runs the reduced matrix: one leg per OS family plus arm64, so it

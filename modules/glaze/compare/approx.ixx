@@ -1,8 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/compare/approx.hpp"
-// glz:header std=<concepts>
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header project_imports=ignore
 export module glaze.compare.approx;
 
 import std;

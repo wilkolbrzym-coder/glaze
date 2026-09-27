@@ -69,6 +69,12 @@ HEADER_META_RE = re.compile(r"^\s*//\s*glz:header(?:\s+(?P<body>.*))?$")
 # is exported here rather than there, and so on); they are not part of the
 # reference header, so the generator drops them exactly like glz:header lines.
 MODULE_NOTE_RE = re.compile(r"^\s*//\s*glz:note\b")
+# A placement marker for the synthesised blocks of the header prologue.  A few
+# reference headers interleave their include blocks with real preprocessor
+# logic (api/lib.hpp's platform block, ext/eigen.hpp's __has_include fallback,
+# core/write_chars.hpp's feature-detection block).  `// glz:emit <what>` puts
+# the named block where the module wants it instead of at its default position.
+EMIT_MARKER_RE = re.compile(r"^\s*//\s*glz:emit\s+(?P<what>std|project|prelude)\s*$")
 MODULE_RE = re.compile(r"^\s*(?:export\s+)?module(?:\s+[A-Za-z_][\w.:]*)?\s*;\s*(?://.*)?$")
 IMPORT_RE = re.compile(r"^\s*(?:export\s+)?import\s+(?P<target>[^;]+?)\s*;\s*(?://.*)?$")
 # A global-scope `using std::...;` (module-local convenience, never in a header).
@@ -98,6 +104,9 @@ class HeaderMetadata:
     # so the generated framing matches byte for byte.
     license: bool = True
     trailing_newline: bool = True
+    # ... and a single header leaves out the blank line between its licence
+    # block and `#pragma once` (`license_gap=none`).
+    license_gap: bool = True
 
 
 @dataclass
@@ -225,6 +234,8 @@ def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None
                metadata.skip = value or "true"
             elif key == "license":
                metadata.license = parse_bool(value)
+            elif key == "license_gap":
+               metadata.license_gap = parse_bool(value)
             elif key in {"trailing_newline", "newline"}:
                metadata.trailing_newline = parse_bool(value)
             else:
@@ -494,8 +505,18 @@ def transform_source(
         (i for i, line in enumerate(lines) if re.match(r"^\s*module\s*;\s*$", line)),
         None,
     )
-    block_drop: set[int] = set()
+    # A global module fragment that carries `// glz:emit` markers is the module's
+    # own copy of the reference header's pre-include region: it is rendered in
+    # place, so its include-only blocks are header content and must be kept.
+    gf_raw_lines: list[str] = []
+    gmf_is_prologue = False
     if gf_start is not None and gf_start < export_index:
+        gf_raw_lines = lines[gf_start + 1 : export_index]
+        gmf_is_prologue = any(EMIT_MARKER_RE.match(line) for line in gf_raw_lines)
+    block_drop: set[int] = set()
+    if gmf_is_prologue:
+        block_drop = set()
+    elif gf_start is not None and gf_start < export_index:
         block_drop = include_only_block_indices(lines, gf_start + 1, export_index)
 
     std_includes = list(metadata.std)
@@ -531,6 +552,9 @@ def transform_source(
             conditional_depth = max(0, conditional_depth - 1)
 
         if in_global_fragment:
+            if gmf_is_prologue:
+                # Rendered as the prologue (see gf_raw_lines) instead.
+                continue
             # Unconditional raw includes in the global module fragment are
             # module-internal (the fragment exists to make the module compile);
             # conditional ones belong to the surrounding block and stay in place.
@@ -594,21 +618,58 @@ def transform_source(
     std_include_lines = [f"#include {include}" for include in sorted(dedupe(std_includes))]
     project_include_lines = [f"#include {include}" for include in sorted(dedupe(project_includes))]
     preamble_lines = collapse_blank_runs(preamble_lines)
+    # Expand `// glz:emit <what>` markers, and remember which blocks the module
+    # placed itself so they are not also emitted at their default position.
+    blocks_by_name = {
+        "std": std_include_lines,
+        "project": project_include_lines,
+        "prelude": prelude_lines,
+    }
+    placed: set[str] = set()
+
+    def expand_markers(source: list[str]) -> list[str]:
+        expanded: list[str] = []
+        for line in source:
+            marker = EMIT_MARKER_RE.match(line)
+            if marker:
+                what = marker.group("what")
+                placed.add(what)
+                expanded.extend(blocks_by_name[what])
+                continue
+            expanded.append(line)
+        return expanded
+
+    # The global module fragment, when it carries markers, is the module's copy
+    # of the reference header's pre-include region and is emitted in place of
+    # the body-head preamble.
+    gf_prologue = expand_markers(gf_raw_lines) if gmf_is_prologue else []
+    # A trailing blank in the fragment separates it from `export module ...;`
+    # in the module source; in the header the include block below supplies that
+    # separation.
+    while gf_prologue and gf_prologue[-1].strip() == "":
+        gf_prologue.pop()
+    expanded_preamble = expand_markers(preamble_lines) if not gmf_is_prologue else []
+
     output_lines: list[str] = []
     output_lines.extend(prefix)
-    if output_lines and output_lines[-1] != "":
+    if metadata.license_gap and output_lines and output_lines[-1] != "":
         output_lines.append("")
     output_lines.append("#pragma once")
-    if preamble_lines:
-        # Emitted verbatim: its blank lines are what separate it from
-        # `#pragma once` above and from the include block below, so no blank is
-        # injected around it.
-        output_lines.extend(preamble_lines)
+    # Both are emitted verbatim: their own blank lines are what separate them
+    # from `#pragma once` above and from the include block below, so no blank is
+    # injected around them.
+    output_lines.extend(gf_prologue)
+    output_lines.extend(expanded_preamble)
     first_block = True
-    for block in (std_include_lines, project_include_lines, prelude_lines, body_lines):
-        if not block:
+    for name, block in (
+        ("std", std_include_lines),
+        ("project", project_include_lines),
+        ("prelude", prelude_lines),
+        ("body", body_lines),
+    ):
+        if not block or name in placed:
             continue
-        if first_block and preamble_lines:
+        if first_block and name != "body" and (gf_prologue or expanded_preamble):
             first_block = False
             output_lines.extend(block)
             continue

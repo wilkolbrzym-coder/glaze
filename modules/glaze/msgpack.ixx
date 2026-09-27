@@ -11,3 +11,4 @@ export import glaze.msgpack.common;
 export import glaze.msgpack.read;
 export import glaze.msgpack.skip;
 export import glaze.msgpack.write;
+export import glaze.msgpack.wrappers;

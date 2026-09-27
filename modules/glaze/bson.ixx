@@ -17,3 +17,4 @@ export import glaze.bson.header;
 export import glaze.bson.read;
 export import glaze.bson.skip;
 export import glaze.bson.write;
+export import glaze.bson.wrappers;

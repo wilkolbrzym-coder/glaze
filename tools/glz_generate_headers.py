@@ -124,6 +124,17 @@ class HeaderMetadata:
     # ... and a single header leaves out the blank line between its licence
     # block and `#pragma once` (`license_gap=none`).
     license_gap: bool = True
+    # A vendored amalgamation (util/fast_float.hpp) carries no `#pragma once`
+    # at all -- it has its own per-section include guards -- so the module
+    # declares `pragma_once=none`.
+    pragma_once: bool = True
+    # A vendored amalgamation may also end with a blank line after its final
+    # guard; `trailing_blanks=1` reproduces that.
+    trailing_blanks: int = 0
+    # Blank runs are normally collapsed to a single line (the conversion drops
+    # lines and can leave extra ones behind), but a vendored amalgamation
+    # contains deliberate double blanks that `blank_runs=2` preserves.
+    blank_runs: int = 1
 
 
 @dataclass
@@ -272,6 +283,19 @@ def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None
                metadata.license_gap = parse_bool(value)
             elif key in {"trailing_newline", "newline"}:
                metadata.trailing_newline = parse_bool(value)
+            elif key == "pragma_once":
+               metadata.pragma_once = parse_bool(value)
+            elif key in {"trailing_blanks", "blank_runs"}:
+               try:
+                  number = int(value)
+               except ValueError as exc:
+                  raise HeaderGenerationError(
+                     f"{source_path}:{line_number}: {key} must be an integer"
+                  ) from exc
+               if key == "trailing_blanks":
+                  metadata.trailing_blanks = number
+               else:
+                  metadata.blank_runs = number
             else:
                raise HeaderGenerationError(f"{source_path}:{line_number}: unknown glz:header key {key!r}")
 
@@ -541,11 +565,16 @@ def transform_source(
         if re.match(r"^\s*(?:export\s+)?module(?:\s+[A-Za-z_][\w.:]*)?\s*;", line):
             first_decl_index = index
             break
-    prefix = [
-        line.replace("glaze.ixx", "glaze.hpp")
-        for line in trim_blank_edges(lines[:first_decl_index])
-        if not HEADER_META_RE.match(line) and not MODULE_NOTE_RE.match(line)
-    ]
+    # Filter the module-only metadata out *before* trimming, so a blank line
+    # that separated the licence from the `glz:header` lines does not linger as
+    # a trailing blank after they are dropped.
+    prefix = trim_blank_edges(
+        [
+            line.replace("glaze.ixx", "glaze.hpp")
+            for line in lines[:first_decl_index]
+            if not HEADER_META_RE.match(line) and not MODULE_NOTE_RE.match(line)
+        ]
+    )
     if not metadata.license:
         # The upstream header carries no licence preamble; the module keeps it
         # for its own sake but `license=none` omits it from the header.
@@ -683,13 +712,13 @@ def transform_source(
         )
 
     body = dequalify_builtin_type_aliases(remove_export_tokens("\n".join(transformed_lines)))
-    body_lines = collapse_blank_runs(trim_blank_edges(body.splitlines()))
+    body_lines = collapse_blank_runs(trim_blank_edges(body.splitlines()), metadata.blank_runs)
     prelude_lines = dequalify_builtin_type_aliases("\n".join(prelude_lines)).splitlines()
-    prelude_lines = collapse_blank_runs(trim_blank_edges(prelude_lines))
+    prelude_lines = collapse_blank_runs(trim_blank_edges(prelude_lines), metadata.blank_runs)
 
     std_include_lines = [f"#include {include}" for include in sorted(dedupe(std_includes))]
     project_include_lines = [f"#include {include}" for include in sorted(dedupe(project_includes))]
-    preamble_lines = collapse_blank_runs(preamble_lines)
+    preamble_lines = collapse_blank_runs(preamble_lines, metadata.blank_runs)
     # Expand `// glz:emit <what>` markers, and remember which blocks the module
     # placed itself so they are not also emitted at their default position.
     blocks_by_name = {
@@ -744,9 +773,13 @@ def transform_source(
 
     output_lines: list[str] = []
     output_lines.extend(prefix)
-    if metadata.license_gap and output_lines and output_lines[-1] != "":
+    # The blank after the licence separates it from `#pragma once`; when the
+    # header carries no pragma (a vendored file with its own guards) the body's
+    # own leading blank already provides that separation.
+    if metadata.license_gap and metadata.pragma_once and output_lines and output_lines[-1] != "":
         output_lines.append("")
-    output_lines.append("#pragma once")
+    if metadata.pragma_once:
+        output_lines.append("#pragma once")
     # Both are emitted verbatim: their own blank lines are what separate them
     # from `#pragma once` above and from the include block below, so no blank is
     # injected around them.
@@ -778,7 +811,7 @@ def transform_source(
     # conversion artefacts such as `{  ` do not leak into the output.
     content = "\n".join(line.rstrip() for line in output_lines)
     if metadata.trailing_newline:
-        content += "\n"
+        content += "\n" * (1 + metadata.trailing_blanks)
     return GeneratedHeader(module_name=module_name, source_path=source_path, header_path=header_path, content=content)
 
 

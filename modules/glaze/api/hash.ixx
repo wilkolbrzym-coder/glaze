@@ -1,13 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/api/hash.hpp"
-// glz:header std=<array>
 // glz:header std=<climits>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<limits>
-// glz:header std=<string_view>
-// glz:header std=<utility>
+// glz:header include="glaze/api/xxh64.hpp"
+// glz:header include="glaze/core/meta.hpp"
+// glz:header project_imports=ignore
 export module glaze.api.hash;
 
 import std;
@@ -17,6 +14,7 @@ import glaze.api.xxh64;
 import glaze.core.meta;
 
 import glaze.util.string_literal;
+import glaze.core.basic_types;
 
 // Collision calculations done with the formula: e^((-k * (k - 1)/(2 * N)))
 // The approximation error tends to zero as N increases, and we are dealing with a large N
@@ -30,16 +28,14 @@ import glaze.util.string_literal;
 // bit: 1220 times 128 bit: 2.2494655e22 times (or 22 sextillion times) 256 bit: 7.6545351e60 times From these
 // calculations it is apparent that a 128 bit hash is more than sufficient
 
-using std::uint64_t;
-using std::size_t;
 
 export namespace glz
 {
    template <class T, T Value>
    consteval auto make_array()
    {
-      return []<size_t... I>(std::index_sequence<I...>) {
-         return std::array<char, sizeof(T)>{static_cast<char>(((Value >> (std::numeric_limits<unsigned char>::digits * I)) & 0xff))...};
+      return []<glz::size_t... I>(std::index_sequence<I...>) {
+         return std::array<char, sizeof(T)>{static_cast<char>(((Value >> (CHAR_BIT * I)) & 0xff))...};
       }(std::make_index_sequence<sizeof(T)>{});
    }
 
@@ -47,7 +43,7 @@ export namespace glz
    {
       // convert an integer to a string_view at compile time
 
-      constexpr uint64_t num_digits(auto x) noexcept // number of digits needed, including minus sign
+      constexpr glz::uint64_t num_digits(auto x) noexcept // number of digits needed, including minus sign
       {
          return x < 10 ? 1 : 1 + num_digits(x / 10);
       }
@@ -59,28 +55,28 @@ export namespace glz
       };
 
       // recursive number-printing template, general case (for three or more digits)
-      template <uint64_t size, uint64_t x, char... args>
+      template <glz::uint64_t size, glz::uint64_t x, char... args>
       struct numeric_builder
       {
          using type = typename numeric_builder<size - 1, x / 10, '0' + x % 10, args...>::type;
       };
 
       // special case for two digits; minus sign is handled here
-      template <uint64_t x, char... args>
+      template <glz::uint64_t x, char... args>
       struct numeric_builder<2, x, args...>
       {
          using type = metastring<'0' + x / 10, '0' + x % 10, args...>;
       };
 
       // special case for one digit (positive numbers only)
-      template <uint64_t x, char... args>
+      template <glz::uint64_t x, char... args>
       struct numeric_builder<1, x, args...>
       {
          using type = metastring<'0' + x, args...>;
       };
 
       // convenience wrapper for numeric_builder
-      template <uint64_t x>
+      template <glz::uint64_t x>
       struct numeric_string
       {
          // generate a unique string type representing this number
@@ -102,29 +98,29 @@ export namespace glz
    template <class T, T Value>
    inline constexpr std::string_view int_to_sv_v = int_to_sv<T, Value>{}.get();
 
-   template <uint64_t I>
+   template <glz::uint64_t I>
    inline consteval auto to_sv()
    {
       return detail::numeric_string<I>::get();
    }
 
-   template <size_t I>
+   template <glz::size_t I>
    struct hash128_i
    {
       static constexpr sv str = to_sv<I>();
-      static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(str.data(), str.size(), 0)>;
-      static constexpr sv h1 = int_to_sv_v<uint64_t, xxh64::hash(str.data(), str.size(), 1)>;
+      static constexpr sv h0 = int_to_sv_v<glz::uint64_t, xxh64::hash(str.data(), str.size(), 0)>;
+      static constexpr sv h1 = int_to_sv_v<glz::uint64_t, xxh64::hash(str.data(), str.size(), 1)>;
       static constexpr sv value = join_v<h0, h1>;
    };
 
-   template <size_t I>
+   template <glz::size_t I>
    inline constexpr std::string_view hash128_i_v = hash128_i<I>::value;
 
    template <const std::string_view& Str>
    struct hash128
    {
-      static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 0)>;
-      static constexpr sv h1 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 1)>;
+      static constexpr sv h0 = int_to_sv_v<glz::uint64_t, xxh64::hash(Str.data(), Str.size(), 0)>;
+      static constexpr sv h1 = int_to_sv_v<glz::uint64_t, xxh64::hash(Str.data(), Str.size(), 1)>;
       static constexpr sv value = join_v<h0, h1>;
    };
 

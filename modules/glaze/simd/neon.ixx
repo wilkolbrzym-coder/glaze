@@ -1,6 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/simd/neon.hpp"
+// glz:header include="glaze/simd/simd.hpp"
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 module;
 
 #include "glaze/simd/simd.hpp"
@@ -9,15 +12,14 @@ module;
 export module glaze.simd.neon;
 
 import std;
+import glaze.core.basic_types;
 
 #if defined(GLZ_USE_NEON)
 
-using std::uint8_t;
-using std::size_t;
 
 export namespace glz::detail
 {
-   GLZ_ALWAYS_INLINE uint8_t neon_hmax_u8(const uint8x16_t v) noexcept
+   GLZ_ALWAYS_INLINE glz::uint8_t neon_hmax_u8(const uint8x16_t v) noexcept
    {
 #if defined(__aarch64__) || defined(_M_ARM64)
       return vmaxvq_u8(v);
@@ -31,7 +33,8 @@ export namespace glz::detail
    }
 
    template <class Data, class WriteEscape>
-   GLZ_ALWAYS_INLINE void neon_string_escape(const char*& c, const char* e, Data*& data, size_t n, WriteEscape&& write_escape)
+   GLZ_ALWAYS_INLINE void neon_string_escape(const char*& c, const char* e, Data*& data, glz::size_t n,
+                                             WriteEscape&& write_escape)
    {
       if (n > 15) {
          const uint8x16_t quote_vec = vdupq_n_u8('"');
@@ -46,15 +49,15 @@ export namespace glz::detail
          // When an escape is found anywhere in the 64-byte region, fall through
          // to the 16-byte loop which locates the exact position.
          for (const char* end_m63 = e - 63; c < end_m63;) {
-            const uint8x16_t v0 = vld1q_u8(reinterpret_cast<const uint8_t*>(c));
-            const uint8x16_t v1 = vld1q_u8(reinterpret_cast<const uint8_t*>(c + 16));
-            const uint8x16_t v2 = vld1q_u8(reinterpret_cast<const uint8_t*>(c + 32));
-            const uint8x16_t v3 = vld1q_u8(reinterpret_cast<const uint8_t*>(c + 48));
+            const uint8x16_t v0 = vld1q_u8(reinterpret_cast<const glz::uint8_t*>(c));
+            const uint8x16_t v1 = vld1q_u8(reinterpret_cast<const glz::uint8_t*>(c + 16));
+            const uint8x16_t v2 = vld1q_u8(reinterpret_cast<const glz::uint8_t*>(c + 32));
+            const uint8x16_t v3 = vld1q_u8(reinterpret_cast<const glz::uint8_t*>(c + 48));
 
-            vst1q_u8(reinterpret_cast<uint8_t*>(data), v0);
-            vst1q_u8(reinterpret_cast<uint8_t*>(data + 16), v1);
-            vst1q_u8(reinterpret_cast<uint8_t*>(data + 32), v2);
-            vst1q_u8(reinterpret_cast<uint8_t*>(data + 48), v3);
+            vst1q_u8(reinterpret_cast<glz::uint8_t*>(data), v0);
+            vst1q_u8(reinterpret_cast<glz::uint8_t*>(data + 16), v1);
+            vst1q_u8(reinterpret_cast<glz::uint8_t*>(data + 32), v2);
+            vst1q_u8(reinterpret_cast<glz::uint8_t*>(data + 48), v3);
 
             const uint8x16_t any = vorrq_u8(vorrq_u8(check(v0), check(v1)), vorrq_u8(check(v2), check(v3)));
 
@@ -71,8 +74,8 @@ export namespace glz::detail
 
          // 16-byte loop: handles the tail and any escape found in the wide path.
          for (const char* end_m15 = e - 15; c < end_m15;) {
-            const uint8x16_t v = vld1q_u8(reinterpret_cast<const uint8_t*>(c));
-            vst1q_u8(reinterpret_cast<uint8_t*>(data), v); // speculative store
+            const uint8x16_t v = vld1q_u8(reinterpret_cast<const glz::uint8_t*>(c));
+            vst1q_u8(reinterpret_cast<glz::uint8_t*>(data), v); // speculative store
 
             if (neon_hmax_u8(check(v)) == 0) {
                data += 16;
@@ -83,7 +86,7 @@ export namespace glz::detail
             // Scalar scan to find first escapable byte — guaranteed to find one
             // within the 16-byte chunk that neon_hmax_u8 flagged.
             // The speculative store already wrote clean bytes ahead of this position.
-            while (uint8_t(*c) >= 0x20 && uint8_t(*c) != '"' && uint8_t(*c) != '\\') {
+            while (glz::uint8_t(*c) >= 0x20 && glz::uint8_t(*c) != '"' && glz::uint8_t(*c) != '\\') {
                ++data;
                ++c;
             }

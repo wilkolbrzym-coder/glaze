@@ -1,16 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/trace/trace.hpp"
-// glz:header std=<atomic>
 // glz:header std=<chrono>
-// glz:header std=<cstdint>
 // glz:header std=<deque>
-// glz:header std=<functional>
 // glz:header std=<mutex>
-// glz:header std=<optional>
-// glz:header std=<string_view>
 // glz:header std=<thread>
-// glz:header std=<utility>
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.trace;
 
 import std;
@@ -19,6 +15,7 @@ import glaze.core.common;
 import glaze.core.meta;
 import glaze.json.write;
 import glaze.util.string_literal;
+import glaze.core.basic_types;
 
 // This code allows profiling and time tracing using tools like Perfetto https://perfetto.dev/
 // The specification adheres to Chrome's tracing format document:
@@ -30,12 +27,10 @@ import glaze.util.string_literal;
 // trace.end("my event name");
 // ```
 
-using std::uint32_t;
-using std::uint64_t;
 
 namespace glz
 {
-   export enum struct display_time_unit : uint32_t {
+   export enum struct display_time_unit : glz::uint32_t {
       s, // seconds
       ms, // milliseconds
       us, // microseconds
@@ -59,11 +54,11 @@ namespace glz
       std::optional<std::string_view>
          cat{}; // The event categories. A comma separated list of categories for the event.
       char ph{}; // The event type.
-      uint64_t ts{}; // The tracing clock timestamp of the event. Provided at microsecond granularity.
-      std::optional<uint64_t> tts{}; // The thread clock timestamp of the event. Provided at microsecond granularity.
-      uint64_t pid{}; // The process ID for the process that output this event.
-      uint64_t tid{}; // The thread ID for the thread that output this event.
-      std::optional<uint64_t>
+      glz::uint64_t ts{}; // The tracing clock timestamp of the event. Provided at microsecond granularity.
+      std::optional<glz::uint64_t> tts{}; // The thread clock timestamp of the event. Provided at microsecond granularity.
+      glz::uint64_t pid{}; // The process ID for the process that output this event.
+      glz::uint64_t tid{}; // The thread ID for the thread that output this event.
+      std::optional<glz::uint64_t>
          id{}; // For async events. Events with the same category and id are treated as from the same event tree.
       glz::raw_json args = "{}"; // metadata
    };

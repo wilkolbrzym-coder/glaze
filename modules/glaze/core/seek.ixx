@@ -89,7 +89,7 @@ namespace glz
       // digit followed by digits. Leading zeros are rejected, as is "-" (the "end of array" token,
       // which never names an existing element) and anything that overflows size_t. This is the
       // single definition of the rule; every JSON Pointer array lookup goes through it.
-      [[nodiscard]] inline constexpr std::optional<glz::size_t> parse_json_ptr_array_index(const sv token) noexcept
+      export [[nodiscard]] inline constexpr std::optional<glz::size_t> parse_json_ptr_array_index(const sv token) noexcept
       {
          if (token.empty()) return {};
          if (token.size() > 1 && token[0] == '0') return {};

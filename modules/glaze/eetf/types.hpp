@@ -27,7 +27,7 @@ namespace glz::eetf
    };
 
    using atom = tagged_string<tag_atom>;
-   constexpr atom operator""_atom(const char* str, size_t sz)
+   constexpr atom operator""_atom(const char* str, std::size_t sz)
    {
       // TODO check if valid atom
       return atom(std::string(str, sz));

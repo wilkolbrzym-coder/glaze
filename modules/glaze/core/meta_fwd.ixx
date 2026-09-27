@@ -1,6 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
-// glz:header path="glaze/core/meta_fwd.hpp"
+// glz:header skip
 export module glaze.core.meta_fwd;
 
 export namespace glz

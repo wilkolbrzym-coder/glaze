@@ -45,6 +45,8 @@ import glaze.core.meta;
 import glaze.tuplet;
 import glaze.util.expected;
 import glaze.util.string_literal;
+import glaze.concepts.container_concepts;
+import glaze.util.tuple;
 
 export namespace glz
 {

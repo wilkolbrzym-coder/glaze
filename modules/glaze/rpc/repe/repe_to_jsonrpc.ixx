@@ -17,7 +17,9 @@ import glaze.core.basic_types;
 import glaze.ext.jsonrpc;
 import glaze.rpc.repe.header;
 
-#include "glaze/glaze.hpp"
+import glaze;
+import glaze.rpc.registry;
+import glaze.util.string_literal;
 
 
 export namespace glz::repe

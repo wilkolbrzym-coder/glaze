@@ -15,7 +15,9 @@ import std;
 import glaze.core.basic_types;
 import glaze.rpc.repe.repe;
 
-#include "glaze/glaze.hpp"
+import glaze;
+import glaze.rpc.registry;
+import glaze.util.string_literal;
 
 
 export namespace glz

@@ -7,22 +7,22 @@
 // glz:header include="glaze/core/feature_test.hpp"
 // glz:header project_imports=ignore
 // glz:header trailing_newline=no
+module;
+#include "glaze/core/feature_test.hpp"
 export module glaze.util.key_transformers;
 
 import std;
 import glaze.core.basic_types;
 
-#include "glaze/core/feature_test.hpp"
-
 
 namespace glz
 {
-   inline constexpr char ascii_toupper(char c) noexcept
+   export inline constexpr char ascii_toupper(char c) noexcept
    {
       return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
    }
 
-   inline constexpr char ascii_tolower(char c) noexcept
+   export inline constexpr char ascii_tolower(char c) noexcept
    {
       return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
    }

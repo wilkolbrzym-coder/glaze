@@ -10,6 +10,9 @@
 // glz:header include="glaze/rpc/repe/header.hpp"
 // glz:header project_imports=ignore
 module;
+// glz:module-only
+#include <cstddef>
+// glz:end-module-only
 
 // glz:emit std
 

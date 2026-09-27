@@ -25,6 +25,7 @@ import std;
 import glaze.core.common;
 import glaze.core.custom;
 import glaze.core.context;
+import glaze.core.error_category;
 import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.cast;

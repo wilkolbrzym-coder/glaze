@@ -1,12 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/exceptions/core_exceptions.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<deque>
-// glz:header std=<stdexcept>
-// glz:header std=<string>
-// glz:header std=<utility>
-// glz:header std=<vector>
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/core/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.exceptions.core_exceptions;
 
 #if __cpp_exceptions
@@ -22,8 +19,8 @@ import glaze.concepts.container_concepts;
 import glaze.util.string_literal;
 
 import std;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz::ex
 {
@@ -82,7 +79,7 @@ namespace glz::ex
 
    export template <auto Opts, class T, raw_buffer Buffer>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] size_t write(T&& value, Buffer&& buffer)
+   [[nodiscard]] glz::size_t write(T&& value, Buffer&& buffer)
    {
       const auto e = write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
       if (not e) [[unlikely]] {

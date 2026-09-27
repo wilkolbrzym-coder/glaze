@@ -23,6 +23,7 @@ import glaze.core.write_chars;
 import glaze.core.context;
 import glaze.concepts.container_concepts;
 import glaze.util.dump;
+import glaze.core.basic_types;
 
 // GLZ_USE_STD_FORMAT_FLOAT is defined in write_chars.hpp (included via write.hpp)
 #if GLZ_USE_STD_FORMAT_FLOAT
@@ -30,7 +31,6 @@ import glaze.util.dump;
 #else
 #include <cstdio>
 #endif
-import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 

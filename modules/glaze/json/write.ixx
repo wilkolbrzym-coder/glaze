@@ -82,6 +82,7 @@ import glaze.simd.avx;
 import glaze.simd.neon;
 import glaze.simd.sse;
 import glaze.core.basic_types;
+import glaze.util.bit;
 
 #include "glaze/util/inline.hpp"
 

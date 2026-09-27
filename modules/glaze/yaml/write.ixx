@@ -40,6 +40,11 @@ import glaze.util.parse;
 import glaze.util.variant;
 import glaze.yaml.common;
 import glaze.yaml.opts;
+import glaze.core.common;
+import glaze.core.meta;
+import glaze.tuplet;
+import glaze.util.expected;
+import glaze.util.string_literal;
 
 export namespace glz
 {

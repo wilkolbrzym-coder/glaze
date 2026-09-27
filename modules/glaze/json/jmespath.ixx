@@ -10,6 +10,10 @@
 // glz:header include="glaze/util/parse.hpp"
 // glz:header include="glaze/util/string_literal.hpp"
 // glz:header project_imports=ignore
+module;
+// glz:module-only
+#include <string.h>
+// glz:end-module-only
 export module glaze.json.jmespath;
 
 import std;

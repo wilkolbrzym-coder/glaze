@@ -18,6 +18,9 @@
 // glz:header include="glaze/util/key_transformers.hpp"
 // glz:header project_imports=ignore
 module;
+// glz:module-only
+#include <cstdio>
+// glz:end-module-only
 
 // glz:emit std
 
@@ -40,6 +43,9 @@ import glaze.json.generic;
 import glaze.net.http;
 import glaze.net.url;
 import glaze.util.key_transformers;
+import glaze.core.write;
+import glaze.forward;
+import glaze.util.compare;
 
 export namespace glz
 {

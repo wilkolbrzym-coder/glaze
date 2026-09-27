@@ -23,6 +23,9 @@ import glaze.core.basic_types;
 import glaze.core.reflect;
 import glaze.json.read;
 import glaze.rpc.repe.header;
+import glaze.core.context;
+import glaze.core.read;
+import glaze.core.opts;
 
 
 export namespace glz::repe

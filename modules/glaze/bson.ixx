@@ -5,6 +5,7 @@
 // glz:header include="glaze/bson/header.hpp"
 // glz:header include="glaze/bson/read.hpp"
 // glz:header include="glaze/bson/skip.hpp"
+// glz:header include="glaze/bson/wrappers.hpp"
 // glz:header include="glaze/bson/write.hpp"
 // glz:header project_imports=ignore
 export module glaze.bson;

@@ -1,8 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/msgpack/skip.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/msgpack/common.hpp"
+// glz:header project_imports=ignore
 export module glaze.msgpack.skip;
 
 import std;
@@ -11,10 +13,8 @@ import glaze.msgpack.common;
 
 import glaze.core.opts;
 import glaze.core.context;
+import glaze.core.basic_types;
 
-using std::int8_t;
-using std::uint8_t;
-using std::size_t;
 
 namespace glz
 {
@@ -29,21 +29,21 @@ namespace glz
             return;
          }
 
-         const uint8_t tag = static_cast<uint8_t>(*it++);
+         const glz::uint8_t tag = static_cast<glz::uint8_t>(*it++);
          skip_with_tag<Opts>(ctx, tag, it, end);
       }
 
       // Overload for callers that have already consumed the tag byte (e.g.
       // dispatchers in parse<MSGPACK>::op that route by tag).
       template <auto Opts, class It, class End>
-      static void op(uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          skip_with_tag<Opts>(ctx, tag, it, end);
       }
 
      private:
       template <auto Opts, class It, class End>
-      static void skip_with_tag(is_context auto& ctx, const uint8_t tag, It& it, const End& end) noexcept
+      static void skip_with_tag(is_context auto& ctx, const glz::uint8_t tag, It& it, const End& end) noexcept
       {
          if (msgpack::is_positive_fixint(tag) || msgpack::is_negative_fixint(tag)) {
             return;
@@ -92,7 +92,7 @@ namespace glz
          }
 
          if (msgpack::is_fixstr(tag) || tag == msgpack::str8 || tag == msgpack::str16 || tag == msgpack::str32) {
-            size_t len{};
+            glz::size_t len{};
             if (!msgpack::read_str_length(ctx, tag, it, end, len)) {
                return;
             }
@@ -101,7 +101,7 @@ namespace glz
          }
 
          if (tag == msgpack::bin8 || tag == msgpack::bin16 || tag == msgpack::bin32) {
-            size_t len{};
+            glz::size_t len{};
             if (!msgpack::read_bin_length(ctx, tag, it, end, len)) {
                return;
             }
@@ -110,22 +110,22 @@ namespace glz
          }
 
          if (msgpack::is_fixarray(tag) || tag == msgpack::array16 || tag == msgpack::array32) {
-            size_t len{};
+            glz::size_t len{};
             if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
                return;
             }
-            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            for (glz::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                op<Opts>(ctx, it, end);
             }
             return;
          }
 
          if (msgpack::is_fixmap(tag) || tag == msgpack::map16 || tag == msgpack::map32) {
-            size_t len{};
+            glz::size_t len{};
             if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
                return;
             }
-            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            for (glz::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                op<Opts>(ctx, it, end); // key
                if (ctx.error != error_code::none) {
                   return;
@@ -156,8 +156,8 @@ namespace glz
             return;
          }
          if (tag == msgpack::ext8 || tag == msgpack::ext16 || tag == msgpack::ext32) {
-            size_t len{};
-            int8_t type{};
+            glz::size_t len{};
+            glz::int8_t type{};
             if (!msgpack::read_ext_header(ctx, tag, it, end, len, type)) {
                return;
             }

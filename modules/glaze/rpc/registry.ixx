@@ -17,16 +17,21 @@ export module glaze.rpc.registry;
 import std;
 
 import glaze.core.basic_types;
+import glaze;
+import glaze.ext.jsonrpc;
 import glaze.net.rest_registry_impl;
 import glaze.rpc.jsonrpc_registry_impl;
 import glaze.rpc.repe.buffer;
 import glaze.rpc.repe.repe;
 import glaze.rpc.repe.repe_registry_impl;
+import glaze.util.itoa;
+import glaze.rpc.repe.header;
+import glaze.tuplet;
+import glaze.util.type_traits;
+import glaze.util.string_literal;
 
-#include "glaze/glaze.hpp"
 
-
-export namespace glz
+namespace glz
 {
    namespace detail
    {
@@ -119,9 +124,15 @@ export namespace glz
       }
    }
 
+   // glz:module-only
+#if 0
+   // glz:end-module-only
    // Forward declaration of implementation template
-   template <auto Opts, glz::uint32_t Protocol>
+   export template <auto Opts, glz::uint32_t Protocol>
    struct registry_impl;
+   // glz:module-only
+#endif
+   // glz:end-module-only
 }
 
 // Include implementation files

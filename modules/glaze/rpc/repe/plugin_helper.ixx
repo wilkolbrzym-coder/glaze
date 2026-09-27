@@ -26,6 +26,7 @@ import glaze.rpc.registry;
 import glaze.rpc.repe.buffer;
 import glaze.rpc.repe.header;
 import glaze.rpc.repe.plugin;
+import glaze.core.context;
 
 
 export namespace glz::repe

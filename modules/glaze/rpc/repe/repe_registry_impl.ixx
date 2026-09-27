@@ -16,15 +16,20 @@ import glaze.core.basic_types;
 import glaze.rpc.repe.repe;
 
 import glaze;
-import glaze.rpc.registry;
 import glaze.util.string_literal;
 
 
 export namespace glz
 {
+   // glz:module-only
+#if 0
+   // glz:end-module-only
    // Forward declaration of the registry template
    template <auto Opts, glz::uint32_t Proto>
    struct registry;
+   // glz:module-only
+#endif
+   // glz:end-module-only
 
    template <>
    struct protocol_storage<REPE>

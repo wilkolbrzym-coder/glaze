@@ -34,6 +34,21 @@ export namespace glz
    {};
 }
 
+// glz:module-only
+// The registry implementation primary template is declared here so that both
+// glaze.rpc.registry and the per-protocol implementation units can name it
+// without importing one another. The reference header declares it in
+// registry.hpp, which then includes the implementation headers; that textual
+// ordering cannot be reproduced with module imports, so the declaration lives
+// in this lower module and registry.hpp keeps its own copy via the
+// `#if 0` scaffolding (which the module translation unit skips).
+export namespace glz
+{
+   template <auto Opts, glz::uint32_t Protocol>
+   struct registry_impl;
+}
+// glz:end-module-only
+
 export namespace glz::detail
 {
    struct string_hash

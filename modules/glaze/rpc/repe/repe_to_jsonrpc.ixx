@@ -18,7 +18,6 @@ import glaze.ext.jsonrpc;
 import glaze.rpc.repe.header;
 
 import glaze;
-import glaze.rpc.registry;
 import glaze.util.string_literal;
 
 

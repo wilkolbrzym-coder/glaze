@@ -57,6 +57,7 @@ import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.read;
 import glaze.core.reflect;
+import glaze.core.wrappers;
 
 import glaze.util.for_each;
 import glaze.util.glaze_fast_float;
@@ -70,6 +71,7 @@ import glaze.util.parse;
 import glaze.util.atoi;
 import glaze.util.expected;
 import glaze.util.tuple;
+import glaze.util.bit;
 import glaze.util.bit_array;
 
 import glaze.core.streaming_state;
@@ -93,9 +95,15 @@ import glaze.core.basic_types;
 
 namespace glz
 {
+   // glz:module-only
+#if 0
+   // glz:end-module-only
    // forward declare from json/wrappers.hpp to avoid circular include
    template <class T>
    struct quoted_t;
+   // glz:module-only
+#endif
+   // glz:end-module-only
 
    // Note: custom_num_t, custom_str_t, custom_bool_t concepts are defined in core/custom_meta.hpp
 

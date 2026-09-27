@@ -38,6 +38,7 @@ export module glaze.api.lib;
 import std;
 
 import glaze.api.api;
+import glaze.util.string_literal;
 
 namespace glz
 {

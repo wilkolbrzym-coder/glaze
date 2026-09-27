@@ -1,17 +1,26 @@
 // CORS Support for Glaze Library
 // Add this to a new file: glaze/net/cors.hpp
+// glz:header path="glaze/net/cors.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<string>
+// glz:header std=<vector>
+// glz:header include="glaze/net/http_router.hpp"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit std
 
-#include <algorithm>
-#include <string>
-#include <vector>
+// glz:emit project
 
-#include "glaze/net/http_router.hpp"
+export module glaze.net.cors;
 
-using std::size_t;
+import std;
 
-namespace glz
+import glaze.core.basic_types;
+import glaze.net.http_router;
+
+
+export namespace glz
 {
    /**
     * @brief Configuration for CORS (Cross-Origin Resource Sharing) support
@@ -127,7 +136,7 @@ namespace glz
       if (vec.empty()) return "";
 
       std::string result = vec[0];
-      for (size_t i = 1; i < vec.size(); ++i) {
+      for (glz::size_t i = 1; i < vec.size(); ++i) {
          result += delimiter + vec[i];
       }
       return result;

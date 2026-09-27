@@ -155,6 +155,12 @@ namespace
       const auto* p = reinterpret_cast<const std::uint8_t*>(g_utf8.data());
       return glz::detail::utf8_simd::validate(p, p + g_utf8.size()) ? 1u : 0u;
    }
+
+   std::uint64_t k_utf8_vector_ascii()
+   {
+      const auto* p = reinterpret_cast<const std::uint8_t*>(g_ascii.data());
+      return glz::detail::utf8_simd::validate(p, p + g_ascii.size()) ? 1u : 0u;
+   }
 #endif
 
    std::uint64_t k_escape_plain()
@@ -267,6 +273,7 @@ int main()
    add("utf8_scalar_mixed", "scalar", g_utf8.size(), &k_utf8_scalar);
 #if defined(GLZ_UTF8_SIMD)
    add("utf8_vector_mixed", utf8_be, g_utf8.size(), &k_utf8_vector);
+   add("utf8_vector_ascii", utf8_be, g_ascii.size(), &k_utf8_vector_ascii);
 #endif
    add("escape_plain", std::string(glz::detail::string_escape_simd()), g_esc_plain.size(), &k_escape_plain);
    add("escape_hot", std::string(glz::detail::string_escape_simd()), g_esc_hot.size(), &k_escape_hot);

@@ -221,9 +221,9 @@ if grep -qv '^build,' "$CSV" 2>/dev/null; then
    awk -F, '
       $1 == "build" { next }
       NF >= 6 && $1 != "" {
-         if (!(($1) in seen))   { seen[$1]=1; builds[++nb]=$1 }
+         if (!(($2) in seen))   { seen[$2]=1; builds[++nb]=$2 }
          if (!(($3) in kseen))  { kseen[$3]=1; keys[++nk]=$3 }
-         val[$3 SUBSEP $1] = $5
+         val[$3 SUBSEP $2] = $5
       }
       END {
          printf "  %-26s", "kernel";

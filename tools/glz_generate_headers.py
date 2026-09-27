@@ -287,6 +287,57 @@ def dedupe(items: list[str]) -> list[str]:
     return result
 
 
+def leading_guard_prefix(lines: list[str], start: int) -> tuple[list[str], set[int]]:
+    """Return a leading preprocessor guard block that must precede the includes.
+
+    Several reference headers open a feature-test guard *before* their include
+    block, e.g.::
+
+        #pragma once
+
+        #if __cpp_exceptions
+
+        // ...doc comment...
+
+        #include "..."
+
+    The module cannot express that with the metadata include list alone (the
+    includes would move above the guard), so when the module body starts with an
+    opening ``#if`` we lift the guard (plus any blank/comment lines up to the
+    first import or include) out of the body and emit it before the include
+    block.  The matching ``#endif`` stays at the end of the body, so the include
+    block ends up inside the guard exactly as in the reference.
+
+    Returns ``(guard_lines, skipped_indices)``; both empty when the body does not
+    start with a guard.
+    """
+    index = start
+    while index < len(lines) and lines[index].strip() == "":
+        index += 1
+    if index >= len(lines) or not PREPROCESSOR_OPEN_RE.match(lines[index]):
+        return [], set()
+
+    end = index
+    while end < len(lines):
+        stripped = lines[end].strip()
+        if IMPORT_RE.match(lines[end]) or RAW_INCLUDE_RE.match(lines[end]) or MODULE_RE.match(lines[end]):
+            break
+        if PREPROCESSOR_CLOSE_RE.match(lines[end]):
+            break
+        if (
+            stripped == ""
+            or stripped.startswith("//")
+            or stripped.startswith("/*")
+            or stripped.startswith("*")
+            or PREPROCESSOR_OPEN_RE.match(lines[end])
+        ):
+            end += 1
+            continue
+        break
+
+    return lines[index:end], set(range(index, end))
+
+
 def transform_source(
     source_path: Path,
     source_text: str,
@@ -311,6 +362,10 @@ def transform_source(
         if not HEADER_META_RE.match(line)
     ]
 
+    # A feature-test guard that opens the body belongs *before* the include
+    # block in the reference header; lift it out of the body (see helper).
+    guard_lines, guard_indices = leading_guard_prefix(lines, first_decl_index + 1)
+
     std_includes = list(metadata.std)
     project_includes: list[str] = list(metadata.includes)
     import_std_seen = False
@@ -321,6 +376,8 @@ def transform_source(
 
     for index, line in enumerate(lines):
         if index < first_decl_index:
+            continue
+        if index in guard_indices:
             continue
         if HEADER_META_RE.match(line):
             continue
@@ -399,6 +456,10 @@ def transform_source(
     if output_lines and output_lines[-1] != "":
         output_lines.append("")
     output_lines.append("#pragma once")
+    guard_lines = trim_blank_edges(guard_lines)
+    if guard_lines:
+        output_lines.append("")
+        output_lines.extend(guard_lines)
     if std_include_lines:
         output_lines.append("")
         output_lines.extend(std_include_lines)

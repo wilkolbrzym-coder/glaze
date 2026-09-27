@@ -1,15 +1,19 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
-
-#pragma once
+// glz:header path="glaze/yaml/skip.hpp"
+// glz:header project_imports=ignore
+module;
 
 #include "glaze/core/context.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/yaml/common.hpp"
+// glz:emit std
+export module glaze.yaml.skip;
 
-using std::int32_t;
+import std;
+import glaze.core.basic_types;
 
-namespace glz::yaml
+export namespace glz::yaml
 {
    // Skip a double-quoted string
    template <class It, class End, class Ctx>
@@ -67,7 +71,7 @@ namespace glz::yaml
 
    // Skip a block scalar (| or >)
    template <class It, class End, class Ctx>
-   inline void skip_block_scalar(It& it, End end, Ctx& ctx, int32_t base_indent) noexcept
+   inline void skip_block_scalar(It& it, End end, Ctx& ctx, glz::int32_t base_indent) noexcept
    {
       if (it == end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -90,12 +94,12 @@ namespace glz::yaml
       }
 
       // Determine content indentation from first content line
-      int32_t content_indent = -1;
+      glz::int32_t content_indent = -1;
 
       while (it != end) {
          // Measure indent of current line
          auto line_start = it;
-         int32_t line_indent = measure_indent<false>(it, end, ctx);
+         glz::int32_t line_indent = measure_indent<false>(it, end, ctx);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -249,7 +253,7 @@ namespace glz::yaml
 
    // Skip any YAML value (for skipping unknown keys)
    template <auto Opts, class Ctx, class It, class End>
-   inline void skip_yaml_value(Ctx& ctx, It& it, End end, int32_t current_indent, bool in_flow) noexcept
+   inline void skip_yaml_value(Ctx& ctx, It& it, End end, glz::int32_t current_indent, bool in_flow) noexcept
    {
       skip_inline_ws(it, end);
 
@@ -317,7 +321,7 @@ namespace glz::yaml
 
             // Check next line indent
             auto line_start = it;
-            int32_t line_indent = measure_indent(it, end, ctx);
+            glz::int32_t line_indent = measure_indent(it, end, ctx);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -363,7 +367,7 @@ namespace glz::yaml
                if (!skip_newline(it, end)) break;
 
                auto line_start = it;
-               int32_t line_indent = measure_indent(it, end, ctx);
+               glz::int32_t line_indent = measure_indent(it, end, ctx);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -407,7 +411,7 @@ namespace glz::yaml
             if (!skip_newline(it, end)) break;
 
             auto line_start = it;
-            int32_t line_indent = measure_indent(it, end, ctx);
+            glz::int32_t line_indent = measure_indent(it, end, ctx);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -433,7 +437,7 @@ namespace glz::yaml
 
 } // namespace glz::yaml
 
-namespace glz
+export namespace glz
 {
    template <>
    struct skip_value<YAML>

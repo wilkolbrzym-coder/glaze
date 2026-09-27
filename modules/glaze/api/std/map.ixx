@@ -2,7 +2,8 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/api/std/map.hpp"
 // glz:header std=<map>
-// glz:header std=<string_view>
+// glz:header include="glaze/core/meta.hpp"
+// glz:header project_imports=ignore
 export module glaze.api.std.map;
 
 import std;
@@ -12,7 +13,7 @@ import glaze.util.string_literal;
 
 export namespace glz
 {
-   template<class Key, class Mapped>
+   template <class Key, class Mapped>
    struct meta<std::map<Key, Mapped>>
    {
       static constexpr std::string_view name =

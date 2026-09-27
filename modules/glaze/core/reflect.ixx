@@ -3626,7 +3626,7 @@ namespace glz
       // An empty reflected object, used to consume the body of a discriminator-only object on behalf
       // of a unit alternative. Routing through it reuses the object readers' key handling, unknown-key
       // policy, and terminator consumption rather than duplicating them per format.
-      struct variant_unit_body
+      export struct variant_unit_body
       {};
    }
 

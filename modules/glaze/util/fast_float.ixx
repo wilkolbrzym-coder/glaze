@@ -95,56 +95,24 @@
 //
 
 // glz:header path="glaze/util/fast_float.hpp"
-// glz:header std=<algorithm>
-// glz:header std=<bit>
-// glz:header std=<cassert>
-// glz:header std=<charconv>
-// glz:header std=<climits>
-// glz:header std=<cmath>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<cstdlib>
-// glz:header std=<cstring>
-// glz:header std=<iterator>
-// glz:header std=<limits>
-// glz:header std=<system_error>
-// glz:header std=<type_traits>
-// glz:header std=<version>
-module;
-
-#include <cassert>
-#include <cstring>
-
-#if ((defined(_WIN32) || defined(_WIN64)) && !defined(__clang__)) ||           \
-    (defined(_M_ARM64) && !defined(__MINGW32__))
-#include <intrin.h>
-#endif
-
-#if defined(__SSE2__) ||                                                       \
-    (defined(_MSC_VER) && (defined(_M_AMD64) || defined(_M_X64) ||              \
-                           (defined(_M_IX86_FP) && _M_IX86_FP == 2))) ||        \
-    defined(__x86_64__) || defined(__i386)
-#include <emmintrin.h>
-#endif
-
-#if defined(__aarch64__) || defined(_M_ARM64)
-#include <arm_neon.h>
-#endif
-
+// glz:header project_imports=ignore
+// glz:header pragma_once=none
+// glz:header trailing_blanks=1
+// glz:header blank_runs=2
 export module glaze.util.fast_float;
 
 import std;
+import glaze.core.basic_types;
 
-using std::uint8_t;
-using std::uint16_t;
-using std::int32_t;
-using std::uint32_t;
-using std::int64_t;
-using std::uint64_t;
-using std::size_t;
 
 #ifndef GLZ_FASTFLOAT_CONSTEXPR_FEATURE_DETECT_H
 #define GLZ_FASTFLOAT_CONSTEXPR_FEATURE_DETECT_H
+
+#ifdef __has_include
+#if __has_include(<version>)
+#include <version>
+#endif
+#endif
 
 // Testing for https://wg21.link/N3652, adopted in C++14
 #if defined(__cpp_constexpr) && __cpp_constexpr >= 201304
@@ -194,7 +162,18 @@ using std::size_t;
 #ifndef GLZ_FASTFLOAT_FLOAT_COMMON_H
 #define GLZ_FASTFLOAT_FLOAT_COMMON_H
 
-
+#include <cfloat>
+#include <cstdint>
+#include <cassert>
+#include <cstring>
+#include <limits>
+#include <type_traits>
+#include <system_error>
+#ifdef __has_include
+#if __has_include(<stdfloat>) && (__cplusplus > 202002L || (defined(_MSVC_LANG) && (_MSVC_LANG > 202002L)))
+#include <stdfloat>
+#endif
+#endif
 
 #define GLZ_FASTFLOAT_VERSION_MAJOR 8
 #define GLZ_FASTFLOAT_VERSION_MINOR 0
@@ -214,23 +193,23 @@ using std::size_t;
 
 namespace glz::fast_float {
 
-enum class chars_format : uint64_t;
+enum class chars_format : glz::uint64_t;
 
 namespace detail {
 inline constexpr chars_format basic_json_fmt = chars_format(1 << 5);
 inline constexpr chars_format basic_fortran_fmt = chars_format(1 << 6);
 } // namespace detail
 
-enum class chars_format : uint64_t {
+enum class chars_format : glz::uint64_t {
   scientific = 1 << 0,
   fixed = 1 << 2,
   hex = 1 << 3,
   no_infnan = 1 << 4,
   // RFC 8259: https://datatracker.ietf.org/doc/html/rfc8259#section-6
-  json = uint64_t(detail::basic_json_fmt) | fixed | scientific | no_infnan,
+  json = glz::uint64_t(detail::basic_json_fmt) | fixed | scientific | no_infnan,
   // Extension of RFC 8259 where, e.g., "inf" and "nan" are allowed.
-  json_or_infnan = uint64_t(detail::basic_json_fmt) | fixed | scientific,
-  fortran = uint64_t(detail::basic_fortran_fmt) | fixed | scientific,
+  json_or_infnan = glz::uint64_t(detail::basic_json_fmt) | fixed | scientific,
+  fortran = glz::uint64_t(detail::basic_fortran_fmt) | fixed | scientific,
   general = fixed | scientific,
   allow_leading_plus = 1 << 7,
   skip_white_space = 1 << 8,
@@ -260,6 +239,9 @@ using parse_options = parse_options_t<char>;
 
 } // namespace glz::fast_float
 
+#if GLZ_FASTFLOAT_HAS_BIT_CAST
+#include <bit>
+#endif
 
 #if (defined(__x86_64) || defined(__x86_64__) || defined(_M_X64) ||            \
      defined(__amd64) || defined(__aarch64__) || defined(_M_ARM64) ||          \
@@ -273,7 +255,7 @@ using parse_options = parse_options_t<char>;
        defined(__MINGW32__) || defined(__EMSCRIPTEN__))
 #define GLZ_FASTFLOAT_32BIT 1
 #else
-  // Need to check incrementally, since SIZE_MAX is a std::size_t, avoid overflow.
+  // Need to check incrementally, since SIZE_MAX is a size_t, avoid overflow.
 // We can never tell the register width, but the SIZE_MAX is a good
 // approximation. UINTPTR_MAX and INTPTR_MAX are optional, so avoid them for max
 // portability.
@@ -286,6 +268,11 @@ using parse_options = parse_options_t<char>;
 #else
 #error Unknown platform (not 32-bit, not 64-bit?)
 #endif
+#endif
+
+#if ((defined(_WIN32) || defined(_WIN64)) && !defined(__clang__)) ||           \
+    (defined(_M_ARM64) && !defined(__MINGW32__))
+#include <intrin.h>
 #endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -414,11 +401,11 @@ struct is_supported_float_type
 
 template <typename T>
 using equiv_uint_t = typename std::conditional<
-    sizeof(T) == 1, uint8_t,
+    sizeof(T) == 1, glz::uint8_t,
     typename std::conditional<
-        sizeof(T) == 2, uint16_t,
-        typename std::conditional<sizeof(T) == 4, uint32_t,
-                                  uint64_t>::type>::type>::type;
+        sizeof(T) == 2, glz::uint16_t,
+        typename std::conditional<sizeof(T) == 4, glz::uint32_t,
+                                  glz::uint64_t>::type>::type>::type;
 
 template <typename T> struct is_supported_integer_type : std::is_integral<T> {};
 
@@ -438,8 +425,8 @@ struct is_supported_char_type
 template <typename UC>
 inline GLZ_FASTFLOAT_CONSTEXPR14 bool
 fastfloat_strncasecmp(UC const *actual_mixedcase, UC const *expected_lowercase,
-                      size_t length) {
-  for (size_t i = 0; i < length; ++i) {
+                      glz::size_t length) {
+  for (glz::size_t i = 0; i < length; ++i) {
     UC const actual = actual_mixedcase[i];
     if ((actual < 256 ? actual | 32 : actual) != expected_lowercase[i]) {
       return false;
@@ -449,59 +436,59 @@ fastfloat_strncasecmp(UC const *actual_mixedcase, UC const *expected_lowercase,
 }
 
 #ifndef FLT_EVAL_METHOD
-#define FLT_EVAL_METHOD 0
+#error "FLT_EVAL_METHOD should be defined, please include cfloat."
 #endif
 
 // a pointer and a length to a contiguous block of memory
 export template <typename T> struct span {
   T const *ptr;
-  size_t length;
+  glz::size_t length;
 
-  constexpr span(T const *_ptr, size_t _length) : ptr(_ptr), length(_length) {}
+  constexpr span(T const *_ptr, glz::size_t _length) : ptr(_ptr), length(_length) {}
 
   constexpr span() : ptr(nullptr), length(0) {}
 
-  constexpr size_t len() const noexcept { return length; }
+  constexpr glz::size_t len() const noexcept { return length; }
 
-  GLZ_FASTFLOAT_CONSTEXPR14 const T &operator[](size_t index) const noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR14 const T &operator[](glz::size_t index) const noexcept {
     GLZ_FASTFLOAT_DEBUG_ASSERT(index < length);
     return ptr[index];
   }
 };
 
 struct value128 {
-  uint64_t low;
-  uint64_t high;
+  glz::uint64_t low;
+  glz::uint64_t high;
 
-  constexpr value128(uint64_t _low, uint64_t _high) : low(_low), high(_high) {}
+  constexpr value128(glz::uint64_t _low, glz::uint64_t _high) : low(_low), high(_high) {}
 
   constexpr value128() : low(0), high(0) {}
 };
 
 /* Helper C++14 constexpr generic implementation of leading_zeroes */
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 int
-leading_zeroes_generic(uint64_t input_num, int last_bit = 0) {
-  if (input_num & uint64_t(0xffffffff00000000)) {
+leading_zeroes_generic(glz::uint64_t input_num, int last_bit = 0) {
+  if (input_num & glz::uint64_t(0xffffffff00000000)) {
     input_num >>= 32;
     last_bit |= 32;
   }
-  if (input_num & uint64_t(0xffff0000)) {
+  if (input_num & glz::uint64_t(0xffff0000)) {
     input_num >>= 16;
     last_bit |= 16;
   }
-  if (input_num & uint64_t(0xff00)) {
+  if (input_num & glz::uint64_t(0xff00)) {
     input_num >>= 8;
     last_bit |= 8;
   }
-  if (input_num & uint64_t(0xf0)) {
+  if (input_num & glz::uint64_t(0xf0)) {
     input_num >>= 4;
     last_bit |= 4;
   }
-  if (input_num & uint64_t(0xc)) {
+  if (input_num & glz::uint64_t(0xc)) {
     input_num >>= 2;
     last_bit |= 2;
   }
-  if (input_num & uint64_t(0x2)) { /* input_num >>=  1; */
+  if (input_num & glz::uint64_t(0x2)) { /* input_num >>=  1; */
     last_bit |= 1;
   }
   return 63 - last_bit;
@@ -509,7 +496,7 @@ leading_zeroes_generic(uint64_t input_num, int last_bit = 0) {
 
 /* result might be undefined when input_num is zero */
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 int
-leading_zeroes(uint64_t input_num) {
+leading_zeroes(glz::uint64_t input_num) {
   assert(input_num > 0);
   if (cpp20_and_in_constexpr()) {
     return leading_zeroes_generic(input_num);
@@ -530,19 +517,19 @@ leading_zeroes(uint64_t input_num) {
 }
 
 // slow emulation routine for 32-bit
-fastfloat_really_inline constexpr uint64_t emulu(uint32_t x, uint32_t y) {
-  return x * (uint64_t)y;
+fastfloat_really_inline constexpr glz::uint64_t emulu(glz::uint32_t x, glz::uint32_t y) {
+  return x * (glz::uint64_t)y;
 }
 
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 uint64_t
-umul128_generic(uint64_t ab, uint64_t cd, uint64_t *hi) {
-  uint64_t ad = emulu((uint32_t)(ab >> 32), (uint32_t)cd);
-  uint64_t bd = emulu((uint32_t)ab, (uint32_t)cd);
-  uint64_t adbc = ad + emulu((uint32_t)ab, (uint32_t)(cd >> 32));
-  uint64_t adbc_carry = (uint64_t)(adbc < ad);
-  uint64_t lo = bd + (adbc << 32);
-  *hi = emulu((uint32_t)(ab >> 32), (uint32_t)(cd >> 32)) + (adbc >> 32) +
-        (adbc_carry << 32) + (uint64_t)(lo < bd);
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 glz::uint64_t
+umul128_generic(glz::uint64_t ab, glz::uint64_t cd, glz::uint64_t *hi) {
+  glz::uint64_t ad = emulu((glz::uint32_t)(ab >> 32), (glz::uint32_t)cd);
+  glz::uint64_t bd = emulu((glz::uint32_t)ab, (glz::uint32_t)cd);
+  glz::uint64_t adbc = ad + emulu((glz::uint32_t)ab, (glz::uint32_t)(cd >> 32));
+  glz::uint64_t adbc_carry = (glz::uint64_t)(adbc < ad);
+  glz::uint64_t lo = bd + (adbc << 32);
+  *hi = emulu((glz::uint32_t)(ab >> 32), (glz::uint32_t)(cd >> 32)) + (adbc >> 32) +
+        (adbc_carry << 32) + (glz::uint64_t)(lo < bd);
   return lo;
 }
 
@@ -550,9 +537,9 @@ umul128_generic(uint64_t ab, uint64_t cd, uint64_t *hi) {
 
 // slow emulation routine for 32-bit
 #if !defined(__MINGW64__)
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 uint64_t _umul128(uint64_t ab,
-                                                                uint64_t cd,
-                                                                uint64_t *hi) {
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 glz::uint64_t _umul128(glz::uint64_t ab,
+                                                                glz::uint64_t cd,
+                                                                glz::uint64_t *hi) {
   return umul128_generic(ab, cd, hi);
 }
 #endif // !__MINGW64__
@@ -561,7 +548,7 @@ fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 uint64_t _umul128(uint64_t ab,
 
 // compute 64-bit a*b
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 value128
-full_multiplication(uint64_t a, uint64_t b) {
+full_multiplication(glz::uint64_t a, glz::uint64_t b) {
   if (cpp20_and_in_constexpr()) {
     value128 answer;
     answer.low = umul128_generic(a, b, &answer.high);
@@ -578,8 +565,8 @@ full_multiplication(uint64_t a, uint64_t b) {
   answer.low = _umul128(a, b, &answer.high); // _umul128 not available on ARM64
 #elif defined(GLZ_FASTFLOAT_64BIT) && defined(__SIZEOF_INT128__)
   __uint128_t r = ((__uint128_t)a) * b;
-  answer.low = uint64_t(r);
-  answer.high = uint64_t(r >> 64);
+  answer.low = glz::uint64_t(r);
+  answer.high = glz::uint64_t(r >> 64);
 #else
   answer.low = umul128_generic(a, b, &answer.high);
 #endif
@@ -587,8 +574,8 @@ full_multiplication(uint64_t a, uint64_t b) {
 }
 
 struct adjusted_mantissa {
-  uint64_t mantissa{0};
-  int32_t power2{0}; // a negative value indicates an invalid result
+  glz::uint64_t mantissa{0};
+  glz::int32_t power2{0}; // a negative value indicates an invalid result
   adjusted_mantissa() = default;
 
   constexpr bool operator==(adjusted_mantissa const &o) const {
@@ -601,10 +588,10 @@ struct adjusted_mantissa {
 };
 
 // Bias so we can get the real exponent with an invalid adjusted_mantissa.
-inline constexpr int32_t invalid_am_bias = -0x8000;
+inline constexpr glz::int32_t invalid_am_bias = -0x8000;
 
 // used for binary_format_lookup_tables<T>::max_mantissa
-inline constexpr uint64_t constant_55555 = 5 * 5 * 5 * 5 * 5;
+inline constexpr glz::uint64_t constant_55555 = 5 * 5 * 5 * 5 * 5;
 
 template <typename T, typename U = void> struct binary_format_lookup_tables;
 
@@ -620,13 +607,13 @@ export template <typename T> struct binary_format : binary_format_lookup_tables<
   static constexpr int max_exponent_fast_path();
   static constexpr int max_exponent_round_to_even();
   static constexpr int min_exponent_round_to_even();
-  static constexpr uint64_t max_mantissa_fast_path(int64_t power);
-  static constexpr uint64_t
+  static constexpr glz::uint64_t max_mantissa_fast_path(glz::int64_t power);
+  static constexpr glz::uint64_t
   max_mantissa_fast_path(); // used when fegetround() == FE_TONEAREST
   static constexpr int largest_power_of_ten();
   static constexpr int smallest_power_of_ten();
-  static constexpr T exact_power_of_ten(int64_t power);
-  static constexpr size_t max_digits();
+  static constexpr T exact_power_of_ten(glz::int64_t power);
+  static constexpr glz::size_t max_digits();
   static constexpr equiv_uint exponent_mask();
   static constexpr equiv_uint mantissa_mask();
   static constexpr equiv_uint hidden_bit_mask();
@@ -639,7 +626,7 @@ template <typename U> struct binary_format_lookup_tables<double, U> {
 
   // Largest integer value v so that (5**index * v) <= 1<<53.
   // 0x20000000000000 == 1 << 53
-  static constexpr uint64_t max_mantissa[] = {
+  static constexpr glz::uint64_t max_mantissa[] = {
       0x20000000000000,
       0x20000000000000 / 5,
       0x20000000000000 / (5 * 5),
@@ -680,7 +667,7 @@ template <typename U>
 constexpr double binary_format_lookup_tables<double, U>::powers_of_ten[];
 
 template <typename U>
-constexpr uint64_t binary_format_lookup_tables<double, U>::max_mantissa[];
+constexpr glz::uint64_t binary_format_lookup_tables<double, U>::max_mantissa[];
 
 #endif
 
@@ -690,7 +677,7 @@ template <typename U> struct binary_format_lookup_tables<float, U> {
 
   // Largest integer value v so that (5**index * v) <= 1<<24.
   // 0x1000000 == 1<<24
-  static constexpr uint64_t max_mantissa[] = {
+  static constexpr glz::uint64_t max_mantissa[] = {
       0x1000000,
       0x1000000 / 5,
       0x1000000 / (5 * 5),
@@ -711,7 +698,7 @@ template <typename U>
 constexpr float binary_format_lookup_tables<float, U>::powers_of_ten[];
 
 template <typename U>
-constexpr uint64_t binary_format_lookup_tables<float, U>::max_mantissa[];
+constexpr glz::uint64_t binary_format_lookup_tables<float, U>::max_mantissa[];
 
 #endif
 
@@ -798,13 +785,13 @@ inline constexpr int binary_format<float>::max_exponent_fast_path() {
 }
 
 template <>
-inline constexpr uint64_t binary_format<double>::max_mantissa_fast_path() {
-  return uint64_t(2) << mantissa_explicit_bits();
+inline constexpr glz::uint64_t binary_format<double>::max_mantissa_fast_path() {
+  return glz::uint64_t(2) << mantissa_explicit_bits();
 }
 
 template <>
-inline constexpr uint64_t binary_format<float>::max_mantissa_fast_path() {
-  return uint64_t(2) << mantissa_explicit_bits();
+inline constexpr glz::uint64_t binary_format<float>::max_mantissa_fast_path() {
+  return glz::uint64_t(2) << mantissa_explicit_bits();
 }
 
 // credit: Jakub Jelínek
@@ -815,7 +802,7 @@ template <typename U> struct binary_format_lookup_tables<std::float16_t, U> {
 
   // Largest integer value v so that (5**index * v) <= 1<<11.
   // 0x800 == 1<<11
-  static constexpr uint64_t max_mantissa[] = {0x800,
+  static constexpr glz::uint64_t max_mantissa[] = {0x800,
                                               0x800 / 5,
                                               0x800 / (5 * 5),
                                               0x800 / (5 * 5 * 5),
@@ -830,14 +817,14 @@ constexpr std::float16_t
     binary_format_lookup_tables<std::float16_t, U>::powers_of_ten[];
 
 template <typename U>
-constexpr uint64_t
+constexpr glz::uint64_t
     binary_format_lookup_tables<std::float16_t, U>::max_mantissa[];
 
 #endif
 
 template <>
 inline constexpr std::float16_t
-binary_format<std::float16_t>::exact_power_of_ten(int64_t power) {
+binary_format<std::float16_t>::exact_power_of_ten(glz::int64_t power) {
   // Work around clang bug https://godbolt.org/z/zedh7rrhc
   return (void)powers_of_ten[0], powers_of_ten[power];
 }
@@ -871,14 +858,14 @@ inline constexpr int binary_format<std::float16_t>::mantissa_explicit_bits() {
 }
 
 template <>
-inline constexpr uint64_t
+inline constexpr glz::uint64_t
 binary_format<std::float16_t>::max_mantissa_fast_path() {
-  return uint64_t(2) << mantissa_explicit_bits();
+  return glz::uint64_t(2) << mantissa_explicit_bits();
 }
 
 template <>
-inline constexpr uint64_t
-binary_format<std::float16_t>::max_mantissa_fast_path(int64_t power) {
+inline constexpr glz::uint64_t
+binary_format<std::float16_t>::max_mantissa_fast_path(glz::int64_t power) {
   // caller is responsible to ensure that
   // power >= 0 && power <= 4
   //
@@ -928,7 +915,7 @@ inline constexpr int binary_format<std::float16_t>::smallest_power_of_ten() {
 }
 
 template <>
-inline constexpr size_t binary_format<std::float16_t>::max_digits() {
+inline constexpr glz::size_t binary_format<std::float16_t>::max_digits() {
   return 22;
 }
 #endif // __STDCPP_FLOAT16_T__
@@ -941,7 +928,7 @@ template <typename U> struct binary_format_lookup_tables<std::bfloat16_t, U> {
 
   // Largest integer value v so that (5**index * v) <= 1<<8.
   // 0x100 == 1<<8
-  static constexpr uint64_t max_mantissa[] = {0x100, 0x100 / 5, 0x100 / (5 * 5),
+  static constexpr glz::uint64_t max_mantissa[] = {0x100, 0x100 / 5, 0x100 / (5 * 5),
                                               0x100 / (5 * 5 * 5),
                                               0x100 / (5 * 5 * 5 * 5)};
 };
@@ -953,14 +940,14 @@ constexpr std::bfloat16_t
     binary_format_lookup_tables<std::bfloat16_t, U>::powers_of_ten[];
 
 template <typename U>
-constexpr uint64_t
+constexpr glz::uint64_t
     binary_format_lookup_tables<std::bfloat16_t, U>::max_mantissa[];
 
 #endif
 
 template <>
 inline constexpr std::bfloat16_t
-binary_format<std::bfloat16_t>::exact_power_of_ten(int64_t power) {
+binary_format<std::bfloat16_t>::exact_power_of_ten(glz::int64_t power) {
   // Work around clang bug https://godbolt.org/z/zedh7rrhc
   return (void)powers_of_ten[0], powers_of_ten[power];
 }
@@ -994,14 +981,14 @@ inline constexpr int binary_format<std::bfloat16_t>::mantissa_explicit_bits() {
 }
 
 template <>
-inline constexpr uint64_t
+inline constexpr glz::uint64_t
 binary_format<std::bfloat16_t>::max_mantissa_fast_path() {
-  return uint64_t(2) << mantissa_explicit_bits();
+  return glz::uint64_t(2) << mantissa_explicit_bits();
 }
 
 template <>
-inline constexpr uint64_t
-binary_format<std::bfloat16_t>::max_mantissa_fast_path(int64_t power) {
+inline constexpr glz::uint64_t
+binary_format<std::bfloat16_t>::max_mantissa_fast_path(glz::int64_t power) {
   // caller is responsible to ensure that
   // power >= 0 && power <= 3
   //
@@ -1051,14 +1038,14 @@ inline constexpr int binary_format<std::bfloat16_t>::smallest_power_of_ten() {
 }
 
 template <>
-inline constexpr size_t binary_format<std::bfloat16_t>::max_digits() {
+inline constexpr glz::size_t binary_format<std::bfloat16_t>::max_digits() {
   return 98;
 }
 #endif // __STDCPP_BFLOAT16_T__
 
 template <>
-inline constexpr uint64_t
-binary_format<double>::max_mantissa_fast_path(int64_t power) {
+inline constexpr glz::uint64_t
+binary_format<double>::max_mantissa_fast_path(glz::int64_t power) {
   // caller is responsible to ensure that
   // power >= 0 && power <= 22
   //
@@ -1067,8 +1054,8 @@ binary_format<double>::max_mantissa_fast_path(int64_t power) {
 }
 
 template <>
-inline constexpr uint64_t
-binary_format<float>::max_mantissa_fast_path(int64_t power) {
+inline constexpr glz::uint64_t
+binary_format<float>::max_mantissa_fast_path(glz::int64_t power) {
   // caller is responsible to ensure that
   // power >= 0 && power <= 10
   //
@@ -1078,13 +1065,13 @@ binary_format<float>::max_mantissa_fast_path(int64_t power) {
 
 template <>
 inline constexpr double
-binary_format<double>::exact_power_of_ten(int64_t power) {
+binary_format<double>::exact_power_of_ten(glz::int64_t power) {
   // Work around clang bug https://godbolt.org/z/zedh7rrhc
   return (void)powers_of_ten[0], powers_of_ten[power];
 }
 
 template <>
-inline constexpr float binary_format<float>::exact_power_of_ten(int64_t power) {
+inline constexpr float binary_format<float>::exact_power_of_ten(glz::int64_t power) {
   // Work around clang bug https://godbolt.org/z/zedh7rrhc
   return (void)powers_of_ten[0], powers_of_ten[power];
 }
@@ -1106,11 +1093,11 @@ template <> inline constexpr int binary_format<float>::smallest_power_of_ten() {
   return -64;
 }
 
-template <> inline constexpr size_t binary_format<double>::max_digits() {
+template <> inline constexpr glz::size_t binary_format<double>::max_digits() {
   return 769;
 }
 
-template <> inline constexpr size_t binary_format<float>::max_digits() {
+template <> inline constexpr glz::size_t binary_format<float>::max_digits() {
   return 114;
 }
 
@@ -1162,7 +1149,7 @@ to_float(bool negative, adjusted_mantissa am, T &value) {
 #if GLZ_FASTFLOAT_HAS_BIT_CAST
   value = std::bit_cast<T>(word);
 #else
-  std::memcpy(&value, &word, sizeof(T));
+  ::memcpy(&value, &word, sizeof(T));
 #endif
 }
 
@@ -1188,21 +1175,21 @@ template <typename T> constexpr bool space_lut<T>::value[];
 #endif
 
 template <typename UC> constexpr bool is_space(UC c) {
-  return c < 256 && space_lut<>::value[uint8_t(c)];
+  return c < 256 && space_lut<>::value[glz::uint8_t(c)];
 }
 
-template <typename UC> constexpr uint64_t int_cmp_zeros() {
+template <typename UC> constexpr glz::uint64_t int_cmp_zeros() {
   static_assert((sizeof(UC) == 1) || (sizeof(UC) == 2) || (sizeof(UC) == 4),
                 "Unsupported character size");
   return (sizeof(UC) == 1) ? 0x3030303030303030
          : (sizeof(UC) == 2)
-             ? (uint64_t(UC('0')) << 48 | uint64_t(UC('0')) << 32 |
-                uint64_t(UC('0')) << 16 | UC('0'))
-             : (uint64_t(UC('0')) << 32 | UC('0'));
+             ? (glz::uint64_t(UC('0')) << 48 | glz::uint64_t(UC('0')) << 32 |
+                glz::uint64_t(UC('0')) << 16 | UC('0'))
+             : (glz::uint64_t(UC('0')) << 32 | UC('0'));
 }
 
 template <typename UC> constexpr int int_cmp_len() {
-  return sizeof(uint64_t) / sizeof(UC);
+  return sizeof(glz::uint64_t) / sizeof(UC);
 }
 
 template <typename UC> constexpr UC const *str_const_nan();
@@ -1248,7 +1235,7 @@ template <> constexpr char8_t const *str_const_inf<char8_t>() {
 #endif
 
 template <typename = void> struct int_luts {
-  static constexpr uint8_t chdigit[] = {
+  static constexpr glz::uint8_t chdigit[] = {
       255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
       255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
       255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -1268,11 +1255,11 @@ template <typename = void> struct int_luts {
       255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
       255};
 
-  static constexpr size_t maxdigits_u64[] = {
+  static constexpr glz::size_t maxdigits_u64[] = {
       64, 41, 32, 28, 25, 23, 22, 21, 20, 19, 18, 18, 17, 17, 16, 16, 16, 16,
       15, 15, 15, 15, 14, 14, 14, 14, 14, 14, 14, 13, 13, 13, 13, 13, 13};
 
-  static constexpr uint64_t min_safe_u64[] = {
+  static constexpr glz::uint64_t min_safe_u64[] = {
       9223372036854775808ull,  12157665459056928801ull, 4611686018427387904,
       7450580596923828125,     4738381338321616896,     3909821048582988049,
       9223372036854775808ull,  12157665459056928801ull, 10000000000000000000ull,
@@ -1289,50 +1276,50 @@ template <typename = void> struct int_luts {
 
 #if GLZ_FASTFLOAT_DETAIL_MUST_DEFINE_CONSTEXPR_VARIABLE
 
-template <typename T> constexpr uint8_t int_luts<T>::chdigit[];
+template <typename T> constexpr glz::uint8_t int_luts<T>::chdigit[];
 
-template <typename T> constexpr size_t int_luts<T>::maxdigits_u64[];
+template <typename T> constexpr glz::size_t int_luts<T>::maxdigits_u64[];
 
-template <typename T> constexpr uint64_t int_luts<T>::min_safe_u64[];
+template <typename T> constexpr glz::uint64_t int_luts<T>::min_safe_u64[];
 
 #endif
 
 template <typename UC>
-fastfloat_really_inline constexpr uint8_t ch_to_digit(UC c) {
+fastfloat_really_inline constexpr glz::uint8_t ch_to_digit(UC c) {
   return int_luts<>::chdigit[static_cast<unsigned char>(c)];
 }
 
-fastfloat_really_inline constexpr size_t max_digits_u64(int base) {
+fastfloat_really_inline constexpr glz::size_t max_digits_u64(int base) {
   return int_luts<>::maxdigits_u64[base - 2];
 }
 
 // If a u64 is exactly max_digits_u64() in length, this is
 // the value below which it has definitely overflowed.
-fastfloat_really_inline constexpr uint64_t min_safe_u64(int base) {
+fastfloat_really_inline constexpr glz::uint64_t min_safe_u64(int base) {
   return int_luts<>::min_safe_u64[base - 2];
 }
 
-static_assert(std::is_same<equiv_uint_t<double>, uint64_t>::value,
-              "equiv_uint should be std::uint64_t for double");
+static_assert(std::is_same<equiv_uint_t<double>, glz::uint64_t>::value,
+              "equiv_uint should be uint64_t for double");
 static_assert(std::numeric_limits<double>::is_iec559,
               "double must fulfill the requirements of IEC 559 (IEEE 754)");
 
-static_assert(std::is_same<equiv_uint_t<float>, uint32_t>::value,
-              "equiv_uint should be std::uint32_t for float");
+static_assert(std::is_same<equiv_uint_t<float>, glz::uint32_t>::value,
+              "equiv_uint should be uint32_t for float");
 static_assert(std::numeric_limits<float>::is_iec559,
               "float must fulfill the requirements of IEC 559 (IEEE 754)");
 
 #ifdef __STDCPP_FLOAT64_T__
-static_assert(std::is_same<equiv_uint_t<std::float64_t>, uint64_t>::value,
-              "equiv_uint should be std::uint64_t for std::float64_t");
+static_assert(std::is_same<equiv_uint_t<std::float64_t>, glz::uint64_t>::value,
+              "equiv_uint should be uint64_t for std::float64_t");
 static_assert(
     std::numeric_limits<std::float64_t>::is_iec559,
     "std::float64_t must fulfill the requirements of IEC 559 (IEEE 754)");
 #endif // __STDCPP_FLOAT64_T__
 
 #ifdef __STDCPP_FLOAT32_T__
-static_assert(std::is_same<equiv_uint_t<std::float32_t>, uint32_t>::value,
-              "equiv_uint should be std::uint32_t for std::float32_t");
+static_assert(std::is_same<equiv_uint_t<std::float32_t>, glz::uint32_t>::value,
+              "equiv_uint should be uint32_t for std::float32_t");
 static_assert(
     std::numeric_limits<std::float32_t>::is_iec559,
     "std::float32_t must fulfill the requirements of IEC 559 (IEEE 754)");
@@ -1340,8 +1327,8 @@ static_assert(
 
 #ifdef __STDCPP_FLOAT16_T__
 static_assert(
-    std::is_same<binary_format<std::float16_t>::equiv_uint, uint16_t>::value,
-    "equiv_uint should be std::uint16_t for std::float16_t");
+    std::is_same<binary_format<std::float16_t>::equiv_uint, glz::uint16_t>::value,
+    "equiv_uint should be uint16_t for std::float16_t");
 static_assert(
     std::numeric_limits<std::float16_t>::is_iec559,
     "std::float16_t must fulfill the requirements of IEC 559 (IEEE 754)");
@@ -1349,8 +1336,8 @@ static_assert(
 
 #ifdef __STDCPP_BFLOAT16_T__
 static_assert(
-    std::is_same<binary_format<std::bfloat16_t>::equiv_uint, uint16_t>::value,
-    "equiv_uint should be std::uint16_t for std::bfloat16_t");
+    std::is_same<binary_format<std::bfloat16_t>::equiv_uint, glz::uint16_t>::value,
+    "equiv_uint should be uint16_t for std::bfloat16_t");
 static_assert(
     std::numeric_limits<std::bfloat16_t>::is_iec559,
     "std::bfloat16_t must fulfill the requirements of IEC 559 (IEEE 754)");
@@ -1473,6 +1460,22 @@ from_chars(UC const *first, UC const *last, T &value, int base = 10) noexcept;
 #ifndef GLZ_FASTFLOAT_ASCII_NUMBER_H
 #define GLZ_FASTFLOAT_ASCII_NUMBER_H
 
+#include <cctype>
+#include <cstdint>
+#include <cstring>
+#include <iterator>
+#include <limits>
+#include <type_traits>
+
+
+#ifdef GLZ_FASTFLOAT_SSE2
+#include <emmintrin.h>
+#endif
+
+#ifdef GLZ_FASTFLOAT_NEON
+#include <arm_neon.h>
+#endif
+
 namespace glz::fast_float {
 
 template <typename UC> fastfloat_really_inline constexpr bool has_simd_opt() {
@@ -1494,11 +1497,11 @@ fastfloat_really_inline constexpr bool is_integer(UC c) noexcept {
 // Uses unsigned underflow to combine bounds check and digit extraction in one operation.
 // This is faster than separate is_integer() check + digit computation.
 export template <typename UC>
-fastfloat_really_inline constexpr uint64_t digit_value(UC c) noexcept {
-  return uint64_t(uint8_t(c) - uint8_t('0'));
+fastfloat_really_inline constexpr glz::uint64_t digit_value(UC c) noexcept {
+  return glz::uint64_t(glz::uint8_t(c) - glz::uint8_t('0'));
 }
 
-fastfloat_really_inline constexpr uint64_t byteswap(uint64_t val) {
+fastfloat_really_inline constexpr glz::uint64_t byteswap(glz::uint64_t val) {
   return (val & 0xFF00000000000000) >> 56 | (val & 0x00FF000000000000) >> 40 |
          (val & 0x0000FF0000000000) >> 24 | (val & 0x000000FF00000000) >> 8 |
          (val & 0x00000000FF000000) << 8 | (val & 0x0000000000FF0000) << 24 |
@@ -1507,18 +1510,18 @@ fastfloat_really_inline constexpr uint64_t byteswap(uint64_t val) {
 
 // Read 8 UC into a u64. Truncates UC if not char.
 template <typename UC>
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 uint64_t
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 glz::uint64_t
 read8_to_u64(UC const *chars) {
   if (cpp20_and_in_constexpr() || !std::is_same<UC, char>::value) {
-    uint64_t val = 0;
+    glz::uint64_t val = 0;
     for (int i = 0; i < 8; ++i) {
-      val |= uint64_t(uint8_t(*chars)) << (i * 8);
+      val |= glz::uint64_t(glz::uint8_t(*chars)) << (i * 8);
       ++chars;
     }
     return val;
   }
-  uint64_t val;
-  std::memcpy(&val, chars, sizeof(uint64_t));
+  glz::uint64_t val;
+  ::memcpy(&val, chars, sizeof(glz::uint64_t));
 #if GLZ_FASTFLOAT_IS_BIG_ENDIAN == 1
   // Need to read as-if the number was in little-endian order.
   val = byteswap(val);
@@ -1528,13 +1531,13 @@ read8_to_u64(UC const *chars) {
 
 #ifdef GLZ_FASTFLOAT_SSE2
 
-fastfloat_really_inline uint64_t simd_read8_to_u64(__m128i const data) {
+fastfloat_really_inline glz::uint64_t simd_read8_to_u64(__m128i const data) {
   GLZ_FASTFLOAT_SIMD_DISABLE_WARNINGS
   __m128i const packed = _mm_packus_epi16(data, data);
 #ifdef GLZ_FASTFLOAT_64BIT
-  return uint64_t(_mm_cvtsi128_si64(packed));
+  return glz::uint64_t(_mm_cvtsi128_si64(packed));
 #else
-  uint64_t value;
+  glz::uint64_t value;
   // Visual Studio + older versions of GCC don't support _mm_storeu_si64
   _mm_storel_epi64(reinterpret_cast<__m128i *>(&value), packed);
   return value;
@@ -1542,7 +1545,7 @@ fastfloat_really_inline uint64_t simd_read8_to_u64(__m128i const data) {
   GLZ_FASTFLOAT_SIMD_RESTORE_WARNINGS
 }
 
-fastfloat_really_inline uint64_t simd_read8_to_u64(char16_t const *chars) {
+fastfloat_really_inline glz::uint64_t simd_read8_to_u64(char16_t const *chars) {
   GLZ_FASTFLOAT_SIMD_DISABLE_WARNINGS
   return simd_read8_to_u64(
       _mm_loadu_si128(reinterpret_cast<__m128i const *>(chars)));
@@ -1551,17 +1554,17 @@ fastfloat_really_inline uint64_t simd_read8_to_u64(char16_t const *chars) {
 
 #elif defined(GLZ_FASTFLOAT_NEON)
 
-fastfloat_really_inline uint64_t simd_read8_to_u64(uint16x8_t const data) {
+fastfloat_really_inline glz::uint64_t simd_read8_to_u64(uint16x8_t const data) {
   GLZ_FASTFLOAT_SIMD_DISABLE_WARNINGS
   uint8x8_t utf8_packed = vmovn_u16(data);
   return vget_lane_u64(vreinterpret_u64_u8(utf8_packed), 0);
   GLZ_FASTFLOAT_SIMD_RESTORE_WARNINGS
 }
 
-fastfloat_really_inline uint64_t simd_read8_to_u64(char16_t const *chars) {
+fastfloat_really_inline glz::uint64_t simd_read8_to_u64(char16_t const *chars) {
   GLZ_FASTFLOAT_SIMD_DISABLE_WARNINGS
   return simd_read8_to_u64(
-      vld1q_u16(reinterpret_cast<uint16_t const *>(chars)));
+      vld1q_u16(reinterpret_cast<glz::uint16_t const *>(chars)));
   GLZ_FASTFLOAT_SIMD_RESTORE_WARNINGS
 }
 
@@ -1574,25 +1577,25 @@ template <typename UC>
 template <typename UC, GLZ_FASTFLOAT_ENABLE_IF(!has_simd_opt<UC>()) = 0>
 #endif
 // dummy for compile
-uint64_t simd_read8_to_u64(UC const *) {
+glz::uint64_t simd_read8_to_u64(UC const *) {
   return 0;
 }
 
 // credit  @aqrit
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 uint32_t
-parse_eight_digits_unrolled(uint64_t val) {
-  uint64_t const mask = 0x000000FF000000FF;
-  uint64_t const mul1 = 0x000F424000000064; // 100 + (1000000ULL << 32)
-  uint64_t const mul2 = 0x0000271000000001; // 1 + (10000ULL << 32)
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 glz::uint32_t
+parse_eight_digits_unrolled(glz::uint64_t val) {
+  glz::uint64_t const mask = 0x000000FF000000FF;
+  glz::uint64_t const mul1 = 0x000F424000000064; // 100 + (1000000ULL << 32)
+  glz::uint64_t const mul2 = 0x0000271000000001; // 1 + (10000ULL << 32)
   val -= 0x3030303030303030;
   val = (val * 10) + (val >> 8); // val = (val * 2561) >> 8;
   val = (((val & mask) * mul1) + (((val >> 16) & mask) * mul2)) >> 32;
-  return uint32_t(val);
+  return glz::uint32_t(val);
 }
 
 // Call this if chars are definitely 8 digits.
 template <typename UC>
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 uint32_t
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 glz::uint32_t
 parse_eight_digits_unrolled(UC const *chars) noexcept {
   if (cpp20_and_in_constexpr() || !has_simd_opt<UC>()) {
     return parse_eight_digits_unrolled(read8_to_u64(chars)); // truncation okay
@@ -1602,7 +1605,7 @@ parse_eight_digits_unrolled(UC const *chars) noexcept {
 
 // credit @aqrit
 fastfloat_really_inline constexpr bool
-is_made_of_eight_digits_fast(uint64_t val) noexcept {
+is_made_of_eight_digits_fast(glz::uint64_t val) noexcept {
   return !((((val + 0x4646464646464646) | (val - 0x3030303030303030)) &
             0x8080808080808080));
 }
@@ -1614,7 +1617,7 @@ is_made_of_eight_digits_fast(uint64_t val) noexcept {
 // parse_eight_digits_unrolled()) ensures we don't load SIMD registers twice.
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 bool
 simd_parse_if_eight_digits_unrolled(char16_t const *chars,
-                                    uint64_t &i) noexcept {
+                                    glz::uint64_t &i) noexcept {
   if (cpp20_and_in_constexpr()) {
     return false;
   }
@@ -1636,7 +1639,7 @@ simd_parse_if_eight_digits_unrolled(char16_t const *chars,
   GLZ_FASTFLOAT_SIMD_RESTORE_WARNINGS
 #elif defined(GLZ_FASTFLOAT_NEON)
   GLZ_FASTFLOAT_SIMD_DISABLE_WARNINGS
-  uint16x8_t const data = vld1q_u16(reinterpret_cast<uint16_t const *>(chars));
+  uint16x8_t const data = vld1q_u16(reinterpret_cast<glz::uint16_t const *>(chars));
 
   // (x - '0') <= 9
   // http://0x80.pl/articles/simd-parsing-int-sequences.html
@@ -1665,13 +1668,13 @@ template <typename UC>
 template <typename UC, GLZ_FASTFLOAT_ENABLE_IF(!has_simd_opt<UC>()) = 0>
 #endif
 // dummy for compile
-bool simd_parse_if_eight_digits_unrolled(UC const *, uint64_t &) {
+bool simd_parse_if_eight_digits_unrolled(UC const *, glz::uint64_t &) {
   return 0;
 }
 
 export template <typename UC, GLZ_FASTFLOAT_ENABLE_IF(!std::is_same<UC, char>::value) = 0>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 void
-loop_parse_if_eight_digits(UC const *&p, UC const *const pend, uint64_t &i) {
+loop_parse_if_eight_digits(UC const *&p, UC const *const pend, glz::uint64_t &i) {
   if (!has_simd_opt<UC>()) {
     return;
   }
@@ -1684,7 +1687,7 @@ loop_parse_if_eight_digits(UC const *&p, UC const *const pend, uint64_t &i) {
 
 export fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 void
 loop_parse_if_eight_digits(char const *&p, char const *const pend,
-                           uint64_t &i) {
+                           glz::uint64_t &i) {
   // optimizes better than parse_if_eight_digits_unrolled() for UC = char.
   while ((std::distance(p, pend) >= 8) &&
          is_made_of_eight_digits_fast(read8_to_u64(p))) {
@@ -1715,8 +1718,8 @@ export enum class parse_error {
 };
 
 export template <typename UC> struct parsed_number_string_t {
-  int64_t exponent{0};
-  uint64_t mantissa{0};
+  glz::int64_t exponent{0};
+  glz::uint64_t mantissa{0};
   UC const *lastmatch{nullptr};
   bool negative{false};
   bool valid{false};
@@ -1755,7 +1758,7 @@ parse_number_string(UC const *p, UC const *pend,
   // assume p < pend, so dereference without checks;
   answer.negative = (*p == UC('-'));
   // C++17 20.19.3.(7.1) explicitly forbids '+' sign here
-  if ((*p == UC('-')) || (uint64_t(fmt & chars_format::allow_leading_plus) &&
+  if ((*p == UC('-')) || (glz::uint64_t(fmt & chars_format::allow_leading_plus) &&
                           !basic_json_fmt && *p == UC('+'))) {
     ++p;
     if (p == pend) {
@@ -1779,9 +1782,9 @@ parse_number_string(UC const *p, UC const *pend,
   }
   UC const *const start_digits = p;
 
-  uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
+  glz::uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
 
-  uint64_t digit;
+  glz::uint64_t digit;
   while ((p != pend) && (digit = digit_value(*p)) <= 9) {
     // a multiplication by 10 is cheaper than an arbitrary integer
     // multiplication
@@ -1789,8 +1792,8 @@ parse_number_string(UC const *p, UC const *pend,
     ++p;
   }
   UC const *const end_of_integer_part = p;
-  int64_t digit_count = int64_t(end_of_integer_part - start_digits);
-  answer.integer = span<UC const>(start_digits, size_t(digit_count));
+  glz::int64_t digit_count = glz::int64_t(end_of_integer_part - start_digits);
+  answer.integer = span<UC const>(start_digits, glz::size_t(digit_count));
   GLZ_FASTFLOAT_IF_CONSTEXPR17(basic_json_fmt) {
     // at least 1 digit in integer part, without leading zeros
     if (digit_count == 0) {
@@ -1802,7 +1805,7 @@ parse_number_string(UC const *p, UC const *pend,
     }
   }
 
-  int64_t exponent = 0;
+  glz::int64_t exponent = 0;
   bool const has_decimal_point = (p != pend) && (*p == decimal_point);
   if (has_decimal_point) {
     ++p;
@@ -1816,7 +1819,7 @@ parse_number_string(UC const *p, UC const *pend,
       i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
     }
     exponent = before - p;
-    answer.fraction = span<UC const>(before, size_t(p - before));
+    answer.fraction = span<UC const>(before, glz::size_t(p - before));
     digit_count -= exponent;
   }
   GLZ_FASTFLOAT_IF_CONSTEXPR17(basic_json_fmt) {
@@ -1829,10 +1832,10 @@ parse_number_string(UC const *p, UC const *pend,
   else if (digit_count == 0) { // we must have encountered at least one integer!
     return report_parse_error<UC>(p, parse_error::no_digits_in_mantissa);
   }
-  int64_t exp_number = 0; // explicit exponential part
-  if ((uint64_t(fmt & chars_format::scientific) && (p != pend) &&
+  glz::int64_t exp_number = 0; // explicit exponential part
+  if ((glz::uint64_t(fmt & chars_format::scientific) && (p != pend) &&
        ((UC('e') == *p) || (UC('E') == *p))) ||
-      (uint64_t(fmt & detail::basic_fortran_fmt) && (p != pend) &&
+      (glz::uint64_t(fmt & detail::basic_fortran_fmt) && (p != pend) &&
        ((UC('+') == *p) || (UC('-') == *p) || (UC('d') == *p) ||
         (UC('D') == *p)))) {
     UC const *location_of_e = p;
@@ -1850,7 +1853,7 @@ parse_number_string(UC const *p, UC const *pend,
       ++p;
     }
     if ((p == pend) || !is_integer(*p)) {
-      if (!uint64_t(fmt & chars_format::fixed)) {
+      if (!glz::uint64_t(fmt & chars_format::fixed)) {
         // The exponential part is invalid for scientific notation, so it must
         // be a trailing token for fixed notation. However, fixed notation is
         // disabled, so report a scientific notation error.
@@ -1860,7 +1863,7 @@ parse_number_string(UC const *p, UC const *pend,
       p = location_of_e;
     } else {
       while ((p != pend) && is_integer(*p)) {
-        uint8_t exp_digit = uint8_t(*p - UC('0'));
+        glz::uint8_t exp_digit = glz::uint8_t(*p - UC('0'));
         if (exp_number < 0x10000000) {
           exp_number = 10 * exp_number + exp_digit;
         }
@@ -1873,8 +1876,8 @@ parse_number_string(UC const *p, UC const *pend,
     }
   } else {
     // If it scientific and not fixed, we have to bail out.
-    if (uint64_t(fmt & chars_format::scientific) &&
-        !uint64_t(fmt & chars_format::fixed)) {
+    if (glz::uint64_t(fmt & chars_format::scientific) &&
+        !glz::uint64_t(fmt & chars_format::fixed)) {
       return report_parse_error<UC>(p, parse_error::missing_exponential_part);
     }
   }
@@ -1907,9 +1910,9 @@ parse_number_string(UC const *p, UC const *pend,
       i = 0;
       p = answer.integer.ptr;
       UC const *int_end = p + answer.integer.len();
-      uint64_t const minimal_nineteen_digit_integer{1000000000000000000};
+      glz::uint64_t const minimal_nineteen_digit_integer{1000000000000000000};
       while ((i < minimal_nineteen_digit_integer) && (p != int_end)) {
-        i = i * 10 + uint64_t(*p - UC('0'));
+        i = i * 10 + glz::uint64_t(*p - UC('0'));
         ++p;
       }
       if (i >= minimal_nineteen_digit_integer) { // We have a big integers
@@ -1918,7 +1921,7 @@ parse_number_string(UC const *p, UC const *pend,
         p = answer.fraction.ptr;
         UC const *frac_end = p + answer.fraction.len();
         while ((i < minimal_nineteen_digit_integer) && (p != frac_end)) {
-          i = i * 10 + uint64_t(*p - UC('0'));
+          i = i * 10 + glz::uint64_t(*p - UC('0'));
           ++p;
         }
         exponent = answer.fraction.ptr - p + exp_number;
@@ -1956,7 +1959,7 @@ parse_int_string(UC const *p, UC const *pend, T &value,
     return answer;
   }
   if ((*p == UC('-')) ||
-      (uint64_t(fmt & chars_format::allow_leading_plus) && (*p == UC('+')))) {
+      (glz::uint64_t(fmt & chars_format::allow_leading_plus) && (*p == UC('+')))) {
     ++p;
   }
 
@@ -1970,20 +1973,20 @@ parse_int_string(UC const *p, UC const *pend, T &value,
 
   UC const *const start_digits = p;
 
-  uint64_t i = 0;
+  glz::uint64_t i = 0;
   if (base == 10) {
     loop_parse_if_eight_digits(p, pend, i); // use SIMD if possible
   }
   while (p != pend) {
-    uint8_t digit = ch_to_digit(*p);
+    glz::uint8_t digit = ch_to_digit(*p);
     if (digit >= base) {
       break;
     }
-    i = uint64_t(base) * i + digit; // might overflow, check this later
+    i = glz::uint64_t(base) * i + digit; // might overflow, check this later
     p++;
   }
 
-  size_t digit_count = size_t(p - start_digits);
+  glz::size_t digit_count = glz::size_t(p - start_digits);
 
   if (digit_count == 0) {
     if (has_leading_zeros) {
@@ -2000,7 +2003,7 @@ parse_int_string(UC const *p, UC const *pend, T &value,
   answer.ptr = p;
 
   // check u64 overflow
-  size_t max_digits = max_digits_u64(base);
+  glz::size_t max_digits = max_digits_u64(base);
   if (digit_count > max_digits) {
     answer.ec = std::errc::result_out_of_range;
     return answer;
@@ -2013,8 +2016,8 @@ parse_int_string(UC const *p, UC const *pend, T &value,
   }
 
   // check other types overflow
-  if (!std::is_same<T, uint64_t>::value) {
-    if (i > uint64_t((std::numeric_limits<T>::max)()) + uint64_t(negative)) {
+  if (!std::is_same<T, glz::uint64_t>::value) {
+    if (i > glz::uint64_t((std::numeric_limits<T>::max)()) + glz::uint64_t(negative)) {
       answer.ec = std::errc::result_out_of_range;
       return answer;
     }
@@ -2032,7 +2035,7 @@ parse_int_string(UC const *p, UC const *pend, T &value,
     // this is always optimized into a neg instruction (note: T is an integer
     // type)
     value = T(-(std::numeric_limits<T>::max)() -
-              T(i - uint64_t((std::numeric_limits<T>::max)())));
+              T(i - glz::uint64_t((std::numeric_limits<T>::max)())));
 #ifdef GLZ_FASTFLOAT_VISUAL_STUDIO
 #pragma warning(pop)
 #endif
@@ -2051,7 +2054,7 @@ parse_int_string(UC const *p, UC const *pend, T &value,
 #ifndef GLZ_FASTFLOAT_FAST_TABLE_H
 #define GLZ_FASTFLOAT_FAST_TABLE_H
 
-
+#include <cstdint>
 
 namespace glz::fast_float {
 
@@ -2081,22 +2084,14 @@ namespace glz::fast_float {
  */
 template <class unused = void> struct powers_template {
 
-#ifdef GLZ_FASTFLOAT_VISUAL_STUDIO
-  // MSVC 14.51 can fail constexpr evaluation of dependent calls to
-  // binary_format<double>::{smallest,largest}_power_of_ten() in modules builds.
-  // These are fixed constants for binary64.
-  constexpr static int smallest_power_of_five = -342;
-  constexpr static int largest_power_of_five = 308;
-#else
   constexpr static int smallest_power_of_five =
       binary_format<double>::smallest_power_of_ten();
   constexpr static int largest_power_of_five =
       binary_format<double>::largest_power_of_ten();
-#endif
   constexpr static int number_of_entries =
       2 * (largest_power_of_five - smallest_power_of_five + 1);
   // Powers of five from 5^-342 all the way to 5^308 rounded toward one.
-  constexpr static uint64_t power_of_five_128[number_of_entries] = {
+  constexpr static glz::uint64_t power_of_five_128[number_of_entries] = {
       0xeef453d6923bd65a, 0x113faa2906a13b3f,
       0x9558b4661b6565f8, 0x4ac7ca59a424c507,
       0xbaaee17fa23ebf76, 0x5d79bcf00d2df649,
@@ -2754,7 +2749,7 @@ template <class unused = void> struct powers_template {
 #if GLZ_FASTFLOAT_DETAIL_MUST_DEFINE_CONSTEXPR_VARIABLE
 
 template <class unused>
-constexpr uint64_t
+constexpr glz::uint64_t
     powers_template<unused>::power_of_five_128[number_of_entries];
 
 #endif
@@ -2768,7 +2763,12 @@ using powers = powers_template<>;
 #ifndef GLZ_FASTFLOAT_DECIMAL_TO_BINARY_H
 #define GLZ_FASTFLOAT_DECIMAL_TO_BINARY_H
 
-
+#include <cfloat>
+#include <cinttypes>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 
 namespace glz::fast_float {
 
@@ -2779,7 +2779,7 @@ namespace glz::fast_float {
 //
 template <int bit_precision>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 value128
-compute_product_approximation(int64_t q, uint64_t w) {
+compute_product_approximation(glz::int64_t q, glz::uint64_t w) {
   int const index = 2 * int(q - powers::smallest_power_of_five);
   // For small values of q, e.g., q in [0,27], the answer is always exact
   // because The line value128 firstproduct = full_multiplication(w,
@@ -2788,9 +2788,9 @@ compute_product_approximation(int64_t q, uint64_t w) {
       full_multiplication(w, powers::power_of_five_128[index]);
   static_assert((bit_precision >= 0) && (bit_precision <= 64),
                 " precision should  be in (0,64]");
-  constexpr uint64_t precision_mask =
-      (bit_precision < 64) ? (uint64_t(0xFFFFFFFFFFFFFFFF) >> bit_precision)
-                           : uint64_t(0xFFFFFFFFFFFFFFFF);
+  constexpr glz::uint64_t precision_mask =
+      (bit_precision < 64) ? (glz::uint64_t(0xFFFFFFFFFFFFFFFF) >> bit_precision)
+                           : glz::uint64_t(0xFFFFFFFFFFFFFFFF);
   if ((firstproduct.high & precision_mask) ==
       precision_mask) { // could further guard with  (lower + w < lower)
     // regarding the second product, we only need secondproduct.high, but our
@@ -2805,33 +2805,6 @@ compute_product_approximation(int64_t q, uint64_t w) {
   }
   return firstproduct;
 }
-
-#ifdef GLZ_FASTFLOAT_VISUAL_STUDIO
-// MSVC 14.51 can fail dependent NTTP evaluation in modules builds for
-// compute_product_approximation<binary::mantissa_explicit_bits() + 3>.
-// Keep behavior identical by using the same computation through a runtime
-// bit-precision argument only on MSVC.
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 value128
-compute_product_approximation(int64_t q, uint64_t w,
-                              int bit_precision) {
-  int const index = 2 * int(q - powers::smallest_power_of_five);
-  value128 firstproduct =
-      full_multiplication(w, powers::power_of_five_128[index]);
-  GLZ_FASTFLOAT_ASSERT((bit_precision >= 0) && (bit_precision <= 64));
-  const uint64_t precision_mask =
-      (bit_precision < 64) ? (uint64_t(0xFFFFFFFFFFFFFFFF) >> bit_precision)
-                           : uint64_t(0xFFFFFFFFFFFFFFFF);
-  if ((firstproduct.high & precision_mask) == precision_mask) {
-    value128 secondproduct =
-        full_multiplication(w, powers::power_of_five_128[index + 1]);
-    firstproduct.low += secondproduct.high;
-    if (secondproduct.high > firstproduct.low) {
-      firstproduct.high++;
-    }
-  }
-  return firstproduct;
-}
-#endif
 
 namespace detail {
 /**
@@ -2849,7 +2822,7 @@ namespace detail {
  * where
  *   p = log(5**-q)/log(2) = -q * log(5)/log(2)
  */
-constexpr fastfloat_really_inline int32_t power(int32_t q) noexcept {
+constexpr fastfloat_really_inline glz::int32_t power(glz::int32_t q) noexcept {
   return (((152170 + 65536) * q) >> 16) + 63;
 }
 } // namespace detail
@@ -2858,12 +2831,12 @@ constexpr fastfloat_really_inline int32_t power(int32_t q) noexcept {
 // for significant digits already multiplied by 10 ** q.
 template <typename binary>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 adjusted_mantissa
-compute_error_scaled(int64_t q, uint64_t w, int lz) noexcept {
+compute_error_scaled(glz::int64_t q, glz::uint64_t w, int lz) noexcept {
   int hilz = int(w >> 63) ^ 1;
   adjusted_mantissa answer;
   answer.mantissa = w << hilz;
   int bias = binary::mantissa_explicit_bits() - binary::minimum_exponent();
-  answer.power2 = int32_t(detail::power(int32_t(q)) + bias - hilz - lz - 62 +
+  answer.power2 = glz::int32_t(detail::power(glz::int32_t(q)) + bias - hilz - lz - 62 +
                           invalid_am_bias);
   return answer;
 }
@@ -2872,16 +2845,11 @@ compute_error_scaled(int64_t q, uint64_t w, int lz) noexcept {
 // the power2 in the exponent will be adjusted by invalid_am_bias.
 template <typename binary>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 adjusted_mantissa
-compute_error(int64_t q, uint64_t w) noexcept {
+compute_error(glz::int64_t q, glz::uint64_t w) noexcept {
   int lz = leading_zeroes(w);
   w <<= lz;
-#ifdef GLZ_FASTFLOAT_VISUAL_STUDIO
-  const int bit_precision = binary::mantissa_explicit_bits() + 3;
-  value128 product = compute_product_approximation(q, w, bit_precision);
-#else
   value128 product =
       compute_product_approximation<binary::mantissa_explicit_bits() + 3>(q, w);
-#endif
   return compute_error_scaled<binary>(q, product.high, lz);
 }
 
@@ -2892,7 +2860,7 @@ compute_error(int64_t q, uint64_t w) noexcept {
 // should recompute in such cases.
 template <typename binary>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 adjusted_mantissa
-compute_float(int64_t q, uint64_t w) noexcept {
+compute_float(glz::int64_t q, glz::uint64_t w) noexcept {
   adjusted_mantissa answer;
   if ((w == 0) || (q < binary::smallest_power_of_ten())) {
     answer.power2 = 0;
@@ -2919,13 +2887,8 @@ compute_float(int64_t q, uint64_t w) noexcept {
   // 3. We might lose a bit due to the "upperbit" routine (result too small,
   // requiring a shift)
 
-#ifdef GLZ_FASTFLOAT_VISUAL_STUDIO
-  const int bit_precision = binary::mantissa_explicit_bits() + 3;
-  value128 product = compute_product_approximation(q, w, bit_precision);
-#else
   value128 product =
       compute_product_approximation<binary::mantissa_explicit_bits() + 3>(q, w);
-#endif
   // The computed 'product' is always sufficient.
   // Mathematical proof:
   // Noble Mushtak and Daniel Lemire, Fast Number Parsing Without Fallback (to
@@ -2940,7 +2903,7 @@ compute_float(int64_t q, uint64_t w) noexcept {
 
   answer.mantissa = product.high >> shift;
 
-  answer.power2 = int32_t(detail::power(int32_t(q)) + upperbit - lz -
+  answer.power2 = glz::int32_t(detail::power(glz::int32_t(q)) + upperbit - lz -
                           binary::minimum_exponent());
   if (answer.power2 <= 0) { // we have a subnormal?
     // Here have that answer.power2 <= 0 so -answer.power2 >= 0
@@ -2967,7 +2930,7 @@ compute_float(int64_t q, uint64_t w) noexcept {
     // subnormal, but we can only know this after rounding.
     // So we only declare a subnormal if we are smaller than the threshold.
     answer.power2 =
-        (answer.mantissa < (uint64_t(1) << binary::mantissa_explicit_bits()))
+        (answer.mantissa < (glz::uint64_t(1) << binary::mantissa_explicit_bits()))
             ? 0
             : 1;
     return answer;
@@ -2985,18 +2948,18 @@ compute_float(int64_t q, uint64_t w) noexcept {
     // ... we dropped out only zeroes. But if this happened, then we can go
     // back!!!
     if ((answer.mantissa << shift) == product.high) {
-      answer.mantissa &= ~uint64_t(1); // flip it so that we do not round up
+      answer.mantissa &= ~glz::uint64_t(1); // flip it so that we do not round up
     }
   }
 
   answer.mantissa += (answer.mantissa & 1); // round up
   answer.mantissa >>= 1;
-  if (answer.mantissa >= (uint64_t(2) << binary::mantissa_explicit_bits())) {
-    answer.mantissa = (uint64_t(1) << binary::mantissa_explicit_bits());
+  if (answer.mantissa >= (glz::uint64_t(2) << binary::mantissa_explicit_bits())) {
+    answer.mantissa = (glz::uint64_t(1) << binary::mantissa_explicit_bits());
     answer.power2++; // undo previous addition
   }
 
-  answer.mantissa &= ~(uint64_t(1) << binary::mantissa_explicit_bits());
+  answer.mantissa &= ~(glz::uint64_t(1) << binary::mantissa_explicit_bits());
   if (answer.power2 >= binary::infinite_power()) { // infinity
     answer.power2 = binary::infinite_power();
     answer.mantissa = 0;
@@ -3011,7 +2974,10 @@ compute_float(int64_t q, uint64_t w) noexcept {
 #ifndef GLZ_FASTFLOAT_BIGINT_H
 #define GLZ_FASTFLOAT_BIGINT_H
 
-
+#include <algorithm>
+#include <climits>
+#include <cstdint>
+#include <cstring>
 
 
 namespace glz::fast_float {
@@ -3024,12 +2990,12 @@ namespace glz::fast_float {
 // doing `8 * sizeof(limb)`.
 #if defined(GLZ_FASTFLOAT_64BIT) && !defined(__sparc)
 #define GLZ_FASTFLOAT_64BIT_LIMB 1
-typedef uint64_t limb;
-inline constexpr size_t limb_bits = 64;
+typedef glz::uint64_t limb;
+inline constexpr glz::size_t limb_bits = 64;
 #else
 #define GLZ_FASTFLOAT_32BIT_LIMB
-typedef uint32_t limb;
-inline constexpr size_t limb_bits = 32;
+typedef glz::uint32_t limb;
+inline constexpr glz::size_t limb_bits = 32;
 #endif
 
 typedef span<limb> limb_span;
@@ -3038,15 +3004,15 @@ typedef span<limb> limb_span;
 // of bits required to store the largest bigint, which is
 // `log2(10**(digits + max_exp))`, or `log2(10**(767 + 342))`, or
 // ~3600 bits, so we round to 4000.
-inline constexpr size_t bigint_bits = 4000;
-inline constexpr size_t bigint_limbs = bigint_bits / limb_bits;
+inline constexpr glz::size_t bigint_bits = 4000;
+inline constexpr glz::size_t bigint_limbs = bigint_bits / limb_bits;
 
 // vector-like type that is allocated on the stack. the entire
 // buffer is pre-allocated, and only the length changes.
-template <uint16_t size> struct stackvec {
+template <glz::uint16_t size> struct stackvec {
   limb data[size];
   // we never need more than 150 limbs
-  uint16_t length{0};
+  glz::uint16_t length{0};
 
   stackvec() = default;
   stackvec(stackvec const &) = delete;
@@ -3059,33 +3025,33 @@ template <uint16_t size> struct stackvec {
     GLZ_FASTFLOAT_ASSERT(try_extend(s));
   }
 
-  GLZ_FASTFLOAT_CONSTEXPR14 limb &operator[](size_t index) noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR14 limb &operator[](glz::size_t index) noexcept {
     GLZ_FASTFLOAT_DEBUG_ASSERT(index < length);
     return data[index];
   }
 
-  GLZ_FASTFLOAT_CONSTEXPR14 const limb &operator[](size_t index) const noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR14 const limb &operator[](glz::size_t index) const noexcept {
     GLZ_FASTFLOAT_DEBUG_ASSERT(index < length);
     return data[index];
   }
 
   // index from the end of the container
-  GLZ_FASTFLOAT_CONSTEXPR14 const limb &rindex(size_t index) const noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR14 const limb &rindex(glz::size_t index) const noexcept {
     GLZ_FASTFLOAT_DEBUG_ASSERT(index < length);
-    size_t rindex = length - index - 1;
+    glz::size_t rindex = length - index - 1;
     return data[rindex];
   }
 
   // set the length, without bounds checking.
-  GLZ_FASTFLOAT_CONSTEXPR14 void set_len(size_t len) noexcept {
-    length = uint16_t(len);
+  GLZ_FASTFLOAT_CONSTEXPR14 void set_len(glz::size_t len) noexcept {
+    length = glz::uint16_t(len);
   }
 
-  constexpr size_t len() const noexcept { return length; }
+  constexpr glz::size_t len() const noexcept { return length; }
 
   constexpr bool is_empty() const noexcept { return length == 0; }
 
-  constexpr size_t capacity() const noexcept { return size; }
+  constexpr glz::size_t capacity() const noexcept { return size; }
 
   // append item to vector, without bounds checking
   GLZ_FASTFLOAT_CONSTEXPR14 void push_unchecked(limb value) noexcept {
@@ -3124,9 +3090,9 @@ template <uint16_t size> struct stackvec {
   // if the new size is longer than the vector, assign value to each
   // appended item.
   GLZ_FASTFLOAT_CONSTEXPR20
-  void resize_unchecked(size_t new_len, limb value) noexcept {
+  void resize_unchecked(glz::size_t new_len, limb value) noexcept {
     if (new_len > len()) {
-      size_t count = new_len - len();
+      glz::size_t count = new_len - len();
       limb *first = data + len();
       limb *last = first + count;
       ::std::fill(first, last, value);
@@ -3137,7 +3103,7 @@ template <uint16_t size> struct stackvec {
   }
 
   // try to resize the vector, returning if the vector was resized.
-  GLZ_FASTFLOAT_CONSTEXPR20 bool try_resize(size_t new_len, limb value) noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR20 bool try_resize(glz::size_t new_len, limb value) noexcept {
     if (new_len > capacity()) {
       return false;
     } else {
@@ -3149,7 +3115,7 @@ template <uint16_t size> struct stackvec {
   // check if any limbs are non-zero after the given index.
   // this needs to be done in reverse order, since the index
   // is relative to the most significant limbs.
-  GLZ_FASTFLOAT_CONSTEXPR14 bool nonzero(size_t index) const noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR14 bool nonzero(glz::size_t index) const noexcept {
     while (index < len()) {
       if (rindex(index) != 0) {
         return true;
@@ -3167,21 +3133,21 @@ template <uint16_t size> struct stackvec {
   }
 };
 
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 uint64_t
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 glz::uint64_t
 empty_hi64(bool &truncated) noexcept {
   truncated = false;
   return 0;
 }
 
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 uint64_t
-uint64_hi64(uint64_t r0, bool &truncated) noexcept {
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 glz::uint64_t
+uint64_hi64(glz::uint64_t r0, bool &truncated) noexcept {
   truncated = false;
   int shl = leading_zeroes(r0);
   return r0 << shl;
 }
 
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 uint64_t
-uint64_hi64(uint64_t r0, uint64_t r1, bool &truncated) noexcept {
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 glz::uint64_t
+uint64_hi64(glz::uint64_t r0, glz::uint64_t r1, bool &truncated) noexcept {
   int shl = leading_zeroes(r0);
   if (shl == 0) {
     truncated = r1 != 0;
@@ -3193,23 +3159,23 @@ uint64_hi64(uint64_t r0, uint64_t r1, bool &truncated) noexcept {
   }
 }
 
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 uint64_t
-uint32_hi64(uint32_t r0, bool &truncated) noexcept {
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 glz::uint64_t
+uint32_hi64(glz::uint32_t r0, bool &truncated) noexcept {
   return uint64_hi64(r0, truncated);
 }
 
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 uint64_t
-uint32_hi64(uint32_t r0, uint32_t r1, bool &truncated) noexcept {
-  uint64_t x0 = r0;
-  uint64_t x1 = r1;
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 glz::uint64_t
+uint32_hi64(glz::uint32_t r0, glz::uint32_t r1, bool &truncated) noexcept {
+  glz::uint64_t x0 = r0;
+  glz::uint64_t x1 = r1;
   return uint64_hi64((x0 << 32) | x1, truncated);
 }
 
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 uint64_t
-uint32_hi64(uint32_t r0, uint32_t r1, uint32_t r2, bool &truncated) noexcept {
-  uint64_t x0 = r0;
-  uint64_t x1 = r1;
-  uint64_t x2 = r2;
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 glz::uint64_t
+uint32_hi64(glz::uint32_t r0, glz::uint32_t r1, glz::uint32_t r2, bool &truncated) noexcept {
+  glz::uint64_t x0 = r0;
+  glz::uint64_t x1 = r1;
+  glz::uint64_t x2 = r2;
   return uint64_hi64(x0, (x1 << 32) | x2, truncated);
 }
 
@@ -3251,12 +3217,12 @@ scalar_mul(limb x, limb y, limb &carry) noexcept {
   value128 z = full_multiplication(x, y);
   bool overflow;
   z.low = scalar_add(z.low, carry, overflow);
-  z.high += uint64_t(overflow); // cannot overflow
+  z.high += glz::uint64_t(overflow); // cannot overflow
   carry = z.high;
   return z.low;
 #endif
 #else
-  uint64_t z = uint64_t(x) * uint64_t(y) + uint64_t(carry);
+  glz::uint64_t z = glz::uint64_t(x) * glz::uint64_t(y) + glz::uint64_t(carry);
   carry = limb(z >> limb_bits);
   return limb(z);
 #endif
@@ -3264,10 +3230,10 @@ scalar_mul(limb x, limb y, limb &carry) noexcept {
 
 // add scalar value to bigint starting from offset.
 // used in grade school multiplication
-template <uint16_t size>
+template <glz::uint16_t size>
 inline GLZ_FASTFLOAT_CONSTEXPR20 bool small_add_from(stackvec<size> &vec, limb y,
-                                                 size_t start) noexcept {
-  size_t index = start;
+                                                 glz::size_t start) noexcept {
+  glz::size_t index = start;
   limb carry = y;
   bool overflow;
   while (carry != 0 && index < vec.len()) {
@@ -3282,18 +3248,18 @@ inline GLZ_FASTFLOAT_CONSTEXPR20 bool small_add_from(stackvec<size> &vec, limb y
 }
 
 // add scalar value to bigint.
-template <uint16_t size>
+template <glz::uint16_t size>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 bool
 small_add(stackvec<size> &vec, limb y) noexcept {
   return small_add_from(vec, y, 0);
 }
 
 // multiply bigint by scalar value.
-template <uint16_t size>
+template <glz::uint16_t size>
 inline GLZ_FASTFLOAT_CONSTEXPR20 bool small_mul(stackvec<size> &vec,
                                             limb y) noexcept {
   limb carry = 0;
-  for (size_t index = 0; index < vec.len(); index++) {
+  for (glz::size_t index = 0; index < vec.len(); index++) {
     vec[index] = scalar_mul(vec[index], y, carry);
   }
   if (carry != 0) {
@@ -3304,9 +3270,9 @@ inline GLZ_FASTFLOAT_CONSTEXPR20 bool small_mul(stackvec<size> &vec,
 
 // add bigint to bigint starting from index.
 // used in grade school multiplication
-template <uint16_t size>
+template <glz::uint16_t size>
 GLZ_FASTFLOAT_CONSTEXPR20 bool large_add_from(stackvec<size> &x, limb_span y,
-                                          size_t start) noexcept {
+                                          glz::size_t start) noexcept {
   // the effective x buffer is from `xstart..x.len()`, so exit early
   // if we can't get that current range.
   if (x.len() < start || y.len() > x.len() - start) {
@@ -3314,7 +3280,7 @@ GLZ_FASTFLOAT_CONSTEXPR20 bool large_add_from(stackvec<size> &x, limb_span y,
   }
 
   bool carry = false;
-  for (size_t index = 0; index < y.len(); index++) {
+  for (glz::size_t index = 0; index < y.len(); index++) {
     limb xi = x[index + start];
     limb yi = y[index];
     bool c1 = false;
@@ -3335,14 +3301,14 @@ GLZ_FASTFLOAT_CONSTEXPR20 bool large_add_from(stackvec<size> &x, limb_span y,
 }
 
 // add bigint to bigint.
-template <uint16_t size>
+template <glz::uint16_t size>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 bool
 large_add_from(stackvec<size> &x, limb_span y) noexcept {
   return large_add_from(x, y, 0);
 }
 
 // grade-school multiplication algorithm
-template <uint16_t size>
+template <glz::uint16_t size>
 GLZ_FASTFLOAT_CONSTEXPR20 bool long_mul(stackvec<size> &x, limb_span y) noexcept {
   limb_span xs = limb_span(x.data, x.len());
   stackvec<size> z(xs);
@@ -3351,7 +3317,7 @@ GLZ_FASTFLOAT_CONSTEXPR20 bool long_mul(stackvec<size> &x, limb_span y) noexcept
   if (y.len() != 0) {
     limb y0 = y[0];
     GLZ_FASTFLOAT_TRY(small_mul(x, y0));
-    for (size_t index = 1; index < y.len(); index++) {
+    for (glz::size_t index = 1; index < y.len(); index++) {
       limb yi = y[index];
       stackvec<size> zi;
       if (yi != 0) {
@@ -3370,7 +3336,7 @@ GLZ_FASTFLOAT_CONSTEXPR20 bool long_mul(stackvec<size> &x, limb_span y) noexcept
 }
 
 // grade-school multiplication algorithm
-template <uint16_t size>
+template <glz::uint16_t size>
 GLZ_FASTFLOAT_CONSTEXPR20 bool large_mul(stackvec<size> &x, limb_span y) noexcept {
   if (y.len() == 1) {
     GLZ_FASTFLOAT_TRY(small_mul(x, y[0]));
@@ -3381,8 +3347,8 @@ GLZ_FASTFLOAT_CONSTEXPR20 bool large_mul(stackvec<size> &x, limb_span y) noexcep
 }
 
 template <typename = void> struct pow5_tables {
-  static constexpr uint32_t large_step = 135;
-  static constexpr uint64_t small_power_of_5[] = {
+  static constexpr glz::uint32_t large_step = 135;
+  static constexpr glz::uint64_t small_power_of_5[] = {
       1UL,
       5UL,
       25UL,
@@ -3425,9 +3391,9 @@ template <typename = void> struct pow5_tables {
 
 #if GLZ_FASTFLOAT_DETAIL_MUST_DEFINE_CONSTEXPR_VARIABLE
 
-template <typename T> constexpr uint32_t pow5_tables<T>::large_step;
+template <typename T> constexpr glz::uint32_t pow5_tables<T>::large_step;
 
-template <typename T> constexpr uint64_t pow5_tables<T>::small_power_of_5[];
+template <typename T> constexpr glz::uint64_t pow5_tables<T>::small_power_of_5[];
 
 template <typename T> constexpr limb pow5_tables<T>::large_power_of_5[];
 
@@ -3448,26 +3414,26 @@ struct bigint : pow5_tables<> {
   bigint(bigint &&) = delete;
   bigint &operator=(bigint &&other) = delete;
 
-  GLZ_FASTFLOAT_CONSTEXPR20 bigint(uint64_t value) : vec() {
+  GLZ_FASTFLOAT_CONSTEXPR20 bigint(glz::uint64_t value) : vec() {
 #ifdef GLZ_FASTFLOAT_64BIT_LIMB
     vec.push_unchecked(value);
 #else
-    vec.push_unchecked(uint32_t(value));
-    vec.push_unchecked(uint32_t(value >> 32));
+    vec.push_unchecked(glz::uint32_t(value));
+    vec.push_unchecked(glz::uint32_t(value >> 32));
 #endif
     vec.normalize();
   }
 
   // get the high 64 bits from the vector, and if bits were truncated.
   // this is to get the significant digits for the float.
-  GLZ_FASTFLOAT_CONSTEXPR20 uint64_t hi64(bool &truncated) const noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR20 glz::uint64_t hi64(bool &truncated) const noexcept {
 #ifdef GLZ_FASTFLOAT_64BIT_LIMB
     if (vec.len() == 0) {
       return empty_hi64(truncated);
     } else if (vec.len() == 1) {
       return uint64_hi64(vec.rindex(0), truncated);
     } else {
-      uint64_t result = uint64_hi64(vec.rindex(0), vec.rindex(1), truncated);
+      glz::uint64_t result = uint64_hi64(vec.rindex(0), vec.rindex(1), truncated);
       truncated |= vec.nonzero(2);
       return result;
     }
@@ -3479,7 +3445,7 @@ struct bigint : pow5_tables<> {
     } else if (vec.len() == 2) {
       return uint32_hi64(vec.rindex(0), vec.rindex(1), truncated);
     } else {
-      uint64_t result =
+      glz::uint64_t result =
           uint32_hi64(vec.rindex(0), vec.rindex(1), vec.rindex(2), truncated);
       truncated |= vec.nonzero(3);
       return result;
@@ -3499,7 +3465,7 @@ struct bigint : pow5_tables<> {
     } else if (vec.len() < other.vec.len()) {
       return -1;
     } else {
-      for (size_t index = vec.len(); index > 0; index--) {
+      for (glz::size_t index = vec.len(); index > 0; index--) {
         limb xi = vec[index - 1];
         limb yi = other.vec[index - 1];
         if (xi > yi) {
@@ -3514,7 +3480,7 @@ struct bigint : pow5_tables<> {
 
   // shift left each limb n bits, carrying over to the new limb
   // returns true if we were able to shift all the digits.
-  GLZ_FASTFLOAT_CONSTEXPR20 bool shl_bits(size_t n) noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR20 bool shl_bits(glz::size_t n) noexcept {
     // Internally, for each item, we shift left by n, and add the previous
     // right shifted limb-bits.
     // For example, we transform (for u8) shifted left 2, to:
@@ -3523,10 +3489,10 @@ struct bigint : pow5_tables<> {
     GLZ_FASTFLOAT_DEBUG_ASSERT(n != 0);
     GLZ_FASTFLOAT_DEBUG_ASSERT(n < sizeof(limb) * 8);
 
-    size_t shl = n;
-    size_t shr = limb_bits - shl;
+    glz::size_t shl = n;
+    glz::size_t shr = limb_bits - shl;
     limb prev = 0;
-    for (size_t index = 0; index < vec.len(); index++) {
+    for (glz::size_t index = 0; index < vec.len(); index++) {
       limb xi = vec[index];
       vec[index] = (xi << shl) | (prev >> shr);
       prev = xi;
@@ -3540,7 +3506,7 @@ struct bigint : pow5_tables<> {
   }
 
   // move the limbs left by `n` limbs.
-  GLZ_FASTFLOAT_CONSTEXPR20 bool shl_limbs(size_t n) noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR20 bool shl_limbs(glz::size_t n) noexcept {
     GLZ_FASTFLOAT_DEBUG_ASSERT(n != 0);
     if (n + vec.len() > vec.capacity()) {
       return false;
@@ -3561,9 +3527,9 @@ struct bigint : pow5_tables<> {
   }
 
   // move the limbs left by `n` bits.
-  GLZ_FASTFLOAT_CONSTEXPR20 bool shl(size_t n) noexcept {
-    size_t rem = n % limb_bits;
-    size_t div = n / limb_bits;
+  GLZ_FASTFLOAT_CONSTEXPR20 bool shl(glz::size_t n) noexcept {
+    glz::size_t rem = n % limb_bits;
+    glz::size_t div = n / limb_bits;
     if (rem != 0) {
       GLZ_FASTFLOAT_TRY(shl_bits(rem));
     }
@@ -3582,7 +3548,7 @@ struct bigint : pow5_tables<> {
       return leading_zeroes(vec.rindex(0));
 #else
       // no use defining a specialized leading_zeroes for a 32-bit type.
-      uint64_t r0 = vec.rindex(0);
+      glz::uint64_t r0 = vec.rindex(0);
       return leading_zeroes(r0 << 32);
 #endif
     }
@@ -3599,22 +3565,22 @@ struct bigint : pow5_tables<> {
   GLZ_FASTFLOAT_CONSTEXPR20 bool add(limb y) noexcept { return small_add(vec, y); }
 
   // multiply as if by 2 raised to a power.
-  GLZ_FASTFLOAT_CONSTEXPR20 bool pow2(uint32_t exp) noexcept { return shl(exp); }
+  GLZ_FASTFLOAT_CONSTEXPR20 bool pow2(glz::uint32_t exp) noexcept { return shl(exp); }
 
   // multiply as if by 5 raised to a power.
-  GLZ_FASTFLOAT_CONSTEXPR20 bool pow5(uint32_t exp) noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR20 bool pow5(glz::uint32_t exp) noexcept {
     // multiply by a power of 5
-    size_t large_length = sizeof(large_power_of_5) / sizeof(limb);
+    glz::size_t large_length = sizeof(large_power_of_5) / sizeof(limb);
     limb_span large = limb_span(large_power_of_5, large_length);
     while (exp >= large_step) {
       GLZ_FASTFLOAT_TRY(large_mul(vec, large));
       exp -= large_step;
     }
 #ifdef GLZ_FASTFLOAT_64BIT_LIMB
-    uint32_t small_step = 27;
+    glz::uint32_t small_step = 27;
     limb max_native = 7450580596923828125UL;
 #else
-    uint32_t small_step = 13;
+    glz::uint32_t small_step = 13;
     limb max_native = 1220703125U;
 #endif
     while (exp >= small_step) {
@@ -3633,7 +3599,7 @@ struct bigint : pow5_tables<> {
   }
 
   // multiply as if by 10 raised to a power.
-  GLZ_FASTFLOAT_CONSTEXPR20 bool pow10(uint32_t exp) noexcept {
+  GLZ_FASTFLOAT_CONSTEXPR20 bool pow10(glz::uint32_t exp) noexcept {
     GLZ_FASTFLOAT_TRY(pow5(exp));
     return pow2(exp);
   }
@@ -3646,13 +3612,16 @@ struct bigint : pow5_tables<> {
 #ifndef GLZ_FASTFLOAT_DIGIT_COMPARISON_H
 #define GLZ_FASTFLOAT_DIGIT_COMPARISON_H
 
-
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <iterator>
 
 
 namespace glz::fast_float {
 
 // 1e0 to 1e19
-export inline constexpr uint64_t powers_of_ten_uint64[] = {1UL,
+export inline constexpr glz::uint64_t powers_of_ten_uint64[] = {1UL,
                                                     10UL,
                                                     100UL,
                                                     1000UL,
@@ -3678,10 +3647,10 @@ export inline constexpr uint64_t powers_of_ten_uint64[] = {1UL,
 // effect on performance: in order to have a faster algorithm, we'd need
 // to slow down performance for faster algorithms, and this is still fast.
 template <typename UC>
-fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 int32_t
+fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 glz::int32_t
 scientific_exponent(parsed_number_string_t<UC> &num) noexcept {
-  uint64_t mantissa = num.mantissa;
-  int32_t exponent = int32_t(num.exponent);
+  glz::uint64_t mantissa = num.mantissa;
+  glz::int32_t exponent = glz::int32_t(num.exponent);
   while (mantissa >= 10000) {
     mantissa /= 10000;
     exponent += 4;
@@ -3702,25 +3671,18 @@ template <typename T>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 adjusted_mantissa
 to_extended(T value) noexcept {
   using equiv_uint = equiv_uint_t<T>;
-#ifdef GLZ_FASTFLOAT_VISUAL_STUDIO
-  // MSVC 14.51 can reject these dependent constexpr calls in modules builds.
-  const equiv_uint exponent_mask = binary_format<T>::exponent_mask();
-  const equiv_uint mantissa_mask = binary_format<T>::mantissa_mask();
-  const equiv_uint hidden_bit_mask = binary_format<T>::hidden_bit_mask();
-#else
   constexpr equiv_uint exponent_mask = binary_format<T>::exponent_mask();
   constexpr equiv_uint mantissa_mask = binary_format<T>::mantissa_mask();
   constexpr equiv_uint hidden_bit_mask = binary_format<T>::hidden_bit_mask();
-#endif
 
   adjusted_mantissa am;
-  int32_t bias = binary_format<T>::mantissa_explicit_bits() -
+  glz::int32_t bias = binary_format<T>::mantissa_explicit_bits() -
                  binary_format<T>::minimum_exponent();
   equiv_uint bits;
 #if GLZ_FASTFLOAT_HAS_BIT_CAST
   bits = std::bit_cast<equiv_uint>(value);
 #else
-  std::memcpy(&bits, &value, sizeof(T));
+  ::memcpy(&bits, &value, sizeof(T));
 #endif
   if ((bits & exponent_mask) == 0) {
     // denormal
@@ -3728,7 +3690,7 @@ to_extended(T value) noexcept {
     am.mantissa = bits & mantissa_mask;
   } else {
     // normal
-    am.power2 = int32_t((bits & exponent_mask) >>
+    am.power2 = glz::int32_t((bits & exponent_mask) >>
                         binary_format<T>::mantissa_explicit_bits());
     am.power2 -= bias;
     am.mantissa = (bits & mantissa_mask) | hidden_bit_mask;
@@ -3754,14 +3716,14 @@ to_extended_halfway(T value) noexcept {
 template <typename T, typename callback>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 void round(adjusted_mantissa &am,
                                                          callback cb) noexcept {
-  int32_t mantissa_shift = 64 - binary_format<T>::mantissa_explicit_bits() - 1;
+  glz::int32_t mantissa_shift = 64 - binary_format<T>::mantissa_explicit_bits() - 1;
   if (-am.power2 >= mantissa_shift) {
     // have a denormal float
-    int32_t shift = -am.power2 + 1;
-    cb(am, (std::min<int32_t>)(shift, 64));
+    glz::int32_t shift = -am.power2 + 1;
+    cb(am, (std::min<glz::int32_t>)(shift, 64));
     // check for round-up: if rounding-nearest carried us to the hidden bit.
     am.power2 = (am.mantissa <
-                 (uint64_t(1) << binary_format<T>::mantissa_explicit_bits()))
+                 (glz::uint64_t(1) << binary_format<T>::mantissa_explicit_bits()))
                     ? 0
                     : 1;
     return;
@@ -3772,13 +3734,13 @@ fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 void round(adjusted_mantissa &
 
   // check for carry
   if (am.mantissa >=
-      (uint64_t(2) << binary_format<T>::mantissa_explicit_bits())) {
-    am.mantissa = (uint64_t(1) << binary_format<T>::mantissa_explicit_bits());
+      (glz::uint64_t(2) << binary_format<T>::mantissa_explicit_bits())) {
+    am.mantissa = (glz::uint64_t(1) << binary_format<T>::mantissa_explicit_bits());
     am.power2++;
   }
 
   // check for infinite: we could have carried to an infinite power
-  am.mantissa &= ~(uint64_t(1) << binary_format<T>::mantissa_explicit_bits());
+  am.mantissa &= ~(glz::uint64_t(1) << binary_format<T>::mantissa_explicit_bits());
   if (am.power2 >= binary_format<T>::infinite_power()) {
     am.power2 = binary_format<T>::infinite_power();
     am.mantissa = 0;
@@ -3787,11 +3749,11 @@ fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 void round(adjusted_mantissa &
 
 template <typename callback>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 void
-round_nearest_tie_even(adjusted_mantissa &am, int32_t shift,
+round_nearest_tie_even(adjusted_mantissa &am, glz::int32_t shift,
                        callback cb) noexcept {
-  uint64_t const mask = (shift == 64) ? std::numeric_limits<uint64_t>::max() : (uint64_t(1) << shift) - 1;
-  uint64_t const halfway = (shift == 0) ? 0 : uint64_t(1) << (shift - 1);
-  uint64_t truncated_bits = am.mantissa & mask;
+  glz::uint64_t const mask = (shift == 64) ? UINT64_MAX : (glz::uint64_t(1) << shift) - 1;
+  glz::uint64_t const halfway = (shift == 0) ? 0 : glz::uint64_t(1) << (shift - 1);
+  glz::uint64_t truncated_bits = am.mantissa & mask;
   bool is_above = truncated_bits > halfway;
   bool is_halfway = truncated_bits == halfway;
 
@@ -3804,11 +3766,11 @@ round_nearest_tie_even(adjusted_mantissa &am, int32_t shift,
   am.power2 += shift;
 
   bool is_odd = (am.mantissa & 1) == 1;
-  am.mantissa += uint64_t(cb(is_odd, is_halfway, is_above));
+  am.mantissa += glz::uint64_t(cb(is_odd, is_halfway, is_above));
 }
 
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 void
-round_down(adjusted_mantissa &am, int32_t shift) noexcept {
+round_down(adjusted_mantissa &am, glz::int32_t shift) noexcept {
   if (shift == 64) {
     am.mantissa = 0;
   } else {
@@ -3820,24 +3782,14 @@ round_down(adjusted_mantissa &am, int32_t shift) noexcept {
 template <typename UC>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 void
 skip_zeros(UC const *&first, UC const *last) noexcept {
-  static_assert((sizeof(UC) == 1) || (sizeof(UC) == 2) || (sizeof(UC) == 4),
-                "Unsupported character size");
-  constexpr int cmp_len = int(sizeof(uint64_t) / sizeof(UC));
-  constexpr uint64_t cmp_zeros =
-      (sizeof(UC) == 1)
-          ? uint64_t(0x3030303030303030ULL)
-          : (sizeof(UC) == 2)
-                ? (uint64_t(UC('0')) << 48 | uint64_t(UC('0')) << 32 |
-                   uint64_t(UC('0')) << 16 | UC('0'))
-                : (uint64_t(UC('0')) << 32 | UC('0'));
-  uint64_t val;
+  glz::uint64_t val;
   while (!cpp20_and_in_constexpr() &&
-         std::distance(first, last) >= cmp_len) {
-    std::memcpy(&val, first, sizeof(uint64_t));
-    if (val != cmp_zeros) {
+         std::distance(first, last) >= int_cmp_len<UC>()) {
+    ::memcpy(&val, first, sizeof(glz::uint64_t));
+    if (val != int_cmp_zeros<UC>()) {
       break;
     }
-    first += cmp_len;
+    first += int_cmp_len<UC>();
   }
   while (first != last) {
     if (*first != UC('0')) {
@@ -3852,25 +3804,15 @@ skip_zeros(UC const *&first, UC const *last) noexcept {
 template <typename UC>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 bool
 is_truncated(UC const *first, UC const *last) noexcept {
-  static_assert((sizeof(UC) == 1) || (sizeof(UC) == 2) || (sizeof(UC) == 4),
-                "Unsupported character size");
-  constexpr int cmp_len = int(sizeof(uint64_t) / sizeof(UC));
-  constexpr uint64_t cmp_zeros =
-      (sizeof(UC) == 1)
-          ? uint64_t(0x3030303030303030ULL)
-          : (sizeof(UC) == 2)
-                ? (uint64_t(UC('0')) << 48 | uint64_t(UC('0')) << 32 |
-                   uint64_t(UC('0')) << 16 | UC('0'))
-                : (uint64_t(UC('0')) << 32 | UC('0'));
   // do 8-bit optimizations, can just compare to 8 literal 0s.
-  uint64_t val;
+  glz::uint64_t val;
   while (!cpp20_and_in_constexpr() &&
-         std::distance(first, last) >= cmp_len) {
-    std::memcpy(&val, first, sizeof(uint64_t));
-    if (val != cmp_zeros) {
+         std::distance(first, last) >= int_cmp_len<UC>()) {
+    ::memcpy(&val, first, sizeof(glz::uint64_t));
+    if (val != int_cmp_zeros<UC>()) {
       return true;
     }
-    first += cmp_len;
+    first += int_cmp_len<UC>();
   }
   while (first != last) {
     if (*first != UC('0')) {
@@ -3889,8 +3831,8 @@ is_truncated(span<UC const> s) noexcept {
 
 template <typename UC>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 void
-parse_eight_digits(UC const *&p, limb &value, size_t &counter,
-                   size_t &count) noexcept {
+parse_eight_digits(UC const *&p, limb &value, glz::size_t &counter,
+                   glz::size_t &count) noexcept {
   value = value * 100000000 + parse_eight_digits_unrolled(p);
   p += 8;
   counter += 8;
@@ -3899,8 +3841,8 @@ parse_eight_digits(UC const *&p, limb &value, size_t &counter,
 
 template <typename UC>
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR14 void
-parse_one_digit(UC const *&p, limb &value, size_t &counter,
-                size_t &count) noexcept {
+parse_one_digit(UC const *&p, limb &value, glz::size_t &counter,
+                glz::size_t &count) noexcept {
   value = value * 10 + limb(*p - UC('0'));
   p++;
   counter++;
@@ -3914,7 +3856,7 @@ add_native(bigint &big, limb power, limb value) noexcept {
 }
 
 fastfloat_really_inline GLZ_FASTFLOAT_CONSTEXPR20 void
-round_up_bigint(bigint &big, size_t &count) noexcept {
+round_up_bigint(bigint &big, glz::size_t &count) noexcept {
   // need to round-up the digits, but need to avoid rounding
   // ....9999 to ...10000, which could cause a false halfway point.
   add_native(big, 10, 1);
@@ -3925,17 +3867,17 @@ round_up_bigint(bigint &big, size_t &count) noexcept {
 template <typename UC>
 inline GLZ_FASTFLOAT_CONSTEXPR20 void
 parse_mantissa(bigint &result, parsed_number_string_t<UC> &num,
-               size_t max_digits, size_t &digits) noexcept {
+               glz::size_t max_digits, glz::size_t &digits) noexcept {
   // try to minimize the number of big integer and scalar multiplication.
   // therefore, try to parse 8 digits at a time, and multiply by the largest
   // scalar value (9 or 19 digits) for each step.
-  size_t counter = 0;
+  glz::size_t counter = 0;
   digits = 0;
   limb value = 0;
 #ifdef GLZ_FASTFLOAT_64BIT_LIMB
-  size_t step = 19;
+  glz::size_t step = 19;
 #else
-  size_t step = 9;
+  glz::size_t step = 9;
 #endif
 
   // process all integer digits.
@@ -4008,8 +3950,8 @@ parse_mantissa(bigint &result, parsed_number_string_t<UC> &num,
 
 template <typename T>
 inline GLZ_FASTFLOAT_CONSTEXPR20 adjusted_mantissa
-positive_digit_comp(bigint &bigmant, int32_t exponent) noexcept {
-  GLZ_FASTFLOAT_ASSERT(bigmant.pow10(uint32_t(exponent)));
+positive_digit_comp(bigint &bigmant, glz::int32_t exponent) noexcept {
+  GLZ_FASTFLOAT_ASSERT(bigmant.pow10(glz::uint32_t(exponent)));
   adjusted_mantissa answer;
   bool truncated;
   answer.mantissa = bigmant.hi64(truncated);
@@ -4017,7 +3959,7 @@ positive_digit_comp(bigint &bigmant, int32_t exponent) noexcept {
              binary_format<T>::minimum_exponent();
   answer.power2 = bigmant.bit_length() - 64 + bias;
 
-  round<T>(answer, [truncated](adjusted_mantissa &a, int32_t shift) {
+  round<T>(answer, [truncated](adjusted_mantissa &a, glz::int32_t shift) {
     round_nearest_tie_even(
         a, shift,
         [truncated](bool is_odd, bool is_halfway, bool is_above) -> bool {
@@ -4036,38 +3978,38 @@ positive_digit_comp(bigint &bigmant, int32_t exponent) noexcept {
 // are of the same magnitude.
 template <typename T>
 inline GLZ_FASTFLOAT_CONSTEXPR20 adjusted_mantissa negative_digit_comp(
-    bigint &bigmant, adjusted_mantissa am, int32_t exponent) noexcept {
+    bigint &bigmant, adjusted_mantissa am, glz::int32_t exponent) noexcept {
   bigint &real_digits = bigmant;
-  int32_t real_exp = exponent;
+  glz::int32_t real_exp = exponent;
 
   // get the value of `b`, rounded down, and get a bigint representation of b+h
   adjusted_mantissa am_b = am;
   // gcc7 buf: use a lambda to remove the noexcept qualifier bug with
   // -Wnoexcept-type.
   round<T>(am_b,
-           [](adjusted_mantissa &a, int32_t shift) { round_down(a, shift); });
+           [](adjusted_mantissa &a, glz::int32_t shift) { round_down(a, shift); });
   T b;
   to_float(false, am_b, b);
   adjusted_mantissa theor = to_extended_halfway(b);
   bigint theor_digits(theor.mantissa);
-  int32_t theor_exp = theor.power2;
+  glz::int32_t theor_exp = theor.power2;
 
   // scale real digits and theor digits to be same power.
-  int32_t pow2_exp = theor_exp - real_exp;
-  uint32_t pow5_exp = uint32_t(-real_exp);
+  glz::int32_t pow2_exp = theor_exp - real_exp;
+  glz::uint32_t pow5_exp = glz::uint32_t(-real_exp);
   if (pow5_exp != 0) {
     GLZ_FASTFLOAT_ASSERT(theor_digits.pow5(pow5_exp));
   }
   if (pow2_exp > 0) {
-    GLZ_FASTFLOAT_ASSERT(theor_digits.pow2(uint32_t(pow2_exp)));
+    GLZ_FASTFLOAT_ASSERT(theor_digits.pow2(glz::uint32_t(pow2_exp)));
   } else if (pow2_exp < 0) {
-    GLZ_FASTFLOAT_ASSERT(real_digits.pow2(uint32_t(-pow2_exp)));
+    GLZ_FASTFLOAT_ASSERT(real_digits.pow2(glz::uint32_t(-pow2_exp)));
   }
 
   // compare digits, and use it to director rounding
   int ord = real_digits.compare(theor_digits);
   adjusted_mantissa answer = am;
-  round<T>(answer, [ord](adjusted_mantissa &a, int32_t shift) {
+  round<T>(answer, [ord](adjusted_mantissa &a, glz::int32_t shift) {
     round_nearest_tie_even(
         a, shift, [ord](bool is_odd, bool _, bool __) -> bool {
           (void)_;  // not needed, since we've done our comparison
@@ -4104,13 +4046,13 @@ digit_comp(parsed_number_string_t<UC> &num, adjusted_mantissa am) noexcept {
   // remove the invalid exponent bias
   am.power2 -= invalid_am_bias;
 
-  int32_t sci_exp = scientific_exponent(num);
-  size_t max_digits = binary_format<T>::max_digits();
-  size_t digits = 0;
+  glz::int32_t sci_exp = scientific_exponent(num);
+  glz::size_t max_digits = binary_format<T>::max_digits();
+  glz::size_t digits = 0;
   bigint bigmant;
   parse_mantissa(bigmant, num, max_digits, digits);
   // can't underflow, since digits is at most max_digits.
-  int32_t exponent = sci_exp + 1 - int32_t(digits);
+  glz::int32_t exponent = sci_exp + 1 - glz::int32_t(digits);
   if (exponent >= 0) {
     return positive_digit_comp<T>(bigmant, exponent);
   } else {
@@ -4126,7 +4068,10 @@ digit_comp(parsed_number_string_t<UC> &num, adjusted_mantissa am) noexcept {
 #define GLZ_FASTFLOAT_PARSE_NUMBER_H
 
 
-
+#include <cmath>
+#include <cstring>
+#include <limits>
+#include <system_error>
 
 namespace glz::fast_float {
 
@@ -4147,7 +4092,7 @@ from_chars_result_t<UC>
   bool const minusSign = (*first == UC('-'));
   // C++17 20.19.3.(7.1) explicitly forbids '+' sign here
   if ((*first == UC('-')) ||
-      (uint64_t(fmt & chars_format::allow_leading_plus) &&
+      (glz::uint64_t(fmt & chars_format::allow_leading_plus) &&
        (*first == UC('+')))) {
     ++first;
   }
@@ -4411,7 +4356,7 @@ from_chars_float_advanced(UC const *first, UC const *last, T &value,
   chars_format const fmt = detail::adjust_for_feature_macros(options.format);
 
   from_chars_result_t<UC> answer;
-  if (uint64_t(fmt & chars_format::skip_white_space)) {
+  if (glz::uint64_t(fmt & chars_format::skip_white_space)) {
     while ((first != last) && fast_float::is_space(*first)) {
       first++;
     }
@@ -4422,11 +4367,11 @@ from_chars_float_advanced(UC const *first, UC const *last, T &value,
     return answer;
   }
   parsed_number_string_t<UC> pns =
-      uint64_t(fmt & detail::basic_json_fmt)
+      glz::uint64_t(fmt & detail::basic_json_fmt)
           ? parse_number_string<true, UC>(first, last, options)
           : parse_number_string<false, UC>(first, last, options);
   if (!pns.valid) {
-    if (uint64_t(fmt & chars_format::no_infnan)) {
+    if (glz::uint64_t(fmt & chars_format::no_infnan)) {
       answer.ec = std::errc::invalid_argument;
       answer.ptr = first;
       return answer;
@@ -4467,7 +4412,7 @@ from_chars_int_advanced(UC const *first, UC const *last, T &value,
   int const base = options.base;
 
   from_chars_result_t<UC> answer;
-  if (uint64_t(fmt & chars_format::skip_white_space)) {
+  if (glz::uint64_t(fmt & chars_format::skip_white_space)) {
     while ((first != last) && fast_float::is_space(*first)) {
       first++;
     }
@@ -4481,7 +4426,7 @@ from_chars_int_advanced(UC const *first, UC const *last, T &value,
   return parse_int_string(first, last, value, options);
 }
 
-template <size_t TypeIx> struct from_chars_advanced_caller {
+template <glz::size_t TypeIx> struct from_chars_advanced_caller {
   static_assert(TypeIx > 0, "unsupported type");
 };
 
@@ -4508,8 +4453,8 @@ GLZ_FASTFLOAT_CONSTEXPR20 from_chars_result_t<UC>
 from_chars_advanced(UC const *first, UC const *last, T &value,
                     parse_options_t<UC> options) noexcept {
   return from_chars_advanced_caller<
-      size_t(is_supported_float_type<T>::value) +
-      2 * size_t(is_supported_integer_type<T>::value)>::call(first, last, value,
+      glz::size_t(is_supported_float_type<T>::value) +
+      2 * glz::size_t(is_supported_integer_type<T>::value)>::call(first, last, value,
                                                              options);
 }
 

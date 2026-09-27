@@ -1,10 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/invoke.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<string>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
+// glz:header include="glaze/json/json_ptr.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.invoke;
 
 import std;
@@ -26,8 +26,8 @@ import glaze.util.tuple;
 import glaze.util.type_traits;
 
 import glaze.tuplet;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
@@ -203,7 +203,7 @@ export namespace glz
             skip_array<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            const sv input = {start, size_t(it - start)};
+            const sv input = {start, glz::size_t(it - start)};
             if (value.initialized) {
                if (input != value.prev) {
                   value.func();
@@ -219,7 +219,7 @@ export namespace glz
             skip_array<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            const sv input = {start, size_t(it - start)};
+            const sv input = {start, glz::size_t(it - start)};
             if (value.initialized) {
                if (input != value.prev) {
                   Tuple inputs{};

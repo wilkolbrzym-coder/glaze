@@ -1,5 +1,40 @@
 #!/usr/bin/env python3
-"""Generate checked-in Glaze headers from native module interface files."""
+"""Generate checked-in Glaze headers from native module interface files.
+
+Builtin-type aliases
+--------------------
+Glaze module code must not spell the C integer types as bare ``size_t`` /
+``uint32_t`` / ... because those names are not guaranteed to be reachable in a
+module without pulling in an extra header, and the maintainer explicitly asked
+for ``glz::size_t`` / ``glz::uint64_t`` aliases so module code never needs the
+``std::`` prefix (AGENTS.md C3).  The public headers, however, use the bare
+spelling almost everywhere (at reference commit 4ec2da3d: 2648 bare ``size_t``
+vs 114 ``std::size_t``).
+
+To keep the generated headers byte-identical, this generator rewrites the
+closed alias set below back to the bare spelling while rendering a module:
+
+    glz::size_t    -> size_t        glz::ptrdiff_t -> ptrdiff_t
+    glz::int8_t    -> int8_t        glz::uint8_t   -> uint8_t
+    glz::int16_t   -> int16_t       glz::uint16_t  -> uint16_t
+    glz::int32_t   -> int32_t       glz::uint32_t  -> uint32_t
+    glz::int64_t   -> int64_t       glz::uint64_t  -> uint64_t
+
+The rewrite is intentionally narrow and is NOT a general "dequalify":
+
+  * only these ten aliases are recognised; ``glz::size_type``,
+    ``glz::size_t_thing`` and any other token are left untouched;
+  * only the exact ``glz::<alias>`` token is matched, with identifier
+    boundaries on both sides;
+  * ``std::size_t`` and any other ``std::`` spelling is never touched -- where
+    the reference header says ``std::size_t`` the module keeps ``std::size_t``;
+  * comments and string/char literals are skipped, so documentation that
+    mentions ``glz::size_t`` survives as written.
+
+A future reader should not mistake this for magic: the module spelling and the
+header spelling differ on purpose, and this table is the single place the
+translation is defined.
+"""
 
 from __future__ import annotations
 
@@ -12,9 +47,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+# Closed set of glz:: builtin-type aliases the module side uses; rendered back
+# to the bare header spelling.  See the module docstring above.
+BUILTIN_TYPE_ALIASES = frozenset(
+    {
+        "size_t",
+        "ptrdiff_t",
+        "int8_t",
+        "int16_t",
+        "int32_t",
+        "int64_t",
+        "uint8_t",
+        "uint16_t",
+        "uint32_t",
+        "uint64_t",
+    }
+)
+
 HEADER_META_RE = re.compile(r"^\s*//\s*glz:header(?:\s+(?P<body>.*))?$")
 MODULE_RE = re.compile(r"^\s*(?:export\s+)?module(?:\s+[A-Za-z_][\w.:]*)?\s*;\s*(?://.*)?$")
 IMPORT_RE = re.compile(r"^\s*(?:export\s+)?import\s+(?P<target>[^;]+?)\s*;\s*(?://.*)?$")
+# A global-scope `using std::...;` (module-local convenience, never in a header).
+GLOBAL_STD_USING_RE = re.compile(r"^using\s+std::[A-Za-z_][\w:]*\s*;\s*(?://.*)?$")
+PREPROCESSOR_OPEN_RE = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef)\b")
+PREPROCESSOR_CLOSE_RE = re.compile(r"^\s*#\s*endif\b")
+RAW_INCLUDE_RE = re.compile(r"^\s*#\s*include\s+(?P<target>[<\"])(?P<inner>[^>\"]*)[>\"]\s*(?://.*)?$")
 IDENT_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
 
 
@@ -60,7 +117,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--allow-missing-metadata",
         action="store_true",
-        help="Ignore .ixx files without glz:header metadata instead of failing",
+        help="Accepted for backwards compatibility; missing metadata is now reported and skipped by default",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail immediately on the first module with missing or incomplete glz:header metadata",
     )
     parser.add_argument(
         "--no-copy-headers",
@@ -127,6 +189,11 @@ def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None
         except ValueError as exc:
             raise HeaderGenerationError(f"{source_path}:{line_number}: invalid glz:header metadata: {exc}") from exc
         for token in tokens:
+            # `skip` may be written bare or with a value; either way the module
+            # intentionally has no public header (internal unit).
+            if token == "skip":
+                metadata.skip = "true"
+                continue
             if "=" not in token:
                 raise HeaderGenerationError(f"{source_path}:{line_number}: expected key=value metadata, got {token!r}")
             key, value = token.split("=", 1)
@@ -209,6 +276,22 @@ def module_import_to_include(
     raise HeaderGenerationError(f"{source_path}: unsupported import {imported_name!r}; add an import_overrides entry")
 
 
+def hoist_include(line: str, std_includes: list[str], project_includes: list[str]) -> bool:
+    """Move an unconditional `#include` line into the header's include block.
+
+    Returns True when the line was recognised and consumed.
+    """
+    match = RAW_INCLUDE_RE.match(line)
+    if match is None:
+        return False
+    target = f"{match.group('target')}{match.group('inner')}{'>' if match.group('target') == '<' else '\"'}"
+    if match.group("target") == "<":
+        std_includes.append(target)
+    else:
+        project_includes.append(target)
+    return True
+
+
 def dedupe(items: list[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -230,15 +313,31 @@ def transform_source(
     lines = source_text.splitlines()
     module_name = discover_module_name(lines)
 
+    # The file header (licence block) is everything before the first module
+    # declaration. Comments *after* the module declaration belong to the body
+    # and must stay where they are (after the includes).
+    first_decl_index = len(lines)
+    for index, line in enumerate(lines):
+        if re.match(r"^\s*(?:export\s+)?module(?:\s+[A-Za-z_][\w.:]*)?\s*;", line):
+            first_decl_index = index
+            break
+    prefix = [
+        line.replace("glaze.ixx", "glaze.hpp")
+        for line in trim_blank_edges(lines[:first_decl_index])
+        if not HEADER_META_RE.match(line)
+    ]
+
     std_includes = list(metadata.std)
-    project_includes: list[str] = []
-    extra_includes = list(metadata.includes)
+    project_includes: list[str] = list(metadata.includes)
     import_std_seen = False
     in_global_fragment = False
-    global_fragment_lines: list[str] = []
+    conditional_depth = 0
+    prelude_lines: list[str] = []
     transformed_lines: list[str] = []
 
-    for line in lines:
+    for index, line in enumerate(lines):
+        if index < first_decl_index:
+            continue
         if HEADER_META_RE.match(line):
             continue
         if re.match(r"^\s*module\s*;\s*(?://.*)?$", line):
@@ -249,29 +348,66 @@ def transform_source(
             continue
         if MODULE_RE.match(line):
             continue
+
+        # Track preprocessor nesting so that conditional includes stay in place
+        # (they are part of the surrounding #if block, not the include block).
+        if PREPROCESSOR_OPEN_RE.match(line):
+            conditional_depth += 1
+        elif PREPROCESSOR_CLOSE_RE.match(line):
+            conditional_depth = max(0, conditional_depth - 1)
+
         if in_global_fragment:
-            global_fragment_lines.append(line)
+            if conditional_depth == 0:
+                hoisted = hoist_include(line, std_includes, project_includes)
+                if hoisted:
+                    continue
+            prelude_lines.append(line)
             continue
+
         import_match = IMPORT_RE.match(line)
         if import_match:
             target = import_match.group("target").strip()
             if target == "std":
                 import_std_seen = True
             elif metadata.project_imports == "include":
-                project_includes.append(module_import_to_include(target, module_name, manifest, source_path))
+                include = module_import_to_include(target, module_name, manifest, source_path)
+                if conditional_depth == 0:
+                    project_includes.append(include)
+                else:
+                    # The import sits inside a preprocessor guard; keep it there
+                    # so the generated header preserves the guard (e.g. the
+                    # `#if __cpp_exceptions` block in glaze_exceptions.hpp).
+                    transformed_lines.append(f"#include {include}")
+            continue
+        # Module-local `using std::...;` at global scope exists only so the module
+        # body can name std types without the `std::` prefix. Emitting it into a
+        # header would pollute every consumer's global namespace (AGENTS.md C3),
+        # and the reference headers contain no such declaration.
+        if GLOBAL_STD_USING_RE.match(line):
+            continue
+        if conditional_depth == 0 and hoist_include(line, std_includes, project_includes):
             continue
         transformed_lines.append(line)
 
     if import_std_seen and not metadata.std:
-        raise HeaderGenerationError(f"{source_path}: import std; requires at least one glz:header std=... entry")
+        # Advisory only.  With the explicit include=/std= contract an empty std
+        # list is a legitimate declaration that the public header includes no
+        # standard headers (the reference headers very often rely on transitive
+        # std includes), so this must not fail --check.  A genuinely missing
+        # std= entry shows up as a substantive oracle diff instead.
+        print(
+            f"note: {source_path}: import std; with no glz:header std=... entry "
+            "(no standard includes emitted)",
+            file=sys.stderr,
+        )
 
-    body = remove_export_tokens("\n".join(transformed_lines))
+    body = dequalify_builtin_type_aliases(remove_export_tokens("\n".join(transformed_lines)))
     body_lines = collapse_blank_runs(trim_blank_edges(body.splitlines()))
-    prefix, body_lines = split_leading_file_comments(body_lines)
+    prelude_lines = dequalify_builtin_type_aliases("\n".join(prelude_lines)).splitlines()
+    prelude_lines = collapse_blank_runs(trim_blank_edges(prelude_lines))
 
-    std_include_lines = [f"#include {include}" for include in dedupe(std_includes)]
-    project_include_lines = [f"#include {include}" for include in dedupe(project_includes + extra_includes)]
-    global_fragment_lines = collapse_blank_runs(trim_blank_edges(global_fragment_lines))
+    std_include_lines = [f"#include {include}" for include in sorted(dedupe(std_includes))]
+    project_include_lines = [f"#include {include}" for include in sorted(dedupe(project_includes))]
     output_lines: list[str] = []
     output_lines.extend(prefix)
     if output_lines and output_lines[-1] != "":
@@ -280,12 +416,12 @@ def transform_source(
     if std_include_lines:
         output_lines.append("")
         output_lines.extend(std_include_lines)
-    if global_fragment_lines:
-        output_lines.append("")
-        output_lines.extend(global_fragment_lines)
     if project_include_lines:
         output_lines.append("")
         output_lines.extend(project_include_lines)
+    if prelude_lines:
+        output_lines.append("")
+        output_lines.extend(prelude_lines)
     if body_lines:
         output_lines.append("")
         output_lines.extend(body_lines)
@@ -316,29 +452,6 @@ def collapse_blank_runs(lines: list[str], max_run: int = 1) -> list[str]:
         blank_run = 0
         result.append(line)
     return result
-
-
-def split_leading_file_comments(lines: list[str]) -> tuple[list[str], list[str]]:
-    prefix: list[str] = []
-    index = 0
-    while index < len(lines):
-        stripped = lines[index].strip()
-        if stripped == "" or stripped.startswith("//"):
-            prefix.append(lines[index])
-            index += 1
-            continue
-        if stripped.startswith("/*"):
-            while index < len(lines):
-                prefix.append(lines[index])
-                if "*/" in lines[index]:
-                    index += 1
-                    break
-                index += 1
-            continue
-        break
-    while prefix and prefix[-1].strip() == "":
-        prefix.pop()
-    return prefix, trim_blank_edges(lines[index:])
 
 
 def resolve_header_path(include_root: Path, metadata_path: str) -> Path:
@@ -426,6 +539,84 @@ def remove_export_tokens(text: str) -> str:
     return "".join(result)
 
 
+def dequalify_builtin_type_aliases(text: str) -> str:
+    """Render ``glz::<builtin-alias>`` back to the bare header spelling.
+
+    Only the ten aliases in ``BUILTIN_TYPE_ALIASES`` are translated, only when
+    written as the exact token ``glz::alias`` (identifier boundaries on both
+    sides), and never inside comments or string/char literals.  ``std::``
+    spellings are left alone.  See the module docstring for why this exists.
+    """
+    result: list[str] = []
+    index = 0
+    length = len(text)
+
+    while index < length:
+        ch = text[index]
+
+        if ch == "/" and index + 1 < length and text[index + 1] == "/":
+            end = text.find("\n", index)
+            if end == -1:
+                result.append(text[index:])
+                break
+            result.append(text[index:end])
+            index = end
+            continue
+
+        if ch == "/" and index + 1 < length and text[index + 1] == "*":
+            end = text.find("*/", index + 2)
+            if end == -1:
+                result.append(text[index:])
+                break
+            result.append(text[index : end + 2])
+            index = end + 2
+            continue
+
+        if ch == "R" and index + 1 < length and text[index + 1] == '"':
+            raw_end = find_raw_string_end(text, index)
+            if raw_end is not None:
+                result.append(text[index:raw_end])
+                index = raw_end
+                continue
+
+        if ch == "'" and is_digit_separator(text, index):
+            result.append(ch)
+            index += 1
+            continue
+
+        if ch in {'"', "'"}:
+            literal_end = find_quoted_literal_end(text, index, ch)
+            result.append(text[index:literal_end])
+            index = literal_end
+            continue
+
+        if ch.isalpha() or ch == "_":
+            end = index + 1
+            while end < length and text[end] in IDENT_CHARS:
+                end += 1
+            token = text[index:end]
+            # Match only the exact `glz::<alias>` sequence.  `glz` must be
+            # immediately followed by `::` and the alias must be a complete
+            # identifier, so `glz::size_type`/`glz::size_t_thing` do not match.
+            if token == "glz" and text[end : end + 2] == "::":
+                alias_end = end + 2
+                while alias_end < length and text[alias_end] in IDENT_CHARS:
+                    alias_end += 1
+                alias = text[end + 2 : alias_end]
+                if alias in BUILTIN_TYPE_ALIASES:
+                    result.append(alias)
+                    index = alias_end
+                    continue
+            result.append(token)
+            index = end
+            continue
+
+        result.append(ch)
+        index += 1
+
+    return "".join(result)
+
+
 def is_digit_separator(text: str, index: int) -> bool:
     return (
         index > 0
@@ -461,13 +652,14 @@ def find_raw_string_end(text: str, start: int) -> int | None:
     return end + len(terminator)
 
 
-def generate_headers(args: argparse.Namespace) -> list[GeneratedHeader]:
+def generate_headers(args: argparse.Namespace) -> tuple[list[GeneratedHeader], list[str]]:
     manifest = parse_manifest(args.manifest)
     source_root = args.module_root
     include_root = args.include_root
     selected = set(args.module)
     generated: list[GeneratedHeader] = []
     generated_paths: dict[Path, Path] = {}
+    problems: list[str] = []
     skipped = 0
 
     for source_path in sorted(source_root.rglob("*.ixx")):
@@ -475,9 +667,11 @@ def generate_headers(args: argparse.Namespace) -> list[GeneratedHeader]:
         lines = source_text.splitlines()
         metadata = parse_metadata(source_path, lines)
         if metadata is None:
-            if args.allow_missing_metadata:
-                continue
-            raise HeaderGenerationError(f"{source_path}: missing glz:header metadata")
+            message = f"{source_path}: missing glz:header metadata"
+            if args.strict:
+                raise HeaderGenerationError(message)
+            problems.append(message)
+            continue
         if metadata.skip is not None:
             skipped += 1
             continue
@@ -496,7 +690,39 @@ def generate_headers(args: argparse.Namespace) -> list[GeneratedHeader]:
         generated.extend(copy_support_headers(source_root, include_root, generated_paths, selected))
     if skipped:
         print(f"skipped {skipped} module file(s) with glz:header skip metadata")
-    return generated
+    for problem in problems:
+        print(f"warning: {problem}", file=sys.stderr)
+    return generated, problems
+
+
+def sanitize_copied_header(text: str) -> str:
+    """Strip module-conversion artefacts from a copied support header.
+
+    Support headers were carried through the module conversion too, so they can
+    contain the same global-scope `using std::...;` pollution and the module
+    provenance line ("refer to glaze.ixx") as the generated headers. The
+    reference tree contains neither.
+    """
+    lines = text.splitlines()
+    result_lines: list[str] = []
+    drop_following_blank = False
+    for line in lines:
+        if GLOBAL_STD_USING_RE.match(line):
+            # The declaration was inserted before a blank separator; drop the
+            # now-redundant blank so single-blank spacing is preserved.
+            drop_following_blank = True
+            continue
+        if drop_following_blank and line.strip() == "":
+            drop_following_blank = False
+            continue
+        drop_following_blank = False
+        result_lines.append(line.replace("glaze.ixx", "glaze.hpp"))
+    while result_lines and result_lines[-1].strip() == "":
+        result_lines.pop()
+    result = "\n".join(result_lines)
+    if result and text.endswith("\n"):
+        result += "\n"
+    return result
 
 
 def copy_support_headers(
@@ -511,7 +737,7 @@ def copy_support_headers(
             module_name=None,
             source_path=source_path,
             header_path=header_path,
-            content=source_path.read_text(encoding="utf-8"),
+            content=sanitize_copied_header(source_path.read_text(encoding="utf-8")),
         )
         if selected and not matches_selection(header, selected):
             continue
@@ -528,7 +754,7 @@ def matches_selection(header: GeneratedHeader, selected: set[str]) -> bool:
     )
 
 
-def write_or_check(headers: list[GeneratedHeader], check: bool, dry_run: bool) -> int:
+def write_or_check(headers: list[GeneratedHeader], check: bool, dry_run: bool, problems: list[str]) -> int:
     changed: list[GeneratedHeader] = []
     for header in headers:
         existing = header.header_path.read_text(encoding="utf-8") if header.header_path.exists() else None
@@ -542,9 +768,16 @@ def write_or_check(headers: list[GeneratedHeader], check: bool, dry_run: bool) -
             header.header_path.write_text(header.content, encoding="utf-8", newline="\n")
             print(f"generated: {header.header_path}")
 
+    failed = False
+    if check and problems:
+        for problem in problems:
+            print(f"error: {problem}", file=sys.stderr)
+        failed = True
     if check and changed:
         for header in changed:
             print(f"out of date: {header.header_path}", file=sys.stderr)
+        failed = True
+    if failed:
         return 1
     if check:
         print(f"checked {len(headers)} header(s)")
@@ -556,11 +789,11 @@ def write_or_check(headers: list[GeneratedHeader], check: bool, dry_run: bool) -
 def main() -> int:
     args = parse_args()
     try:
-        headers = generate_headers(args)
+        headers, problems = generate_headers(args)
         if not headers:
             print("no module files with glz:header metadata found", file=sys.stderr)
             return 1
-        return write_or_check(headers, check=args.check, dry_run=args.dry_run)
+        return write_or_check(headers, check=args.check, dry_run=args.dry_run, problems=problems)
     except HeaderGenerationError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

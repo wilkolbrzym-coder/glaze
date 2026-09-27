@@ -616,7 +616,7 @@ namespace glz
    // buffers that are neither padded nor null terminated.
    export template <char... Chars>
       requires(sizeof...(Chars) > 0)
-   export GLZ_ALWAYS_INLINE const char* find_first_of(const char* p, const char* const end) noexcept
+   GLZ_ALWAYS_INLINE const char* find_first_of(const char* p, const char* const end) noexcept
    {
       // end - p rather than p + 8 <= end: the latter forms a pointer past one-past-the-end for
       // short ranges, and is diagnosable UB on a null range. Pointer difference is well defined
@@ -1337,7 +1337,7 @@ namespace glz
 
    export template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
       requires(not Opts.comments)
-   export GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
@@ -1440,7 +1440,7 @@ namespace glz
 
    export template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
       requires(Opts.comments)
-   export GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;

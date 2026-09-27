@@ -223,7 +223,7 @@ namespace glz
 {
    export template <glz::uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
-   export struct from<Format, T>
+   struct from<Format, T>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
@@ -239,7 +239,7 @@ namespace glz
 
    export template <glz::uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
-   export struct to<Format, T>
+   struct to<Format, T>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)

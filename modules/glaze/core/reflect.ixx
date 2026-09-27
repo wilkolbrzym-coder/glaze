@@ -375,7 +375,7 @@ namespace glz
 
    export template <class T>
       requires(glaze_merge_t<T>)
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
 
@@ -465,7 +465,7 @@ namespace glz
 
    export template <class T>
       requires(meta_keys<T> && glaze_t<T>)
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
       static constexpr auto size = tuple_size_v<meta_keys_t<T>>;
@@ -491,12 +491,12 @@ namespace glz
 
    export template <class T>
       requires(is_memory_object<T>)
-   export struct reflect<T> : reflect<memory_type<T>>
+   struct reflect<T> : reflect<memory_type<T>>
    {};
 
    export template <class T>
       requires(glaze_array_t<T>)
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
 
@@ -513,7 +513,7 @@ namespace glz
 
    export template <class T>
       requires reflectable<T>
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
       using tie_type = decltype(to_tie(std::declval<T&>()));
@@ -530,7 +530,7 @@ namespace glz
 
    export template <class T>
       requires readable_map_t<T>
-   export struct reflect<T>
+   struct reflect<T>
    {
       static constexpr auto size = 0;
    };
@@ -1056,7 +1056,7 @@ namespace glz
 {
    export template <auto Enum>
       requires(std::is_enum_v<decltype(Enum)>)
-   export constexpr sv enum_name_v = []() -> std::string_view {
+   constexpr sv enum_name_v = []() -> std::string_view {
       using T = std::decay_t<decltype(Enum)>;
 
       if constexpr (glaze_t<T>) {
@@ -1115,7 +1115,7 @@ namespace glz
 
    export template <class T>
       requires std::is_enum_v<T>
-   export constexpr auto make_int_keys_info()
+   constexpr auto make_int_keys_info()
    {
       using U = std::underlying_type_t<T>;
       constexpr auto N = reflect<T>::size;
@@ -1338,12 +1338,12 @@ namespace glz
 
    export template <class T>
       requires std::is_enum_v<T>
-   export constexpr auto enum_index_info = make_int_keys_info<T>();
+   constexpr auto enum_index_info = make_int_keys_info<T>();
 
    // Array of enum underlying values for runtime indexing
    export template <class T>
       requires std::is_enum_v<T>
-   export constexpr auto enum_values_array = []<glz::size_t... I>(std::index_sequence<I...>) {
+   constexpr auto enum_values_array = []<glz::size_t... I>(std::index_sequence<I...>) {
       using U = std::underlying_type_t<T>;
       return std::array<U, sizeof...(I)>{static_cast<U>(glz::get<I>(reflect<T>::values))...};
    }(std::make_index_sequence<reflect<T>::size>{});
@@ -1479,7 +1479,7 @@ namespace glz
    // Note: is_reflect_enum types are handled separately because P2996 requires inline consteval context
    export template <class T>
       requires(glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
-   export constexpr auto get_enum_name(T&& enum_value)
+   constexpr auto get_enum_name(T&& enum_value)
    {
       using V = std::decay_t<T>;
       using U = std::underlying_type_t<V>;
@@ -3088,7 +3088,7 @@ namespace glz
    // Helper to create int_keys_info from ids_v<T> for integral variant IDs
    export template <is_variant T>
       requires(std::integral<std::decay_t<decltype(ids_v<T>[0])>>)
-   export constexpr auto make_variant_int_keys_info()
+   constexpr auto make_variant_int_keys_info()
    {
       using U = std::decay_t<decltype(ids_v<T>[0])>;
       constexpr auto N = ids_v<T>.size();

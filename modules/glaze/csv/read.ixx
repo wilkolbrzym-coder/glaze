@@ -1,16 +1,16 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/csv/read.hpp"
-// glz:header std=<array>
 // glz:header std=<charconv>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<limits>
-// glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
-// glz:header std=<vector>
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/csv/skip.hpp"
+// glz:header include="glaze/file/file_ops.hpp"
+// glz:header include="glaze/util/glaze_fast_float.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header project_imports=ignore
 export module glaze.csv.read;
 
 import glaze.csv.skip;
@@ -36,12 +36,10 @@ import glaze.util.type_traits;
 import glaze.util.atoi;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 namespace glz
 {
@@ -117,7 +115,7 @@ namespace glz
          using V = decay_keep_volatile_t<decltype(value)>;
          if constexpr (int_t<V>) {
             if constexpr (std::is_unsigned_v<V>) {
-               uint64_t i{};
+               glz::uint64_t i{};
                if (*it == '-') [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
@@ -287,7 +285,7 @@ namespace glz
 
             auto closing = it;
             --closing;
-            field = std::string_view(content_begin, static_cast<size_t>(closing - content_begin));
+            field = std::string_view(content_begin, static_cast<std::size_t>(closing - content_begin));
 
             if (it != end && *it != csv_delimiter<Opts>() && *it != '\n' && *it != '\r') {
                ctx.error = error_code::syntax_error;
@@ -299,7 +297,7 @@ namespace glz
             while (it != end && *it != csv_delimiter<Opts>() && *it != '\n' && *it != '\r') {
                ++it;
             }
-            field = std::string_view(content_begin, static_cast<size_t>(it - content_begin));
+            field = std::string_view(content_begin, static_cast<std::size_t>(it - content_begin));
          }
 
          if (field.empty()) {
@@ -311,7 +309,7 @@ namespace glz
          bool has_char = false;
 
          if (quoted) {
-            size_t idx = 0;
+            std::size_t idx = 0;
             while (idx < field.size()) {
                const char c = field[idx];
                if (c == '"') {
@@ -405,7 +403,7 @@ namespace glz
                return;
             }
 
-            visit<N>([&]<size_t I>() { value = get<I>(reflect<T>::values); }, index);
+            visit<N>([&]<glz::size_t I>() { value = get<I>(reflect<T>::values); }, index);
          }
       }
    };
@@ -432,7 +430,7 @@ namespace glz
             ++it;
          }
 
-         const auto field_size = static_cast<size_t>(it - start);
+         const auto field_size = static_cast<glz::size_t>(it - start);
 
          if (field_size == 0) {
             // Empty field defaults to false
@@ -459,7 +457,7 @@ namespace glz
 
          // Fall back to numeric parsing (0/1)
          it = start; // Reset iterator for numeric parsing
-         uint64_t temp;
+         glz::uint64_t temp;
          if (not glz::atoi(temp, it, end)) [[unlikely]] {
             ctx.error = error_code::expected_true_or_false;
             return;
@@ -490,13 +488,13 @@ namespace glz
 
    // Utility to quickly count cells in a row for pre-allocation
    template <char delim = ',', class It>
-   inline size_t count_csv_cells(It start, It end) noexcept
+   inline glz::size_t count_csv_cells(It start, It end) noexcept
    {
       if (start == end) {
          return 0;
       }
 
-      size_t count = 1; // At least one cell if non-empty
+      glz::size_t count = 1; // At least one cell if non-empty
       bool in_quotes = false;
 
       while (start != end) {
@@ -563,7 +561,7 @@ namespace glz
 
             // Read the CSV data row by row, but store column by column
             while (it != end) {
-               size_t col_index = 0;
+               glz::size_t col_index = 0;
 
                while (it != end) {
                   // Ensure we have enough columns
@@ -629,7 +627,7 @@ namespace glz
                // Resize if it's a fixed-size container
                if constexpr (requires { row.resize(col.size()); }) {
                   row.resize(col.size());
-                  for (size_t i = 0; i < col.size(); ++i) {
+                  for (glz::size_t i = 0; i < col.size(); ++i) {
                      row[i] = std::move(col[i]);
                   }
                }
@@ -709,7 +707,7 @@ namespace glz
             }
 
             // Parse cells in current row
-            size_t cell_index = 0;
+            glz::size_t cell_index = 0;
             bool row_has_data = false;
 
             while (it != end && *it != '\n' && *it != '\r') {
@@ -820,7 +818,7 @@ namespace glz
          if constexpr (requires { Opts.validate_rectangular; } && Opts.validate_rectangular) {
             if (!value.empty()) {
                const auto expected_cols = value[0].size();
-               for (size_t i = 1; i < value.size(); ++i) {
+               for (glz::size_t i = 1; i < value.size(); ++i) {
                   if (value[i].size() != expected_cols) {
                      ctx.error = error_code::constraint_violated;
                      ctx.custom_error_message = "non-rectangular CSV rows";
@@ -846,12 +844,12 @@ namespace glz
    template <char delim = ','>
    inline auto read_column_wise_keys(auto&& ctx, auto&& it, auto end)
    {
-      std::vector<std::pair<sv, size_t>> keys;
+      std::vector<std::pair<sv, glz::size_t>> keys;
 
       auto read_key = [&](auto&& start, auto&& it) {
-         sv key{start, size_t(it - start)};
+         sv key{start, glz::size_t(it - start)};
 
-         size_t csv_index{};
+         glz::size_t csv_index{};
 
          const auto brace_pos = key.find('[');
          if (brace_pos != sv::npos) {
@@ -911,9 +909,9 @@ namespace glz
             while (it != end) {
                auto start = it;
                goto_delim<csv_delimiter<Opts>()>(it, end);
-               sv key{start, static_cast<size_t>(it - start)};
+               sv key{start, static_cast<glz::size_t>(it - start)};
 
-               size_t csv_index{};
+               glz::size_t csv_index{};
 
                const auto brace_pos = key.find('[');
                if (brace_pos != sv::npos) {
@@ -937,7 +935,7 @@ namespace glz
                auto& member = value[key_type(key)];
                using M = std::decay_t<decltype(member)>;
                if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
-                  size_t col = 0;
+                  glz::size_t col = 0;
                   while (it != end) {
                      if (col < member.size()) [[likely]] {
                         auto& element = member[col];
@@ -1028,10 +1026,10 @@ namespace glz
 
             const auto n_keys = keys.size();
 
-            size_t row = 0;
+            glz::size_t row = 0;
 
             while (it != end) {
-               for (size_t i = 0; i < n_keys; ++i) {
+               for (glz::size_t i = 0; i < n_keys; ++i) {
                   using key_type = typename std::decay_t<decltype(value)>::key_type;
                   auto& member = value[key_type(keys[i].first)];
                   using M = std::decay_t<decltype(member)>;
@@ -1109,7 +1107,7 @@ namespace glz
 
          if constexpr (check_layout(Opts) == colwise) {
             // Read column headers
-            std::vector<size_t> member_indices;
+            std::vector<glz::size_t> member_indices;
 
             if constexpr (check_use_headers(Opts)) {
                auto headers = read_column_wise_keys<csv_delimiter<Opts>()>(ctx, it, end);
@@ -1140,7 +1138,7 @@ namespace glz
             }
             else {
                // Use default order of members
-               for (size_t i = 0; i < N; ++i) {
+               for (glz::size_t i = 0; i < N; ++i) {
                   member_indices.push_back(i);
                }
             }
@@ -1151,11 +1149,11 @@ namespace glz
             while (it != end) {
                U struct_value{};
 
-               for (size_t i = 0; i < n_cols; ++i) {
+               for (glz::size_t i = 0; i < n_cols; ++i) {
                   const auto member_idx = member_indices[i];
 
                   visit<N>(
-                     [&]<size_t I>() {
+                     [&]<glz::size_t I>() {
                         if (I == member_idx) {
                            decltype(auto) member = [&]() -> decltype(auto) {
                               if constexpr (reflectable<U>) {
@@ -1251,7 +1249,7 @@ namespace glz
                   U struct_value{};
 
                   // Parse each field in declaration order
-                  for_each<N>([&]<size_t I>() {
+                  for_each<N>([&]<glz::size_t I>() {
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
@@ -1332,9 +1330,9 @@ namespace glz
             while (it != end) {
                auto start = it;
                goto_delim<csv_delimiter<Opts>()>(it, end);
-               sv key{start, static_cast<size_t>(it - start)};
+               sv key{start, static_cast<glz::size_t>(it - start)};
 
-               size_t csv_index{};
+               glz::size_t csv_index{};
 
                const auto brace_pos = key.find('[');
                if (brace_pos != sv::npos) {
@@ -1361,7 +1359,7 @@ namespace glz
                // accidental matches from non-member inputs (e.g., fuzzed data).
                if (index < N && reflect<T>::keys[index] == key) [[likely]] {
                   visit<N>(
-                     [&]<size_t I>() {
+                     [&]<glz::size_t I>() {
                         decltype(auto) member = [&]() -> decltype(auto) {
                            if constexpr (reflectable<T>) {
                               return get_member(value, get<I>(to_tie(value)));
@@ -1373,7 +1371,7 @@ namespace glz
 
                         using M = std::decay_t<decltype(member)>;
                         if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
-                           size_t col = 0;
+                           glz::size_t col = 0;
                            while (it != end) {
                               if (col < member.size()) [[likely]] {
                                  auto& element = member[col];
@@ -1483,19 +1481,19 @@ namespace glz
 
             const auto n_keys = keys.size();
 
-            size_t row = 0;
+            glz::size_t row = 0;
 
             bool at_end{it == end};
             if (!at_end) {
                while (true) {
-                  for (size_t i = 0; i < n_keys; ++i) {
+                  for (glz::size_t i = 0; i < n_keys; ++i) {
                      const auto key = keys[i].first;
                      const auto index = decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(
                         key.data(), key.data() + key.size(), key.size());
 
                      if (index < N && reflect<T>::keys[index] == key) [[likely]] {
                         visit<N>(
-                           [&]<size_t I>() {
+                           [&]<glz::size_t I>() {
                               decltype(auto) member = [&]() -> decltype(auto) {
                                  if constexpr (reflectable<T>) {
                                     return get_member(value, get<I>(to_tie(value)));
@@ -1568,13 +1566,13 @@ namespace glz
       }
    };
 
-   export template <uint32_t layout = rowwise, read_supported<CSV> T, class Buffer>
+   export template <glz::uint32_t layout = rowwise, read_supported<CSV> T, class Buffer>
    [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer)
    {
       return read<opts_csv{.layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   export template <uint32_t layout = rowwise, read_supported<CSV> T, class Buffer>
+   export template <glz::uint32_t layout = rowwise, read_supported<CSV> T, class Buffer>
    [[nodiscard]] inline auto read_csv(Buffer&& buffer)
    {
       T value{};
@@ -1582,7 +1580,7 @@ namespace glz
       return value;
    }
 
-   export template <uint32_t layout = rowwise, read_supported<CSV> T, is_buffer Buffer>
+   export template <glz::uint32_t layout = rowwise, read_supported<CSV> T, is_buffer Buffer>
    [[nodiscard]] inline error_ctx read_file_csv(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};

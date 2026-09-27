@@ -66,16 +66,9 @@ on:
   push:
     branches:
       - modules
-  pull_request:
-    paths:
-      - 'modules/**'
-      - 'include/**'
-      - 'tests/modules/**'
-      - 'benchmarks/**'
-      - 'cmake/modules-files.cmake'
-      - 'CMakeLists.txt'
-      - 'CMakePresets.json'
-      - '.github/workflows/modules-tests.yml'
+  # No pull_request trigger while the work is being finished on the fork: the
+  # maintainer asked for no pull request runs yet. Re-add it, with the path
+  # filter, when the umbrella PR goes to the upstream repository.
   workflow_dispatch:
     inputs:
       full_matrix:
@@ -366,6 +359,19 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.apple) }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Use the newest Xcode the image ships
+        # The default Xcode on the hosted images is not always the newest, and
+        # older AppleClang rejects constructs the headers use. Pick the highest
+        # installed one explicitly rather than inheriting the image default.
+        run: |
+          set -eux
+          newest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -t_ -k2 -V | tail -1 || true)"
+          if [ -n "$newest" ]; then
+            sudo xcode-select -s "$newest/Contents/Developer"
+          fi
+          xcode-select -p
+          c++ --version
 
       - name: Header-only smoke (Apple's libc++ cannot import std)
         # Apple's libc++ predates std.cppm, so this leg is header-only. On the

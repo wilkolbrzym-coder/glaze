@@ -76,6 +76,9 @@ GLOBAL_STD_USING_RE = re.compile(r"^using\s+std::[A-Za-z_][\w:]*\s*;\s*(?://.*)?
 PREPROCESSOR_OPEN_RE = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef)\b")
 PREPROCESSOR_CLOSE_RE = re.compile(r"^\s*#\s*endif\b")
 RAW_INCLUDE_RE = re.compile(r"^\s*#\s*include\s+(?P<target>[<\"])(?P<inner>[^>\"]*)[>\"]\s*(?://.*)?$")
+# Directives that only express conditional structure around other lines; any
+# other directive (`#define`, `#undef`, `#pragma`, ...) is block content.
+STRUCTURAL_DIRECTIVE_RE = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef|elif|else|endif)\b")
 IDENT_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
 
 
@@ -406,11 +409,14 @@ def include_only_block_indices(lines: list[str], start: int, end: int) -> set[in
         export module ...;
 
     The reference header has no trace of such a guard.  A preprocessor block is
-    dropped when it contains at least one ``#include`` and every non-preprocessor,
-    non-blank line inside it is an ``#include``.  Blocks that also carry macros,
-    ``static_assert``s or other content (the ``GLAZE_API_ON_WINDOWS`` block in
-    api/lib.hpp, the ``__has_include(<Eigen/Core>)`` fallback in eigen.hpp) are
-    kept, because there they are part of the header's own logic.
+    dropped when it contains at least one ``#include`` and every other line
+    inside it is either one of those includes or pure conditional structure
+    (``#if``/``#ifdef``/``#ifndef``/``#elif``/``#else``/``#endif``).  Any other
+    directive counts as content, exactly like a non-preprocessor line: a
+    ``#define`` makes the block part of the header's own logic.  That keeps the
+    ``GLAZE_API_ON_WINDOWS`` block of api/lib.hpp and the
+    ``__has_include(<Eigen/Core>)`` fallback of eigen.hpp, which the reference
+    headers spell out verbatim.
     """
     drop: set[int] = set()
     index = start
@@ -433,8 +439,10 @@ def include_only_block_indices(lines: list[str], start: int, end: int) -> set[in
                 break
         content = [lines[i].strip() for i in block if lines[i].strip()]
         includes = [l for l in content if RAW_INCLUDE_RE.match(l)]
-        non_preproc = [l for l in content if not l.startswith("#")]
-        if includes and not non_preproc:
+        structure_only = all(
+            STRUCTURAL_DIRECTIVE_RE.match(l) or RAW_INCLUDE_RE.match(l) for l in content
+        )
+        if includes and structure_only:
             drop.update(block)
         index = cursor
     return drop

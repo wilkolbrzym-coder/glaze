@@ -1,9 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/beve/wrappers.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
 // glz:header std=<type_traits>
+// glz:header include="glaze/core/custom.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/wrappers.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.beve.wrappers;
 
 import std;
@@ -15,11 +19,10 @@ import glaze.core.common;
 import glaze.core.context;
 import glaze.core.custom;
 import glaze.core.opts;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::uint8_t;
-using std::size_t;
 
 namespace glz
 {
@@ -44,7 +47,7 @@ namespace glz
    };
 
    // max_length wrapper for limiting string/array sizes when reading
-   template <class T, size_t MaxLen>
+   template <class T, glz::size_t MaxLen>
    struct from<BEVE, max_length_t<T, MaxLen>>
    {
      private:
@@ -60,7 +63,7 @@ namespace glz
             else {
                struct extended : std::decay_t<decltype(Opts)>
                {
-                  size_t max_string_length = MaxLen;
+                  glz::size_t max_string_length = MaxLen;
                };
                return extended{Opts};
             }
@@ -74,7 +77,7 @@ namespace glz
             else {
                struct extended : std::decay_t<decltype(Opts)>
                {
-                  size_t max_array_size = MaxLen;
+                  glz::size_t max_array_size = MaxLen;
                };
                return extended{Opts};
             }
@@ -94,7 +97,7 @@ namespace glz
 
       template <auto Opts>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, const uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
+      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, const glz::uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto limited = make_limited_opts<Opts>();
          from<BEVE, T>::template op<limited>(wrapper.val, tag, ctx, it, end);
@@ -102,7 +105,7 @@ namespace glz
    };
 
    // max_length wrapper for writing (just passes through without modification)
-   template <class T, size_t MaxLen>
+   template <class T, glz::size_t MaxLen>
    struct to<BEVE, max_length_t<T, MaxLen>>
    {
       template <auto Opts>

@@ -55,6 +55,7 @@ import glaze.util.type_traits;
 import glaze.util.variant;
 import glaze.util.string_literal;
 import glaze.core.basic_types;
+import glaze.util.bit_array;
 
 #include "glaze/util/inline.hpp"
 

@@ -223,7 +223,7 @@ namespace glz
    // afterwards in case that read never claimed them (an included document whose top level is not
    // the including object, or one that failed before reaching its closing brace).
    template <class Ctx>
-   struct include_key_scope final
+   export struct include_key_scope final
    {
       Ctx& ctx;
 

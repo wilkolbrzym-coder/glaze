@@ -15,6 +15,7 @@ import glaze.core.context;
 import glaze.core.custom;
 import glaze.forward;
 import glaze.core.basic_types;
+import glaze.util.type_traits;
 
 
 namespace glz

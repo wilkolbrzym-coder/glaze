@@ -63,6 +63,9 @@ name: modules-tests
 #   The plan job builds the matrix lists and prints which mode is running.
 
 on:
+  push:
+    branches:
+      - modules
   pull_request:
     paths:
       - 'modules/**'

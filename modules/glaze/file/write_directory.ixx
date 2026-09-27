@@ -2,11 +2,11 @@
 // For the license information refer to glaze.ixx
 
 // glz:header path="glaze/file/write_directory.hpp"
-// glz:header std=<concepts>
 // glz:header std=<filesystem>
-// glz:header std=<string>
-// glz:header std=<type_traits>
-// glz:header std=<unordered_map>
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/file/file_ops.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.file.write_directory;
 
 import glaze.file.file_ops;

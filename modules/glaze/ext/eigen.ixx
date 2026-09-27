@@ -21,6 +21,9 @@ module;
 static_assert(false, "Eigen must be included to use glaze/ext/eigen.hpp");
 #endif
 
+// glz:module-only
+#include "glaze/util/inline.hpp"
+// glz:end-module-only
 // glz:emit std
 
 // glz:emit project

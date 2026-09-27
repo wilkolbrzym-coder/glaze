@@ -201,10 +201,6 @@ export namespace glz
       return t;
    }();
 
-   consteval glz::uint32_t repeat_byte4(const auto repeat) { return glz::uint32_t(0x01010101u) * glz::uint8_t(repeat); }
-
-   consteval glz::uint64_t repeat_byte8(const glz::uint8_t repeat) { return 0x0101010101010101ull * repeat; }
-
 #if defined(__SIZEOF_INT128__)
    consteval __uint128_t repeat_byte16(const glz::uint8_t repeat)
    {
@@ -539,32 +535,6 @@ export namespace glz
       else [[unlikely]] {
          ctx.error = error_code::expected_end_comment;
       }
-   }
-
-   GLZ_ALWAYS_INLINE constexpr auto has_zero(const glz::uint64_t chunk) noexcept
-   {
-      return (((chunk - 0x0101010101010101u) & ~chunk) & 0x8080808080808080u);
-   }
-
-   GLZ_ALWAYS_INLINE constexpr auto has_quote(const glz::uint64_t chunk) noexcept
-   {
-      return has_zero(chunk ^ repeat_byte8('"'));
-   }
-
-   GLZ_ALWAYS_INLINE constexpr auto has_escape(const glz::uint64_t chunk) noexcept
-   {
-      return has_zero(chunk ^ repeat_byte8('\\'));
-   }
-
-   GLZ_ALWAYS_INLINE constexpr auto has_space(const glz::uint64_t chunk) noexcept
-   {
-      return has_zero(chunk ^ repeat_byte8(' '));
-   }
-
-   template <char Char>
-   GLZ_ALWAYS_INLINE constexpr auto has_char(const glz::uint64_t chunk) noexcept
-   {
-      return has_zero(chunk ^ repeat_byte8(Char));
    }
 
    // Advance to the first byte equal to any of Chars, or to end if there is none.

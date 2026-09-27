@@ -949,6 +949,12 @@ export namespace glz
       return o.internal & glz::uint32_t(opts_internal::disable_write_unknown);
    }
 
+   // glz:module-only
+   // Compatibility shim: public disable_padding was removed in this sync but unsynced readers still
+   // query it. Dropped from the generated header.
+   consteval bool check_disable_padding(auto&&) { return false; }
+   // glz:end-module-only
+
    consteval bool check_is_padded(auto&& o) { return o.internal & glz::uint32_t(opts_internal::is_padded); }
 
    consteval bool check_write_unchecked(auto&& o) { return o.internal & glz::uint32_t(opts_internal::write_unchecked); }

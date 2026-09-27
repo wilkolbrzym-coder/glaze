@@ -21,6 +21,7 @@ import glaze.core.common;
 import glaze.core.context;
 import glaze.core.read;
 import glaze.core.opts;
+import glaze.core.buffer_traits;
 import glaze.core.reflect;
 import glaze.reflection.to_tuple;
 import glaze.core.write;

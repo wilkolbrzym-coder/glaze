@@ -13,6 +13,8 @@ export module glaze.util.for_each;
 import std;
 import glaze.core.basic_types;
 
+#include <cassert>
+
 #include "glaze/util/inline.hpp"
 
 // We do not mark these functions noexcept so that it can be used in exception contexts

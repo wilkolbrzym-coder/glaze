@@ -22,9 +22,9 @@ export module glaze.containers.ordered_small_map;
 import std;
 
 import glaze.hash.sweethash;
+import glaze.core.basic_types;
 
 #include "glaze/core/feature_test.hpp"
-import glaze.core.basic_types;
 
 
 #ifndef GLZ_THROW_OR_ABORT

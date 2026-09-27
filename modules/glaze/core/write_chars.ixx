@@ -43,6 +43,7 @@ import std;
 
 import glaze.core.opts;
 import glaze.core.context;
+import glaze.core.buffer_traits;
 
 import glaze.concepts.container_concepts;
 

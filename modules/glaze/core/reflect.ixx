@@ -296,7 +296,7 @@ namespace glz
    export template <class T>
       requires(!glaze_merge_t<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> == 0))
-   export struct reflect<T>
+   struct reflect<T>
    {
       static constexpr auto size = 0;
       static constexpr auto values = tuple{};
@@ -309,7 +309,7 @@ namespace glz
    export template <class T>
       requires(!meta_keys<T> && !glaze_merge_t<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> != 0))
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
       static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();

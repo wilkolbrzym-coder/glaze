@@ -305,7 +305,7 @@ namespace glz
       return 0;
    }
 
-   namespace unicode
+   export namespace unicode
    {
       inline constexpr glz::uint32_t generic_surrogate_mask = 0xF800;
       inline constexpr glz::uint32_t generic_surrogate_value = 0xD800;

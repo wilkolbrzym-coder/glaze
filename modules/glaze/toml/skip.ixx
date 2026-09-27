@@ -7,13 +7,10 @@
 // glz:header include="glaze/toml/common.hpp"
 // glz:header project_imports=ignore
 // glz:header license=none
-// glz:module-only
-// std::array is used in the body below. The generated header gets <array> from the
-// std=<array> metadata entry; the module has to include it for its own compile.
-#include <array>
-// glz:end-module-only
 
 export module glaze.toml.skip;
+
+import std;
 
 import glaze.toml.common;
 

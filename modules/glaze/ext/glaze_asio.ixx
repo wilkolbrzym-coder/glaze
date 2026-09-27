@@ -1,7 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
-
-#pragma once
+// glz:header path="glaze/ext/glaze_asio.hpp"
+// glz:header project_imports=ignore
+module;
 
 #if defined(_WIN32) && !defined(_WIN32_WINNT) && !defined(_WIN32_WINDOWS)
 // ASIO requires a Windows target macro; if missing, it warns and assumes Windows 7.
@@ -46,12 +47,6 @@
 #include <boost/asio/ssl.hpp>
 #endif
 #else
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
-
 static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
 
@@ -65,8 +60,13 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include "glaze/rpc/repe/buffer.hpp"
 #include "glaze/util/buffer_pool.hpp"
 #include "glaze/util/memory_pool.hpp"
+// glz:emit std
+export module glaze.ext.glaze_asio;
 
-namespace glz
+import std;
+import glaze.core.basic_types;
+
+export namespace glz
 {
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio
@@ -181,10 +181,10 @@ namespace glz
    /// @param buffer Output buffer (will be resized to fit message)
    /// @param max_message_size Maximum allowed message size (prevents DoS) - 0 for unlimited
    inline asio::awaitable<void> co_receive_raw(asio::ip::tcp::socket& socket, std::string& buffer,
-                                               size_t max_message_size = 64 * 1024 * 1024)
+                                               glz::size_t max_message_size = 64 * 1024 * 1024)
    {
       // Read just the length field (first 8 bytes of header)
-      uint64_t length{};
+      glz::uint64_t length{};
       co_await asio::async_read(socket, asio::buffer(&length, sizeof(length)), asio::transfer_exactly(sizeof(length)),
                                 asio::use_awaitable);
 
@@ -203,15 +203,15 @@ namespace glz
       std::memcpy(buffer.data(), &length, sizeof(length));
 
       // Read the rest of the message directly into buffer
-      const size_t remaining = length - sizeof(length);
+      const glz::size_t remaining = length - sizeof(length);
       if (remaining > 0) {
          co_await asio::async_read(socket, asio::buffer(buffer.data() + sizeof(length), remaining),
                                    asio::transfer_exactly(remaining), asio::use_awaitable);
       }
 
       // Validate header fields using safe memcpy (avoids strict aliasing issues)
-      uint16_t spec{};
-      uint8_t version{};
+      glz::uint16_t spec{};
+      glz::uint8_t version{};
       std::memcpy(&spec, buffer.data() + offsetof(repe::header, spec), sizeof(spec));
       std::memcpy(&version, buffer.data() + offsetof(repe::header, version), sizeof(version));
 
@@ -242,13 +242,13 @@ namespace glz
       std::string service{""}; // often the port
       std::mutex mtx{};
       std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets{2};
-      std::vector<size_t> available{0, 1}; // indices of available sockets
+      std::vector<glz::size_t> available{0, 1}; // indices of available sockets
 
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false);
 
       // provides a pointer to a socket and an index
-      std::tuple<std::shared_ptr<asio::ip::tcp::socket>, size_t, std::error_code> get()
+      std::tuple<std::shared_ptr<asio::ip::tcp::socket>, glz::size_t, std::error_code> get()
       {
          std::unique_lock lock{mtx};
 
@@ -261,7 +261,7 @@ namespace glz
             const auto current_size = sockets.size();
             const auto new_size = sockets.size() * 2;
             sockets.resize(new_size);
-            for (size_t i = current_size; i < new_size; ++i) {
+            for (glz::size_t i = current_size; i < new_size; ++i) {
                available.emplace_back(i);
             }
          }
@@ -302,7 +302,7 @@ namespace glz
          return {socket, index, ec};
       }
 
-      void free(const size_t index)
+      void free(const glz::size_t index)
       {
          std::unique_lock lock{mtx};
          available.emplace_back(index);
@@ -313,7 +313,7 @@ namespace glz
    {
       socket_pool* pool{};
       std::shared_ptr<asio::ip::tcp::socket> ptr{};
-      size_t index{};
+      glz::size_t index{};
 #if !defined(GLZ_USING_BOOST_ASIO)
       std::error_code ec{};
 #else
@@ -362,7 +362,7 @@ namespace glz
    {
       std::string host{"localhost"}; // host name
       std::string service{""}; // often the port
-      uint32_t concurrency{1}; // how many threads to use
+      glz::uint32_t concurrency{1}; // how many threads to use
 
       struct glaze
       {
@@ -625,12 +625,12 @@ namespace glz
    template <auto Opts = opts{}>
    struct asio_server
    {
-      uint16_t port{}; // 0 will select a random free port
-      uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
+      glz::uint16_t port{}; // 0 will select a random free port
+      glz::uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
 
       /// Maximum message size (default 64MB)
       /// Set to 0 for unlimited (not recommended for untrusted clients)
-      size_t max_message_size = 64 * 1024 * 1024;
+      glz::size_t max_message_size = 64 * 1024 * 1024;
 
       /// Buffer pool for coroutine-safe buffer management
       /// Buffers are borrowed by each connection and automatically returned
@@ -877,8 +877,8 @@ namespace glz
             delete ptr;
          });
 
-         threads->reserve(concurrency - uint32_t(run_on_main_thread));
-         for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
+         threads->reserve(concurrency - glz::uint32_t(run_on_main_thread));
+         for (glz::uint32_t i = glz::uint32_t(run_on_main_thread); i < concurrency; ++i) {
             threads->emplace_back([this]() { ctx->run(); });
          }
 
@@ -935,7 +935,7 @@ namespace glz
          std::shared_ptr<asio::ip::tcp::socket> socket{};
          std::string request{};
          std::string response{};
-         uint64_t message_length{};
+         glz::uint64_t message_length{};
       };
 
       static void finish_windows_session(const std::shared_ptr<windows_session_state>& state)
@@ -998,7 +998,7 @@ namespace glz
 
          asio::async_read(
             *state->socket, asio::buffer(&state->message_length, sizeof(state->message_length)),
-            asio::transfer_exactly(sizeof(state->message_length)), [state](const asio::error_code& ec, size_t) {
+            asio::transfer_exactly(sizeof(state->message_length)), [state](const asio::error_code& ec, glz::size_t) {
                if (handle_windows_session_error(state, ec, "read length")) {
                   return;
                }
@@ -1021,10 +1021,10 @@ namespace glz
                   return;
                }
 
-               state->request.resize(size_t(state->message_length));
+               state->request.resize(glz::size_t(state->message_length));
                std::memcpy(state->request.data(), &state->message_length, sizeof(state->message_length));
 
-               const auto remaining = size_t(state->message_length - sizeof(state->message_length));
+               const auto remaining = glz::size_t(state->message_length - sizeof(state->message_length));
                if (!remaining) {
                   state->self->process_windows_request(state);
                   return;
@@ -1039,10 +1039,10 @@ namespace glz
             return;
          }
 
-         const auto remaining = size_t(state->message_length - sizeof(state->message_length));
+         const auto remaining = glz::size_t(state->message_length - sizeof(state->message_length));
          asio::async_read(*state->socket,
                           asio::buffer(state->request.data() + sizeof(state->message_length), remaining),
-                          asio::transfer_exactly(remaining), [state](const asio::error_code& ec, size_t) {
+                          asio::transfer_exactly(remaining), [state](const asio::error_code& ec, glz::size_t) {
                              if (handle_windows_session_error(state, ec, "read body")) {
                                 return;
                              }
@@ -1059,8 +1059,8 @@ namespace glz
             return;
          }
 
-         uint16_t spec{};
-         uint8_t version{};
+         glz::uint16_t spec{};
+         glz::uint8_t version{};
          std::memcpy(&spec, state->request.data() + offsetof(repe::header, spec), sizeof(spec));
          std::memcpy(&version, state->request.data() + offsetof(repe::header, version), sizeof(version));
 
@@ -1100,7 +1100,7 @@ namespace glz
          }
 
          asio::async_write(*state->socket, asio::buffer(state->response.data(), state->response.size()),
-                           asio::transfer_exactly(state->response.size()), [state](const asio::error_code& ec, size_t) {
+                           asio::transfer_exactly(state->response.size()), [state](const asio::error_code& ec, glz::size_t) {
                               if (handle_windows_session_error(state, ec, "write response")) {
                                  return;
                               }
@@ -1223,4 +1223,3 @@ namespace glz
       }
    };
 }
-

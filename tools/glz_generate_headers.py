@@ -233,21 +233,51 @@ def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None
 
 
 def normalize_std_include(value: str) -> str:
+    return normalize_include(value, angle=True)
+
+
+def split_include_comment(value: str) -> tuple[str, str]:
+    """Split a declared include from an optional trailing `// ...` annotation.
+
+    Some reference headers annotate an include, e.g.::
+
+        #include "glaze/util/itoa.hpp" // For shared char_table and digit_pairs
+
+    The module declares that line as ``include="glaze/util/itoa.hpp // ..."`` so
+    the annotation survives into the generated header.  The annotation is a
+    property of the *header include line*, not free-form header text, so it
+    belongs with the include declaration.
+    """
     value = value.strip()
-    if value.startswith("<") and value.endswith(">"):
-        return value
-    return f"<{value}>"
+    if not value:
+        return value, ""
+    # No include target contains `//`, so the first occurrence starts the
+    # annotation.
+    index = value.find("//")
+    if index == -1:
+        return value, ""
+    return value[:index].strip(), value[index:].strip()
+
+
+def normalize_include(value: str, angle: bool) -> str:
+    target, comment = split_include_comment(value)
+    if not target:
+        target = value.strip()
+    if angle:
+        if not (target.startswith("<") and target.endswith(">")):
+            target = f"<{target}>"
+    else:
+        if not ((target.startswith('"') and target.endswith('"')) or (target.startswith("<") and target.endswith(">"))):
+            target = f'"{target}"'
+    return f"{target} {comment}".rstrip()
+
+
+def normalize_project_include(value: str) -> str:
+    return normalize_include(value, angle=False)
 
 
 def parse_bool(value: str) -> bool:
     return value.strip().lower() not in {"none", "no", "false", "off", "0"}
-
-
-def normalize_project_include(value: str) -> str:
-    value = value.strip()
-    if (value.startswith('"') and value.endswith('"')) or (value.startswith("<") and value.endswith(">")):
-        return value
-    return f'"{value}"'
 
 
 def discover_module_name(lines: list[str]) -> str | None:

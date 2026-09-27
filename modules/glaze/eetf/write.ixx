@@ -1,18 +1,29 @@
-#pragma once
+// glz:header path="glaze/eetf/write.hpp"
+// glz:header include="defs.hpp" group=g_rel0
+// glz:header include="ei.hpp" group=g_rel0
+// glz:header include="opts.hpp" group=g_rel1
+// glz:header project_imports=ignore
+module;
+// glz:module-only
+#include "glaze/concepts/container_concepts.hpp"
+#include "glaze/eetf/defs.hpp"
+#include "glaze/eetf/ei.hpp"
+#include "glaze/eetf/opts.hpp"
+// glz:end-module-only
 
-#include "defs.hpp"
-#include "ei.hpp"
+// glz:emit g_rel0
 #include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/util/variant.hpp"
-#include "opts.hpp"
+// glz:emit g_rel1
+export module glaze.eetf.write;
 
-using std::uint8_t;
-using std::size_t;
+import std;
+import glaze.core.basic_types;
 
-namespace glz
+export namespace glz
 {
 
    template <>
@@ -154,12 +165,12 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            [&]<size_t... I>(std::index_sequence<I...>) {
+            [&]<glz::size_t... I>(std::index_sequence<I...>) {
                (serialize<EETF>::op<Opts>(std::get<I>(value), ctx, args...), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
-            [&]<size_t... I>(std::index_sequence<I...>) {
+            [&]<glz::size_t... I>(std::index_sequence<I...>) {
                (serialize<EETF>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
             }(std::make_index_sequence<N>{});
          }
@@ -179,7 +190,7 @@ namespace glz
 
       template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, glz::size_t& ix) noexcept
       {
          const auto n = value.size();
          encode_list_header(n, ctx, b, ix);
@@ -213,7 +224,7 @@ namespace glz
 
       template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, glz::size_t& ix) noexcept
       {
          const auto n = value.size();
 
@@ -255,7 +266,7 @@ namespace glz
 
       template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, glz::size_t& ix) noexcept
       {
          static constexpr auto N = reflect<T>::size;
 
@@ -279,7 +290,7 @@ namespace glz
             }
          }();
 
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if constexpr (Opts.layout == eetf::proplist_layout) {
                encode_tuple_header(2, ctx, b, ix);
             }
@@ -320,15 +331,15 @@ namespace glz
       // empty for compilation error if use unsupported value type
    };
 
-   template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, output_buffer Buffer>
+   template <glz::uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
                                                                       std::forward<Buffer>(buffer));
    }
 
-   template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, raw_buffer Buffer>
-   [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
+   template <glz::uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, raw_buffer Buffer>
+   [[nodiscard]] expected<glz::size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
                                                                       std::forward<Buffer>(buffer));
@@ -341,4 +352,3 @@ namespace glz
    }
 
 } // namespace glz
-

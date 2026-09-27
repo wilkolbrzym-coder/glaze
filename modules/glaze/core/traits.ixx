@@ -2,6 +2,7 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/traits.hpp"
 // glz:header std=<type_traits>
+// glz:header project_imports=ignore
 export module glaze.core.traits;
 
 import std;

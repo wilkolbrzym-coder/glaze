@@ -3,17 +3,17 @@
 
 // original source (significantly refactored): https://github.com/codeinred/tuplet
 // glz:header path="glaze/tuplet/tuple.hpp"
-// glz:header std=<array>
 // glz:header std=<compare>
 // glz:header std=<concepts>
 // glz:header std=<cstddef>
-// glz:header std=<tuple>
 // glz:header std=<type_traits>
 // glz:header std=<utility>
-// glz:header std=<variant>
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 export module glaze.tuplet;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
@@ -29,7 +29,6 @@ import std;
 #define GLZ_NO_UNIQUE_ADDRESS
 #endif
 
-using std::size_t;
 
 namespace glz
 {
@@ -42,10 +41,10 @@ namespace glz
       export template <class T>
       using type_t = typename T::type;
 
-      export template <size_t I>
-      using tag = std::integral_constant<size_t, I>;
+      export template <glz::size_t I>
+      using tag = std::integral_constant<glz::size_t, I>;
 
-      export template <size_t N>
+      export template <glz::size_t N>
       using tag_range = std::make_index_sequence<N>;
 
       export template <class T, class U>
@@ -105,7 +104,7 @@ namespace glz
          bool operator==(const type_map&) const = default;
       };
 
-      template <size_t I, class T>
+      template <glz::size_t I, class T>
       struct tuple_elem
       {
          // Like declval, but with the element
@@ -143,7 +142,7 @@ namespace glz
       template <class A, class... T>
       struct get_tuple_base;
 
-      template <size_t... I, class... T>
+      template <glz::size_t... I, class... T>
       struct get_tuple_base<std::index_sequence<I...>, T...>
       {
          using type = type_map<tuple_elem<I, T>...>;
@@ -189,11 +188,11 @@ namespace glz
       using tuple_base_t = typename get_tuple_base<tag_range<sizeof...(T)>, T...>::type;
    }
 
-   export template<class... T>
+   export template <class... T>
    struct tuple : tuplet::tuple_base_t<T...>
    {
       static constexpr auto glaze_reflect = false;
-      static constexpr size_t N = sizeof...(T);
+      static constexpr glz::size_t N = sizeof...(T);
       using super = tuplet::tuple_base_t<T...>;
       using super::operator[];
       using base_list = typename super::base_list;
@@ -288,7 +287,7 @@ namespace glz
          // https://developercommunity.visualstudio.com/t/fold-expressions-unreliable-in-171-with-c20/1676476
          (void(B1::value = static_cast<U&&>(u).B2::value), ...);
       }
-      template <class U, size_t... I>
+      template <class U, glz::size_t... I>
       constexpr void eq_impl(U&& u, std::index_sequence<I...>)
       {
          (void(tuplet::tuple_elem<I, T>::value = get<I>(static_cast<U&&>(u))), ...);
@@ -347,10 +346,10 @@ namespace glz
          return (bool(func(static_cast<T&&>(B::value))) && ...);
       }
    };
-   template<>
+   template <>
    struct tuple<> : tuplet::tuple_base_t<>
    {
-      constexpr static size_t N = 0;
+      constexpr static glz::size_t N = 0;
       using super = tuplet::tuple_base_t<>;
       using base_list = tuplet::type_list<>;
 
@@ -433,7 +432,7 @@ namespace glz
    // glz::get implementation
    // glz::tie implementation
    // glz::apply implementation
-   export template <size_t I, tuplet::indexable Tup>
+   export template <glz::size_t I, tuplet::indexable Tup>
    GLZ_ALWAYS_INLINE constexpr decltype(auto) get(Tup&& tup) noexcept
    {
       return static_cast<Tup&&>(tup)[tuplet::tag<I>()];
@@ -513,49 +512,53 @@ namespace glz
    } // namespace tuplet
 } // namespace glz
 
+#include <array>
+#include <tuple>
+#include <variant>
+
 export namespace glz
 {
    template <class... T>
    struct tuple_size;
 
    template <class T>
-   constexpr size_t tuple_size_v = tuple_size<std::remove_const_t<T>>::value;
+   constexpr glz::size_t tuple_size_v = tuple_size<std::remove_const_t<T>>::value;
 
-   template <class T, size_t N>
+   template <class T, glz::size_t N>
    struct tuple_size<std::array<T, N>>
    {
-      static constexpr size_t value = N;
+      static constexpr glz::size_t value = N;
    };
 
    template <class... Types>
    struct tuple_size<std::tuple<Types...>>
    {
-      static constexpr size_t value = sizeof...(Types);
+      static constexpr glz::size_t value = sizeof...(Types);
    };
 
-   template <size_t I, class... T>
+   template <glz::size_t I, class... T>
    struct tuple_element;
 
-   template <size_t I, class Tuple>
+   template <glz::size_t I, class Tuple>
    using tuple_element_t = typename tuple_element<I, Tuple>::type;
 
-   template <size_t I, class... T>
+   template <glz::size_t I, class... T>
    struct tuple_element<I, std::tuple<T...>>
    {
       using type = typename std::tuple_element<I, std::tuple<T...>>::type;
    };
 
-   template <size_t I, typename T1, typename T2>
+   template <std::size_t I, typename T1, typename T2>
    struct tuple_element<I, std::pair<T1, T2>>
    {
       using type = typename std::conditional<I == 0, T1, T2>::type;
    };
 
    template <class... T>
-   struct tuple_size<glz::tuple<T...>> : std::integral_constant<size_t, sizeof...(T)>
+   struct tuple_size<glz::tuple<T...>> : std::integral_constant<glz::size_t, sizeof...(T)>
    {};
 
-   template <size_t I, class... T>
+   template <glz::size_t I, class... T>
    struct tuple_element<I, glz::tuple<T...>>
    {
       using type = decltype(glz::tuple<T...>::decl_elem(glz::tuplet::tag<I>()));

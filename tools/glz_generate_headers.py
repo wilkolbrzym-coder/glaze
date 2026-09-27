@@ -75,6 +75,12 @@ MODULE_NOTE_RE = re.compile(r"^\s*//\s*glz:note\b")
 # core/write_chars.hpp's feature-detection block).  `// glz:emit <what>` puts
 # the named block where the module wants it instead of at its default position.
 EMIT_MARKER_RE = re.compile(r"^\s*//\s*glz:emit\s+(?P<what>std|project|prelude)\s*$")
+# Module-only scaffolding.  A few modules need a helper or a macro fallback for
+# their own compilation while the reference header spells the same thing
+# differently (json/lazy.hpp takes GLZ_NO_UNIQUE_ADDRESS from tuplet/tuple.hpp).
+# Everything between the markers is dropped from the generated header.
+HIDDEN_START_RE = re.compile(r"^\s*//\s*glz:module-only\s*$")
+HIDDEN_END_RE = re.compile(r"^\s*//\s*glz:end-module-only\s*$")
 MODULE_RE = re.compile(r"^\s*(?:export\s+)?module(?:\s+[A-Za-z_][\w.:]*)?\s*;\s*(?://.*)?$")
 IMPORT_RE = re.compile(r"^\s*(?:export\s+)?import\s+(?P<target>[^;]+?)\s*;\s*(?://.*)?$")
 # A global-scope `using std::...;` (module-local convenience, never in a header).
@@ -348,6 +354,34 @@ def dedupe(items: list[str]) -> list[str]:
     return result
 
 
+def hidden_line_indices(lines: list[str]) -> set[int]:
+    """Indices between `// glz:module-only` and `// glz:end-module-only` markers.
+
+    The markers themselves are hidden too.  Unbalanced markers raise so a typo
+    cannot silently swallow the rest of a module.
+    """
+    hidden: set[int] = set()
+    start: int | None = None
+    for index, line in enumerate(lines):
+        if HIDDEN_START_RE.match(line):
+            if start is not None:
+                raise HeaderGenerationError("nested glz:module-only marker")
+            start = index
+            hidden.add(index)
+            continue
+        if HIDDEN_END_RE.match(line):
+            if start is None:
+                raise HeaderGenerationError("glz:end-module-only without glz:module-only")
+            hidden.add(index)
+            start = None
+            continue
+        if start is not None:
+            hidden.add(index)
+    if start is not None:
+        raise HeaderGenerationError("glz:module-only without glz:end-module-only")
+    return hidden
+
+
 def leading_preamble(lines: list[str], start: int) -> tuple[list[str], set[int]]:
     """Return the header preamble that sits between ``#pragma once`` and the includes.
 
@@ -375,6 +409,7 @@ def leading_preamble(lines: list[str], start: int) -> tuple[list[str], set[int]]
     Returns ``(preamble_lines, skipped_indices)``; both empty when the body opens
     directly with an import, an include or code.
     """
+    hidden = hidden_line_indices(lines)
     index = start
     end = start
     preamble: list[str] = []
@@ -393,8 +428,9 @@ def leading_preamble(lines: list[str], start: int) -> tuple[list[str], set[int]]
             or stripped.startswith("*")
             or PREPROCESSOR_OPEN_RE.match(line)
         ):
-            if MODULE_NOTE_RE.match(line):
-                # `// glz:note ...` documents the module only; it never reaches
+            if MODULE_NOTE_RE.match(line) or end in hidden:
+                # `// glz:note ...` documents the module only, and a
+                # glz:module-only block is module scaffolding; neither reaches
                 # the header, not even from inside the preamble.
                 skipped.add(end)
             else:
@@ -494,6 +530,8 @@ def transform_source(
         first_decl_index,
     )
 
+    hidden_indices = hidden_line_indices(lines)
+
     # The header preamble (blank line, doc comment and/or feature-test guard)
     # belongs *before* the include block in the reference header; lift it out of
     # the body verbatim (see helper).
@@ -531,7 +569,7 @@ def transform_source(
     for index, line in enumerate(lines):
         if index < first_decl_index:
             continue
-        if index in preamble_indices or index in block_drop:
+        if index in preamble_indices or index in block_drop or index in hidden_indices:
             continue
         if HEADER_META_RE.match(line) or MODULE_NOTE_RE.match(line):
             continue

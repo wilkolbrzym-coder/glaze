@@ -1,14 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/write.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<deque>
 // glz:header std=<fstream>
-// glz:header std=<ios>
-// glz:header std=<string>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
-// glz:header std=<vector>
+// glz:header include="glaze/core/buffer_traits.hpp"
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.write;
 
 import std;
@@ -21,8 +18,8 @@ import glaze.concepts.container_concepts;
 
 import glaze.util.expected;
 import glaze.util.string_literal;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
@@ -39,7 +36,7 @@ namespace glz
             buffer.resize(2 * write_padding_bytes);
          }
       }
-      size_t ix = 0; // overwrite index
+      glz::size_t ix = 0; // overwrite index
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
@@ -63,7 +60,7 @@ namespace glz
          }
       }
       context ctx{};
-      size_t ix = 0;
+      glz::size_t ix = 0;
       serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
@@ -79,7 +76,7 @@ namespace glz
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       context ctx{};
-      size_t ix = 0;
+      glz::size_t ix = 0;
       serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return {ix, ctx.error, ctx.custom_error_message};
@@ -112,7 +109,7 @@ namespace glz
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
-      size_t ix = 0;
+      glz::size_t ix = 0;
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return {ix, ctx.error, ctx.custom_error_message};

@@ -1348,7 +1348,7 @@ namespace glz::simple_float
    // Returns: {pointer past last parsed char, error code}
    // Uses strict JSON-compliant parsing (RFC 8259)
    export template <bool null_terminated, class T>
-   export GLZ_ALWAYS_INLINE constexpr std::from_chars_result from_chars(const char* first, const char* last, T& value) noexcept
+   GLZ_ALWAYS_INLINE constexpr std::from_chars_result from_chars(const char* first, const char* last, T& value) noexcept
    {
       static_assert(std::is_floating_point_v<T>, "T must be a floating-point type");
 

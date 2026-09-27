@@ -32,7 +32,7 @@ namespace glz
    // reports being full only through try_emplace_back. Its resize(), reserve() and emplace_back()
    // throw std::bad_alloc past capacity, and abort outright when exceptions are disabled.
    export template <class T>
-   export concept fixed_capacity_container = has_try_emplace_back<std::remove_cvref_t<T>> && requires(T& t) {
+   concept fixed_capacity_container = has_try_emplace_back<std::remove_cvref_t<T>> && requires(T& t) {
       { t.max_size() } -> std::convertible_to<glz::size_t>;
    };
 
@@ -51,7 +51,7 @@ namespace glz
    }
 
    export template <auto Opts>
-   export auto read_iterators(contiguous auto&& buffer) noexcept
+   auto read_iterators(contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
@@ -76,7 +76,7 @@ namespace glz
    // Every entry point that builds iterators over a caller's buffer has to go through this. Reached
    // by two paths before, they disagreed, and the one that skipped it read out of bounds.
    export template <auto Opts, class Buf>
-   export consteval auto parse_opts_for()
+   consteval auto parse_opts_for()
    {
       auto o = is_padded_off<Opts>();
       using B = std::remove_cvref_t<Buf>;
@@ -141,7 +141,7 @@ namespace glz
    //   - running after the parse, because readers that take the buffer verbatim (glz::text,
    //     glz::raw_json) must see every byte; they complete without error and never reach this.
    export template <auto Opts>
-   export GLZ_ALWAYS_INLINE void finalize_top_level_read(is_context auto&& ctx, const char* start, const char* it,
+   GLZ_ALWAYS_INLINE void finalize_top_level_read(is_context auto&& ctx, const char* start, const char* it,
                                                   const char* end) noexcept
    {
       if constexpr (Opts.format == JSON && !check_null_terminated(Opts)) {
@@ -250,10 +250,10 @@ namespace glz
    }
 
    export template <class T>
-   export concept c_style_char_buffer = std::convertible_to<std::remove_cvref_t<T>, std::string_view> && !has_data<T>;
+   concept c_style_char_buffer = std::convertible_to<std::remove_cvref_t<T>, std::string_view> && !has_data<T>;
 
    export template <class T>
-   export concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
+   concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
 
    // for char array input
    export template <auto Opts, class T, c_style_char_buffer Buffer>

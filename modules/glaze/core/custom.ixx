@@ -30,7 +30,7 @@ namespace glz::detail
    // take a tag the caller has already consumed (MSGPACK, BSON) can bind it here. What remains
    // is purely the shape of the user's handler, which is the same for every format.
    export template <class T, class ParseInto, class Discard>
-   export void dispatch_custom_read(auto&& value, is_context auto&& ctx, ParseInto&& parse_into, Discard&& discard)
+   void dispatch_custom_read(auto&& value, is_context auto&& ctx, ParseInto&& parse_into, Discard&& discard)
    {
       using V = std::decay_t<decltype(value)>;
       using From = typename V::from_t;
@@ -162,7 +162,7 @@ namespace glz::detail
    // to<Format, custom_t> for its own reasons (see eetf/wrappers.hpp) can reuse the getter dispatch
    // instead of restating it.
    export template <glz::uint32_t Format, auto Opts, class T>
-   export void dispatch_custom_write(auto&& value, is_context auto&& ctx, auto&&... args)
+   void dispatch_custom_write(auto&& value, is_context auto&& ctx, auto&&... args)
    {
       using V = std::decay_t<decltype(value)>;
       using To = typename V::to_t;

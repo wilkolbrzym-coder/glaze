@@ -59,7 +59,7 @@ namespace glz
    // quote can step past `end` before the next test. An unsigned difference wraps there and reads
    // the whole address space as "room left".
    export template <glz::size_t Width>
-   export GLZ_ALWAYS_INLINE constexpr std::ptrdiff_t chunk_min(const bool padded) noexcept
+   GLZ_ALWAYS_INLINE constexpr std::ptrdiff_t chunk_min(const bool padded) noexcept
    {
       static_assert(Width <= padding_bytes);
       return padded ? 1 : std::ptrdiff_t(Width);
@@ -261,7 +261,7 @@ namespace glz
    }
 
    export template <class Char>
-   export [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t code_point_to_utf8(const glz::uint32_t code_point, Char* c) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t code_point_to_utf8(const glz::uint32_t code_point, Char* c) noexcept
    {
       if (code_point <= 0x7F) {
          c[0] = Char(code_point);
@@ -341,7 +341,7 @@ namespace glz
    // that are there decide -- a clean prefix is a truncation, anything already contradicting the
    // escape is malformed.
    export template <bool ExpectOpener>
-   export [[nodiscard]] GLZ_ALWAYS_INLINE bool escape_prefix_intact(const auto* it, const auto* end) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool escape_prefix_intact(const auto* it, const auto* end) noexcept
    {
       auto n = glz::size_t(end - it);
       if constexpr (ExpectOpener) {
@@ -358,7 +358,7 @@ namespace glz
    }
 
    export template <class SrcChar, class DstChar = SrcChar>
-   export [[nodiscard]] GLZ_ALWAYS_INLINE unicode_result handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
+   [[nodiscard]] GLZ_ALWAYS_INLINE unicode_result handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
                                                                             const SrcChar* end) noexcept
    {
       using namespace unicode;
@@ -414,7 +414,7 @@ namespace glz
    }
 
    export template <class Char>
-   export [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end) noexcept
    {
       using namespace unicode;
       if (it + 4 >= end) [[unlikely]] {
@@ -482,7 +482,7 @@ namespace glz
 
    // Checks for a character and validates that we are not at the end (considered an error)
    export template <char C, match_invalid_end_opts Opts>
-   export GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (*it != C) [[unlikely]] {
          if constexpr (C == '"') {
@@ -518,7 +518,7 @@ namespace glz
    }
 
    export template <char C>
-   export GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
+   GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
    {
       if (*it != C) [[unlikely]] {
          if constexpr (C == '"') {
@@ -551,7 +551,7 @@ namespace glz
    // against a value already in a register, next to a literal compare that has to happen anyway --
    // far too little to be worth a second instantiation of every reader that matches a keyword.
    export template <string_literal str, auto Opts>
-   export GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr auto S = str.sv();
       if ((end - it < std::ptrdiff_t(str.size())) || not comparitor<S>(it)) [[unlikely]] {
@@ -675,7 +675,7 @@ namespace glz
 
    // skip whitespace
    export template <ws_opts Opts>
-   export GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 
@@ -884,7 +884,7 @@ namespace glz
    // needless validation pass, it never skips one. Callers with no accumulator take the default
    // and always validate.
    export template <auto Opts>
-   export GLZ_ALWAYS_INLINE bool validate_utf8_span(is_context auto&& ctx, const auto* start, const auto* fin,
+   GLZ_ALWAYS_INLINE bool validate_utf8_span(is_context auto&& ctx, const auto* start, const auto* fin,
                                              const glz::uint64_t ascii_acc = repeat_byte8(0b10000000)) noexcept
    {
       if constexpr (not check_validate_utf8(Opts)) {
@@ -1024,7 +1024,7 @@ namespace glz
    // clear chunk or to just past a character it has finished with, never into the middle of an
    // escape.
    export template <skip_string_opts Opts>
-   export GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (not Opts.opening_handled) {
          ++it;
@@ -1255,7 +1255,7 @@ namespace glz
    // encoding. Rewinding to the open quote costs one redundant window at most and keeps that
    // validation exactly where it was.
    export template <skip_until_closed_opts Opts, char Open, char Close>
-   export GLZ_ALWAYS_INLINE bool skip_windows(auto&& it, auto end, glz::size_t& depth) noexcept
+   GLZ_ALWAYS_INLINE bool skip_windows(auto&& it, auto end, glz::size_t& depth) noexcept
    {
       glz::uint64_t escape_carry{};
       glz::uint64_t in_string_carry{}; // all ones while the next window opens inside a string
@@ -1645,7 +1645,7 @@ namespace glz
    };
 
    export template <skip_number_opts Opts>
-   export GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (not Opts.validate) {
          if constexpr (Opts.null_terminated) {
@@ -1683,7 +1683,7 @@ namespace glz
    }
 
    export template <glz::size_t multiple>
-   export GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const std::integral auto val) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const std::integral auto val) noexcept
    {
       return val + (multiple - (val % multiple)) % multiple;
    }

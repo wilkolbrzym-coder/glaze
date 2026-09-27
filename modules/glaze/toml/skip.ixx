@@ -172,7 +172,7 @@ namespace glz::toml
       // recursing on the opposite bracket type, so that adversarial input such as `[{[{...` is
       // bounded by max_recursive_depth_limit instead of overflowing the call stack.
       std::array<char, max_recursive_depth_limit> closers{};
-      size_t depth = 0;
+      glz::size_t depth = 0;
       closers[depth++] = Close;
       ++it;
 

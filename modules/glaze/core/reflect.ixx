@@ -1526,11 +1526,9 @@ namespace glz
    }
 }
 
-#include <initializer_list>
+// glz:emit init_list
 
-#include "glaze/core/common.hpp"
-#include "glaze/reflection/get_name.hpp"
-#include "glaze/reflection/to_tuple.hpp"
+// glz:emit mid
 
 namespace glz
 {

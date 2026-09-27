@@ -2,9 +2,9 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/file/read_directory.hpp"
 // glz:header std=<filesystem>
-// glz:header std=<functional>
-// glz:header std=<string>
-// glz:header std=<unordered_map>
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/file/file_ops.hpp"
+// glz:header project_imports=ignore
 export module glaze.file.read_directory;
 
 import glaze.file.file_ops;

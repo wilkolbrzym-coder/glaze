@@ -1,15 +1,22 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/net/url.hpp"
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<unordered_map>
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit std
 
-#include <string>
-#include <string_view>
-#include <unordered_map>
+export module glaze.net.url;
 
-using std::size_t;
+import std;
 
-namespace glz
+import glaze.core.basic_types;
+
+
+export namespace glz
 {
    // URL encoding/decoding utilities
    // Implements percent-encoding per RFC 3986 and application/x-www-form-urlencoded parsing per WHATWG URL Standard
@@ -42,7 +49,7 @@ namespace glz
       output.clear();
       output.reserve(input.size());
 
-      for (size_t i = 0; i < input.size(); ++i) {
+      for (glz::size_t i = 0; i < input.size(); ++i) {
          if (input[i] == '%' && i + 2 < input.size()) {
             const int high = hex_char_to_int(input[i + 1]);
             const int low = hex_char_to_int(input[i + 2]);
@@ -147,10 +154,10 @@ namespace glz
          return;
       }
 
-      size_t pos = 0;
+      glz::size_t pos = 0;
       while (pos < query_string.size()) {
          // Find the end of this key=value pair
-         size_t amp_pos = query_string.find('&', pos);
+         glz::size_t amp_pos = query_string.find('&', pos);
          if (amp_pos == std::string_view::npos) {
             amp_pos = query_string.size();
          }
@@ -158,7 +165,7 @@ namespace glz
          std::string_view pair = query_string.substr(pos, amp_pos - pos);
          if (!pair.empty()) {
             // Find the '=' separator
-            size_t eq_pos = pair.find('=');
+            glz::size_t eq_pos = pair.find('=');
             if (eq_pos != std::string_view::npos) {
                std::string_view key = pair.substr(0, eq_pos);
                std::string_view value = pair.substr(eq_pos + 1);
@@ -238,7 +245,7 @@ namespace glz
     */
    constexpr target_components split_target(std::string_view target) noexcept
    {
-      const size_t query_pos = target.find('?');
+      const glz::size_t query_pos = target.find('?');
       if (query_pos == std::string_view::npos) {
          return {target, {}};
       }

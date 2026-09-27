@@ -363,7 +363,7 @@ namespace glz
    // `operator const char*` satisfies. Converting through that operator stops at the first embedded
    // null and discards the type's own size(), so prefer the type's bounds whenever it reports them.
    // Standard string types agree either way. Null pointers become empty rather than dereferencing.
-   template <class T>
+   export template <class T>
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::string_view str_view(auto&& value) noexcept
    {
       if constexpr (std::same_as<std::decay_t<T>, std::string_view>) {

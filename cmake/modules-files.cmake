@@ -1,8 +1,7 @@
-## TODO: sort
 
 
 # Top-level
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -14,6 +13,7 @@ target_sources(glaze_glaze
       modules/glaze/beve.ixx
       modules/glaze/csv.ixx
       modules/glaze/chrono.ixx
+      modules/glaze/forward.ixx
       modules/glaze/version.ixx
       modules/glaze/glaze_exceptions.ixx
       modules/glaze/msgpack.ixx
@@ -21,12 +21,13 @@ target_sources(glaze_glaze
 )
 
 # core
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
       modules/glaze/core/array_apply.ixx
       modules/glaze/core/as_array_wrapper.ixx
+      modules/glaze/core/basic_types.ixx
       modules/glaze/core/buffer_traits.ixx
       modules/glaze/core/cast.ixx
       modules/glaze/core/chrono.ixx
@@ -36,6 +37,7 @@ target_sources(glaze_glaze
       modules/glaze/core/convert_struct.ixx
       modules/glaze/core/custom.ixx
       modules/glaze/core/custom_meta.ixx
+      modules/glaze/core/error_category.ixx
       modules/glaze/core/format_str.ixx
       modules/glaze/core/istream_buffer.ixx
       modules/glaze/core/manage.ixx
@@ -53,13 +55,14 @@ target_sources(glaze_glaze
       modules/glaze/core/to.ixx
       modules/glaze/core/traits.ixx
       modules/glaze/core/wrapper_traits.ixx
+      modules/glaze/core/wrappers.ixx
       modules/glaze/core/write.ixx
       modules/glaze/core/write_chars.ixx
       modules/glaze/core/write_wrappers.ixx
 )
 
 # json
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -92,7 +95,7 @@ target_sources(glaze_glaze
 )
 
 # utils
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -128,7 +131,7 @@ target_sources(glaze_glaze
 )
 
 # concepts
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -136,7 +139,7 @@ target_sources(glaze_glaze
 )
 
 # api
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -151,7 +154,7 @@ target_sources(glaze_glaze
 )
 
 # api/std
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -174,7 +177,7 @@ target_sources(glaze_glaze
 )
 
 # tuplet
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -182,7 +185,7 @@ target_sources(glaze_glaze
 )
 
 # thread
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -190,15 +193,12 @@ target_sources(glaze_glaze
     modules/glaze/thread/async.ixx
     modules/glaze/thread/async_string.ixx
     modules/glaze/thread/async_vector.ixx
-    modules/glaze/thread/shared_async_map.ixx
-    modules/glaze/thread/shared_async_vector.ixx
     modules/glaze/thread/threadpool.ixx
-    modules/glaze/thread/value_proxy.ixx
     modules/glaze/thread/guard.ixx
 )
 
 # simd
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -208,7 +208,7 @@ target_sources(glaze_glaze
 )
 
 # reflection
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -218,7 +218,7 @@ target_sources(glaze_glaze
 )
 
 # base64
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -226,7 +226,7 @@ target_sources(glaze_glaze
 )
 
 # beve
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -244,19 +244,18 @@ target_sources(glaze_glaze
 )
 
 # file
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/file/file_ops.ixx
-    modules/glaze/file/hostname_include.ixx
     modules/glaze/file/raw_or_file.ixx
     modules/glaze/file/read_directory.ixx
     modules/glaze/file/write_directory.ixx
 )
 
 # cbor
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -269,7 +268,7 @@ target_sources(glaze_glaze
 )
 
 # bson
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -281,7 +280,7 @@ target_sources(glaze_glaze
 )
 
 # jsonb
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -294,7 +293,7 @@ target_sources(glaze_glaze
 )
 
 # containers
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -305,7 +304,7 @@ target_sources(glaze_glaze
 )
 
 # hardware
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -313,7 +312,7 @@ target_sources(glaze_glaze
 )
 
 # record
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -321,7 +320,7 @@ target_sources(glaze_glaze
 )
 
 # trace
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -329,7 +328,7 @@ target_sources(glaze_glaze
 )
 
 # csv
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -339,7 +338,7 @@ target_sources(glaze_glaze
 )
 
 # exceptions
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -354,7 +353,7 @@ target_sources(glaze_glaze
 )
 
 # msgpack
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -365,7 +364,7 @@ target_sources(glaze_glaze
 )
 
 # ext (external)
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -375,7 +374,7 @@ target_sources(glaze_glaze
 )
 
 # compare
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -384,7 +383,7 @@ target_sources(glaze_glaze
 )
 
 # stencil
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -393,7 +392,7 @@ target_sources(glaze_glaze
 )
 
 # format
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -401,7 +400,7 @@ target_sources(glaze_glaze
 )
 
 # toml
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
@@ -413,7 +412,7 @@ target_sources(glaze_glaze
 )
 
 # hash
-target_sources(glaze_glaze
+target_sources(${GLAZE_MODULES_TARGET}
   PUBLIC
     FILE_SET CXX_MODULES
     FILES

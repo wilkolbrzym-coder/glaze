@@ -1,9 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/exceptions/json_exceptions.hpp"
-// glz:header std=<stdexcept>
-// glz:header std=<string>
-// glz:header std=<utility>
+// glz:header include="glaze/exceptions/core_exceptions.hpp"
+// glz:header include="glaze/exceptions/json_schema_exceptions.hpp"
+// glz:header include="glaze/glaze.hpp"
+// glz:header project_imports=ignore
 export module glaze.exceptions.json_exceptions;
 
 #if __cpp_exceptions

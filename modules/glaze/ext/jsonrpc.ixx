@@ -1,20 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/ext/jsonrpc.hpp"
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<iterator>
-// glz:header std=<limits>
-// glz:header std=<optional>
-// glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
+// glz:header std=<glaze/glaze.hpp>
+// glz:header std=<glaze/tuplet/tuple.hpp>
+// glz:header std=<glaze/util/expected.hpp>
 // glz:header std=<unordered_map>
 // glz:header std=<utility>
-// glz:header std=<variant>
-// glz:header std=<vector>
+// glz:header project_imports=ignore
 export module glaze.ext.jsonrpc;
 
 import glaze;
@@ -26,9 +18,8 @@ import glaze.util.type_traits;
 import glaze.concepts.container_concepts;
 
 import std;
+import glaze.core.basic_types;
 
-using std::int64_t;
-using std::size_t;
 
 export namespace glz::rpc
 {
@@ -69,7 +60,7 @@ export namespace glz::rpc
 // jsonrpc
 export namespace glz::rpc
 {
-   using id_t = std::variant<glz::generic::null_t, std::string_view, int64_t>;
+   using id_t = std::variant<glz::generic::null_t, std::string_view, std::int64_t>;
    inline constexpr std::string_view supported_version{"2.0"};
 
    struct error final
@@ -238,11 +229,11 @@ export namespace glz::rpc
                      method.callback = [=](const params_t& params) -> expected_t { return callback(params); };
                   }
                   else {
-                     static_assert(glz::false_v<result_t>, "Method return cannot construct expected<result_t, rpc::error>");
+                     static_assert(false_v<result_t>, "Method return cannot construct expected<result_t, rpc::error>");
                   }
                }
                else {
-                  static_assert(glz::false_v<M>, "Method supplied is not invocable with registered types");
+                  static_assert(false_v<M>, "Method supplied is not invocable with registered types");
                }
                return true;
             }
@@ -259,19 +250,19 @@ export namespace glz::rpc
       template <class T, T value, class... Ts>
       struct index_of_name<T, value, T, Ts...>
       {
-         static constexpr size_t index = 0;
+         static constexpr std::size_t index = 0;
       };
 
       template <class T, T value, class U, class... Ts>
       struct index_of_name<T, value, U, Ts...>
       {
-         static constexpr size_t index = (value == U::name_v) ? 0 : 1 + index_of_name<T, value, Ts...>::index;
+         static constexpr std::size_t index = (value == U::name_v) ? 0 : 1 + index_of_name<T, value, Ts...>::index;
       };
 
       template <class T, T value>
       struct index_of_name<T, value>
       {
-         static constexpr size_t index = (std::numeric_limits<size_t>::max)();
+         static constexpr std::size_t index = (std::numeric_limits<glz::size_t>::max)();
       };
 
       template <class Map, string_literal Name, class... Method>

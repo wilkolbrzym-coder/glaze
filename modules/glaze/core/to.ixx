@@ -1,8 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/to.hpp"
-// glz:header std=<cstdint>
-// glz:header std=<utility>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.to;
 
 import std;
@@ -12,14 +13,14 @@ import glaze.core.context;
 import glaze.core.opts;
 import glaze.concepts.container_concepts;
 import glaze.util.type_traits;
+import glaze.core.basic_types;
 
 // Common behavior for `to` specializations, typically applies for all formats
 
-using std::uint32_t;
 
 namespace glz
 {
-   template <uint32_t Format>
+   template <glz::uint32_t Format>
    struct to<Format, hidden>
    {
       template <auto Opts>
@@ -29,7 +30,7 @@ namespace glz
       }
    };
 
-   template <uint32_t Format>
+   template <glz::uint32_t Format>
    struct to<Format, skip>
    {
       template <auto Opts>
@@ -39,7 +40,7 @@ namespace glz
       }
    };
 
-   template <uint32_t Format, filesystem_path T>
+   template <glz::uint32_t Format, filesystem_path T>
    struct to<Format, T>
    {
       template <auto Opts, class... Args>

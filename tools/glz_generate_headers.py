@@ -65,6 +65,10 @@ BUILTIN_TYPE_ALIASES = frozenset(
 )
 
 HEADER_META_RE = re.compile(r"^\s*//\s*glz:header(?:\s+(?P<body>.*))?$")
+# A module-only note.  These comments document the *module* (why a declaration
+# is exported here rather than there, and so on); they are not part of the
+# reference header, so the generator drops them exactly like glz:header lines.
+MODULE_NOTE_RE = re.compile(r"^\s*//\s*glz:note\b")
 MODULE_RE = re.compile(r"^\s*(?:export\s+)?module(?:\s+[A-Za-z_][\w.:]*)?\s*;\s*(?://.*)?$")
 IMPORT_RE = re.compile(r"^\s*(?:export\s+)?import\s+(?P<target>[^;]+?)\s*;\s*(?://.*)?$")
 # A global-scope `using std::...;` (module-local convenience, never in a header).
@@ -359,24 +363,34 @@ def leading_preamble(lines: list[str], start: int) -> tuple[list[str], set[int]]
     """
     index = start
     end = start
+    preamble: list[str] = []
+    skipped: set[int] = set()
     while end < len(lines):
-        stripped = lines[end].strip()
-        if IMPORT_RE.match(lines[end]) or RAW_INCLUDE_RE.match(lines[end]) or MODULE_RE.match(lines[end]):
+        line = lines[end]
+        stripped = line.strip()
+        if IMPORT_RE.match(line) or RAW_INCLUDE_RE.match(line) or MODULE_RE.match(line):
             break
-        if PREPROCESSOR_CLOSE_RE.match(lines[end]):
+        if PREPROCESSOR_CLOSE_RE.match(line):
             break
         if (
             stripped == ""
             or stripped.startswith("//")
             or stripped.startswith("/*")
             or stripped.startswith("*")
-            or PREPROCESSOR_OPEN_RE.match(lines[end])
+            or PREPROCESSOR_OPEN_RE.match(line)
         ):
+            if MODULE_NOTE_RE.match(line):
+                # `// glz:note ...` documents the module only; it never reaches
+                # the header, not even from inside the preamble.
+                skipped.add(end)
+            else:
+                preamble.append(line)
+                skipped.add(end)
             end += 1
             continue
         break
 
-    return lines[index:end], set(range(index, end))
+    return preamble, skipped
 
 
 def include_only_block_indices(lines: list[str], start: int, end: int) -> set[int]:
@@ -447,7 +461,7 @@ def transform_source(
     prefix = [
         line.replace("glaze.ixx", "glaze.hpp")
         for line in trim_blank_edges(lines[:first_decl_index])
-        if not HEADER_META_RE.match(line)
+        if not HEADER_META_RE.match(line) and not MODULE_NOTE_RE.match(line)
     ]
     if not metadata.license:
         # The upstream header carries no licence preamble; the module keeps it
@@ -490,7 +504,7 @@ def transform_source(
             continue
         if index in preamble_indices or index in block_drop:
             continue
-        if HEADER_META_RE.match(line):
+        if HEADER_META_RE.match(line) or MODULE_NOTE_RE.match(line):
             continue
         if re.match(r"^\s*module\s*;\s*(?://.*)?$", line):
             in_global_fragment = True

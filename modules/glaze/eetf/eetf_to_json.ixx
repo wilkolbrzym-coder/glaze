@@ -1,7 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
-
-#pragma once
+// glz:header path="glaze/eetf/eetf_to_json.hpp"
+// glz:header project_imports=ignore
+module;
 
 #include <cstdint>
 #include <cstring>
@@ -9,24 +10,29 @@
 #include "glaze/eetf/ei.hpp"
 #include "glaze/eetf/opts.hpp"
 #include "glaze/json/write.hpp"
+// glz:emit std
+export module glaze.eetf.eetf_to_json;
 
-namespace glz
+import std;
+import glaze.core.basic_types;
+
+export namespace glz
 {
    namespace detail
    {
       template <class It0, class It1>
-      GLZ_ALWAYS_INLINE size_t get8s(auto&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE glz::size_t get8s(auto&& ctx, It0&& it, It1&& end) noexcept
       {
          if (check_invalid_offset(ctx, it, end, 1)) return 0;
-         return std::size_t(static_cast<uint8_t>(*it++));
+         return std::size_t(static_cast<glz::uint8_t>(*it++));
       }
 
       template <class It0, class It1>
-      GLZ_ALWAYS_INLINE size_t get16be(auto&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE glz::size_t get16be(auto&& ctx, It0&& it, It1&& end) noexcept
       {
          if (check_invalid_offset(ctx, it, end, 2)) return 0;
-         const std::size_t b1 = std::size_t(static_cast<uint8_t>(*it++)) << 8;
-         return b1 | static_cast<uint8_t>(*it++);
+         const std::size_t b1 = std::size_t(static_cast<glz::uint8_t>(*it++)) << 8;
+         return b1 | static_cast<glz::uint8_t>(*it++);
       }
 
       template <auto Opts, typename I>
@@ -63,7 +69,7 @@ namespace glz
       }
 
       template <auto Opts, class Buffer>
-      void term_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, uint32_t recursive_depth)
+      void term_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix, glz::uint32_t recursive_depth)
       {
          // Check recursion depth limit
          if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
@@ -75,7 +81,7 @@ namespace glz
             return;
          }
 
-         auto write_sequence = [](size_t arity, size_t index, auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
+         auto write_sequence = [](glz::size_t arity, glz::size_t index, auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
                                   auto recursive_depth) {
             std::advance(it, index);
             if (invalid_end(ctx, it, end)) [[unlikely]] {
@@ -100,7 +106,7 @@ namespace glz
             dump(']', out, ix);
          };
 
-         const auto type = uint8_t(*it);
+         const auto type = glz::uint8_t(*it);
          switch (type) {
          case ERL_SMALL_INTEGER_EXT:
          case ERL_INTEGER_EXT: {
@@ -132,7 +138,7 @@ namespace glz
          case ERL_ATOM_EXT:
          case ERL_ATOM_UTF8_EXT: {
             ++it; // skip type
-            const size_t len = get16be(ctx, it, end);
+            const glz::size_t len = get16be(ctx, it, end);
             if (bool(ctx.error)) return;
             if (check_invalid_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
@@ -144,7 +150,7 @@ namespace glz
          case ERL_SMALL_ATOM_EXT:
          case ERL_SMALL_ATOM_UTF8_EXT: {
             ++it; // skip type
-            const size_t len = get8s(ctx, it, end);
+            const glz::size_t len = get8s(ctx, it, end);
             if (bool(ctx.error)) return;
             if (check_invalid_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
@@ -180,7 +186,7 @@ namespace glz
             // A proper list terminates with ERL_NIL_EXT, a single tag byte. Read that tag directly
             // rather than through get_type/ei_get_type, which reads a 2-4 byte length header off the
             // raw pointer (past end when the tail tag is the final byte) for any other term type.
-            if (uint8_t(*it) != ERL_NIL_EXT) {
+            if (glz::uint8_t(*it) != ERL_NIL_EXT) {
                ctx.error = error_code::array_element_not_found;
                return;
             }
@@ -233,7 +239,7 @@ namespace glz
                // is_string/is_atom accept the raw, un-normalized tag, and term_to_json_value re-reads
                // and bounds-checks the full key below. Widen to int so the tag clears the int_t
                // constraint on is_string/is_atom (uint8_t is a char type and would be rejected).
-               const int key_type = uint8_t(*it);
+               const int key_type = glz::uint8_t(*it);
                // support only string or atom keys in json
                if (!eetf::is_string(key_type) && !eetf::is_atom(key_type)) {
                   ctx.error = error_code::syntax_error;
@@ -279,7 +285,7 @@ namespace glz
       requires has_value_type<EETFBuffer> && (sizeof(typename EETFBuffer::value_type) == sizeof(char))
    [[nodiscard]] inline error_ctx eetf_to_json(const EETFBuffer& term, JSONBuffer& out)
    {
-      size_t ix{}; // write index
+      glz::size_t ix{}; // write index
 
       auto* it = term.data();
       auto* end = it + term.size();

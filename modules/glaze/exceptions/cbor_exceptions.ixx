@@ -1,9 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/exceptions/cbor_exceptions.hpp"
-// glz:header std=<stdexcept>
-// glz:header std=<string>
-// glz:header std=<utility>
+// glz:header include="glaze/cbor.hpp"
+// glz:header include="glaze/exceptions/core_exceptions.hpp"
+// glz:header project_imports=ignore
 export module glaze.exceptions.cbor_exceptions;
 
 #if __cpp_exceptions

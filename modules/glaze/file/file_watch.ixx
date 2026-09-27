@@ -1,13 +1,19 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
-
-#pragma once
+// glz:header path="glaze/file/file_watch.hpp"
+// glz:header project_imports=ignore
+module;
 
 #include <chrono>
 #include <filesystem>
 #include <future>
+// glz:emit std
+export module glaze.file.file_watch;
 
-namespace glz
+import std;
+import glaze.core.basic_types;
+
+export namespace glz
 {
    struct thread_handler final
    {

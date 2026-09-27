@@ -2,6 +2,10 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/help.hpp"
 // glz:header std=<string>
+// glz:header include="glaze/core/meta.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header include="glaze/util/type_traits.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.help;
 
 import std;

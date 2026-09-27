@@ -3,13 +3,14 @@
 // glz:header path="glaze/containers/flat_map.hpp"
 // glz:header std=<algorithm>
 // glz:header std=<concepts>
-// glz:header std=<cstdlib>
 // glz:header std=<functional>
 // glz:header std=<initializer_list>
 // glz:header std=<iterator>
 // glz:header std=<stdexcept>
 // glz:header std=<utility>
 // glz:header std=<vector>
+// glz:header include="glaze/util/expected.hpp"
+// glz:header project_imports=ignore
 export module glaze.containers.flat_map;
 
 import std;

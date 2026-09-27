@@ -839,6 +839,7 @@ def export_body(body: list[str]) -> list[str]:
     code = _strip_to_code(body)
     stack: list[str] = []
     open_decl = False
+    paren_depth = 0
     marked: list[int] = []
     header_buf: list[str] = []
     # A line that continues a preprocessor directive (`#if ... \`): the export
@@ -870,8 +871,8 @@ def export_body(body: list[str]) -> list[str]:
             continue
         if stripped.startswith("#") or index in continuation:
             continue
-        if not open_decl and at_namespace_scope() and not stripped.startswith(("}", "{")):
-            first = re.split(r"[\s<(]", stripped, 1)[0]
+        if not open_decl and paren_depth == 0 and at_namespace_scope() and not stripped.startswith(("}", "{")):
+            first = re.split(r"[\s<(]", stripped, maxsplit=1)[0]
             if re.match(r"^(?:inline\s+)?namespace\b", stripped):
                 begins = False  # export the members, not the namespace
             elif re.match(r"^export\b", stripped):
@@ -896,6 +897,10 @@ def export_body(body: list[str]) -> list[str]:
                 if stack:
                     stack.pop()
                 header_buf = []
+            elif ch == "(":
+                paren_depth += 1
+            elif ch == ")":
+                paren_depth = max(0, paren_depth - 1)
             elif ch == ";":
                 if open_decl and at_namespace_scope():
                     open_decl = False

@@ -5,6 +5,10 @@
 // glz:header include="glaze/api/xxh64.hpp"
 // glz:header include="glaze/core/meta.hpp"
 // glz:header project_imports=ignore
+module;
+// glz:module-only
+#include <climits>
+// glz:end-module-only
 export module glaze.api.hash;
 
 import std;

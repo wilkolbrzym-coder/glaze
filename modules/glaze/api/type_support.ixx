@@ -6,6 +6,10 @@
 // glz:header include="glaze/core/meta.hpp"
 // glz:header include="glaze/util/for_each.hpp"
 // glz:header project_imports=ignore
+module;
+// glz:module-only
+#include <cstdint>
+// glz:end-module-only
 export module glaze.api.type_support;
 
 import std;

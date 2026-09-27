@@ -13,6 +13,7 @@ import glaze.core.opts;
 
 import glaze.util.dump;
 import glaze.util.parse;
+import glaze.util.bit;
 import glaze.util.string_literal;
 
 import std;

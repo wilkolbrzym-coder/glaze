@@ -12,8 +12,9 @@
 // One backend is selected at compile time, widest first: AVX-512BW, AVX2, SSSE3, AArch64 NEON, or
 // WebAssembly SIMD128. Targets without a byte-granular shuffle (plain SSE2, 32 bit NEON) fall back
 // to the scalar validator in parse.hpp, which is always correct, just slower.
-
-#pragma once
+// glz:header path="glaze/simd/utf8_validation.hpp"
+// glz:header project_imports=ignore
+module;
 
 #include <cstddef>
 #include <cstdint>
@@ -32,25 +33,30 @@
    defined(GLZ_USE_WASM_SIMD128) || (defined(GLZ_UTF8_GENERIC_WIDTH) && !defined(GLZ_DISABLE_SIMD))
 #define GLZ_UTF8_SIMD
 #endif
+// glz:emit std
+export module glaze.simd.utf8_validation;
+
+import std;
+import glaze.core.basic_types;
 
 #if defined(GLZ_UTF8_SIMD)
 
-namespace glz::detail::utf8_simd
+export namespace glz::detail::utf8_simd
 {
    // Error classes. A lookup hit means "this pair is wrong for this reason".
-   inline constexpr uint8_t too_short = 1 << 0; // lead followed by a non-continuation
-   inline constexpr uint8_t too_long = 1 << 1; // continuation not preceded by a lead
-   inline constexpr uint8_t overlong_3 = 1 << 2; // E0 80..9F
-   inline constexpr uint8_t too_large = 1 << 3; // > U+10FFFF
-   inline constexpr uint8_t surrogate = 1 << 4; // ED A0..BF
-   inline constexpr uint8_t overlong_2 = 1 << 5; // C0..C1
-   inline constexpr uint8_t too_large_1000 = 1 << 6;
-   inline constexpr uint8_t overlong_4 = 1 << 6; // F0 80..8F
-   inline constexpr uint8_t two_conts = 1 << 7;
-   inline constexpr uint8_t carry = too_short | too_long | two_conts;
+   inline constexpr glz::uint8_t too_short = 1 << 0; // lead followed by a non-continuation
+   inline constexpr glz::uint8_t too_long = 1 << 1; // continuation not preceded by a lead
+   inline constexpr glz::uint8_t overlong_3 = 1 << 2; // E0 80..9F
+   inline constexpr glz::uint8_t too_large = 1 << 3; // > U+10FFFF
+   inline constexpr glz::uint8_t surrogate = 1 << 4; // ED A0..BF
+   inline constexpr glz::uint8_t overlong_2 = 1 << 5; // C0..C1
+   inline constexpr glz::uint8_t too_large_1000 = 1 << 6;
+   inline constexpr glz::uint8_t overlong_4 = 1 << 6; // F0 80..8F
+   inline constexpr glz::uint8_t two_conts = 1 << 7;
+   inline constexpr glz::uint8_t carry = too_short | too_long | two_conts;
 
    // Indexed by the high nibble of the previous byte.
-   alignas(16) inline constexpr uint8_t byte_1_high[16]{
+   alignas(16) inline constexpr glz::uint8_t byte_1_high[16]{
       too_long,
       too_long,
       too_long,
@@ -70,7 +76,7 @@ namespace glz::detail::utf8_simd
    };
 
    // Indexed by the low nibble of the previous byte.
-   alignas(16) inline constexpr uint8_t byte_1_low[16]{
+   alignas(16) inline constexpr glz::uint8_t byte_1_low[16]{
       carry | overlong_3 | overlong_2 | overlong_4, // 0
       carry | overlong_2, // 1
       carry, // 2
@@ -90,7 +96,7 @@ namespace glz::detail::utf8_simd
    };
 
    // Indexed by the high nibble of the current byte.
-   alignas(16) inline constexpr uint8_t byte_2_high[16]{
+   alignas(16) inline constexpr glz::uint8_t byte_2_high[16]{
       too_short,
       too_short,
       too_short,
@@ -112,7 +118,7 @@ namespace glz::detail::utf8_simd
    // Saturating-subtract thresholds leaving a non-zero byte when the last 1..3 bytes of a register
    // begin a sequence running past its end. Backends load the trailing `width` bytes of this array,
    // so the three thresholds always land in the final three lanes regardless of register size.
-   alignas(64) inline constexpr uint8_t incomplete_max[64]{
+   alignas(64) inline constexpr glz::uint8_t incomplete_max[64]{
       0xFF,     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
       0xFF,     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
       0xFF,     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -136,19 +142,19 @@ namespace glz::detail::utf8_simd
    // every width. Never selected by a normal build.
    struct vec
    {
-      uint8_t b[GLZ_UTF8_GENERIC_WIDTH]{};
+      glz::uint8_t b[GLZ_UTF8_GENERIC_WIDTH]{};
    };
-   inline constexpr size_t width = GLZ_UTF8_GENERIC_WIDTH;
+   inline constexpr glz::size_t width = GLZ_UTF8_GENERIC_WIDTH;
    static_assert(width == 16 || width == 32 || width == 64, "generic width must be 16, 32, or 64");
 
-   GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept
+   GLZ_ALWAYS_INLINE vec load(const glz::uint8_t* p) noexcept
    {
       vec r;
       std::memcpy(r.b, p, width);
       return r;
    }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return vec{}; }
-   GLZ_ALWAYS_INLINE vec set1(uint8_t v) noexcept
+   GLZ_ALWAYS_INLINE vec set1(glz::uint8_t v) noexcept
    {
       vec r;
       std::memset(r.b, v, width);
@@ -158,7 +164,7 @@ namespace glz::detail::utf8_simd
    GLZ_ALWAYS_INLINE vec name(vec a, vec c) noexcept                \
    {                                                                \
       vec r;                                                        \
-      for (size_t i = 0; i < width; ++i) r.b[i] = a.b[i] op c.b[i]; \
+      for (glz::size_t i = 0; i < width; ++i) r.b[i] = a.b[i] op c.b[i]; \
       return r;                                                     \
    }
    GLZ_UTF8_GENERIC_BINOP(and_, &)
@@ -168,13 +174,13 @@ namespace glz::detail::utf8_simd
    GLZ_ALWAYS_INLINE vec shr4(vec a) noexcept
    {
       vec r;
-      for (size_t i = 0; i < width; ++i) r.b[i] = uint8_t(a.b[i] >> 4);
+      for (glz::size_t i = 0; i < width; ++i) r.b[i] = glz::uint8_t(a.b[i] >> 4);
       return r;
    }
    GLZ_ALWAYS_INLINE vec subs(vec a, vec c) noexcept
    {
       vec r;
-      for (size_t i = 0; i < width; ++i) r.b[i] = a.b[i] > c.b[i] ? uint8_t(a.b[i] - c.b[i]) : uint8_t(0);
+      for (glz::size_t i = 0; i < width; ++i) r.b[i] = a.b[i] > c.b[i] ? glz::uint8_t(a.b[i] - c.b[i]) : glz::uint8_t(0);
       return r;
    }
    // Mirrors pshufb / vqtbl1q / swizzle: index >= 16 (high bit set) yields 0. The table repeats
@@ -182,22 +188,22 @@ namespace glz::detail::utf8_simd
    GLZ_ALWAYS_INLINE vec lookup16(vec table, vec idx) noexcept
    {
       vec r;
-      for (size_t i = 0; i < width; ++i) {
-         const uint8_t x = idx.b[i];
-         r.b[i] = (x & 0x80) ? 0 : table.b[(i & ~size_t(15)) + (x & 0x0F)];
+      for (glz::size_t i = 0; i < width; ++i) {
+         const glz::uint8_t x = idx.b[i];
+         r.b[i] = (x & 0x80) ? 0 : table.b[(i & ~glz::size_t(15)) + (x & 0x0F)];
       }
       return r;
    }
    GLZ_ALWAYS_INLINE bool is_zero(vec a) noexcept
    {
-      for (size_t i = 0; i < width; ++i)
+      for (glz::size_t i = 0; i < width; ++i)
          if (a.b[i]) return false;
       return true;
    }
-   GLZ_ALWAYS_INLINE vec load_table(const uint8_t* p) noexcept
+   GLZ_ALWAYS_INLINE vec load_table(const glz::uint8_t* p) noexcept
    {
       vec r;
-      for (size_t i = 0; i < width; ++i) r.b[i] = p[i & 15];
+      for (glz::size_t i = 0; i < width; ++i) r.b[i] = p[i & 15];
       return r;
    }
    GLZ_ALWAYS_INLINE vec load_incomplete_max() noexcept { return load(incomplete_max + (64 - width)); }
@@ -206,19 +212,19 @@ namespace glz::detail::utf8_simd
    GLZ_ALWAYS_INLINE vec prev(vec cur, vec prv) noexcept
    {
       vec r;
-      for (size_t i = 0; i < width; ++i) {
-         r.b[i] = (i < size_t(N)) ? prv.b[width - N + i] : cur.b[i - N];
+      for (glz::size_t i = 0; i < width; ++i) {
+         r.b[i] = (i < glz::size_t(N)) ? prv.b[width - N + i] : cur.b[i - N];
       }
       return r;
    }
 
 #elif defined(GLZ_USE_AVX512BW)
    using vec = __m512i;
-   inline constexpr size_t width = 64;
+   inline constexpr glz::size_t width = 64;
 
-   GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept { return _mm512_loadu_si512(p); }
+   GLZ_ALWAYS_INLINE vec load(const glz::uint8_t* p) noexcept { return _mm512_loadu_si512(p); }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return _mm512_setzero_si512(); }
-   GLZ_ALWAYS_INLINE vec set1(uint8_t v) noexcept { return _mm512_set1_epi8(static_cast<char>(v)); }
+   GLZ_ALWAYS_INLINE vec set1(glz::uint8_t v) noexcept { return _mm512_set1_epi8(static_cast<char>(v)); }
    GLZ_ALWAYS_INLINE vec and_(vec a, vec b) noexcept { return _mm512_and_si512(a, b); }
    GLZ_ALWAYS_INLINE vec or_(vec a, vec b) noexcept { return _mm512_or_si512(a, b); }
    GLZ_ALWAYS_INLINE vec xor_(vec a, vec b) noexcept { return _mm512_xor_si512(a, b); }
@@ -229,7 +235,7 @@ namespace glz::detail::utf8_simd
    GLZ_ALWAYS_INLINE vec subs(vec a, vec b) noexcept { return _mm512_subs_epu8(a, b); }
    GLZ_ALWAYS_INLINE vec lookup16(vec table, vec idx) noexcept { return _mm512_shuffle_epi8(table, idx); }
    GLZ_ALWAYS_INLINE bool is_zero(vec a) noexcept { return _mm512_test_epi8_mask(a, a) == 0; }
-   GLZ_ALWAYS_INLINE vec load_table(const uint8_t* p) noexcept
+   GLZ_ALWAYS_INLINE vec load_table(const glz::uint8_t* p) noexcept
    {
       return _mm512_broadcast_i32x4(_mm_loadu_si128(reinterpret_cast<const __m128i*>(p)));
    }
@@ -245,14 +251,14 @@ namespace glz::detail::utf8_simd
 
 #elif defined(GLZ_USE_AVX2)
    using vec = __m256i;
-   inline constexpr size_t width = 32;
+   inline constexpr glz::size_t width = 32;
 
-   GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept
+   GLZ_ALWAYS_INLINE vec load(const glz::uint8_t* p) noexcept
    {
       return _mm256_loadu_si256(reinterpret_cast<const __m256i*>(p));
    }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return _mm256_setzero_si256(); }
-   GLZ_ALWAYS_INLINE vec set1(uint8_t v) noexcept { return _mm256_set1_epi8(static_cast<char>(v)); }
+   GLZ_ALWAYS_INLINE vec set1(glz::uint8_t v) noexcept { return _mm256_set1_epi8(static_cast<char>(v)); }
    GLZ_ALWAYS_INLINE vec and_(vec a, vec b) noexcept { return _mm256_and_si256(a, b); }
    GLZ_ALWAYS_INLINE vec or_(vec a, vec b) noexcept { return _mm256_or_si256(a, b); }
    GLZ_ALWAYS_INLINE vec xor_(vec a, vec b) noexcept { return _mm256_xor_si256(a, b); }
@@ -263,7 +269,7 @@ namespace glz::detail::utf8_simd
    GLZ_ALWAYS_INLINE vec subs(vec a, vec b) noexcept { return _mm256_subs_epu8(a, b); }
    GLZ_ALWAYS_INLINE vec lookup16(vec table, vec idx) noexcept { return _mm256_shuffle_epi8(table, idx); }
    GLZ_ALWAYS_INLINE bool is_zero(vec a) noexcept { return _mm256_testz_si256(a, a) != 0; }
-   GLZ_ALWAYS_INLINE vec load_table(const uint8_t* p) noexcept
+   GLZ_ALWAYS_INLINE vec load_table(const glz::uint8_t* p) noexcept
    {
       return _mm256_broadcastsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i*>(p)));
    }
@@ -277,14 +283,14 @@ namespace glz::detail::utf8_simd
 
 #elif defined(GLZ_USE_SSSE3)
    using vec = __m128i;
-   inline constexpr size_t width = 16;
+   inline constexpr glz::size_t width = 16;
 
-   GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept
+   GLZ_ALWAYS_INLINE vec load(const glz::uint8_t* p) noexcept
    {
       return _mm_loadu_si128(reinterpret_cast<const __m128i*>(p));
    }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return _mm_setzero_si128(); }
-   GLZ_ALWAYS_INLINE vec set1(uint8_t v) noexcept { return _mm_set1_epi8(static_cast<char>(v)); }
+   GLZ_ALWAYS_INLINE vec set1(glz::uint8_t v) noexcept { return _mm_set1_epi8(static_cast<char>(v)); }
    GLZ_ALWAYS_INLINE vec and_(vec a, vec b) noexcept { return _mm_and_si128(a, b); }
    GLZ_ALWAYS_INLINE vec or_(vec a, vec b) noexcept { return _mm_or_si128(a, b); }
    GLZ_ALWAYS_INLINE vec xor_(vec a, vec b) noexcept { return _mm_xor_si128(a, b); }
@@ -295,7 +301,7 @@ namespace glz::detail::utf8_simd
    {
       return _mm_movemask_epi8(_mm_cmpeq_epi8(a, _mm_setzero_si128())) == 0xFFFF;
    }
-   GLZ_ALWAYS_INLINE vec load_table(const uint8_t* p) noexcept { return load(p); }
+   GLZ_ALWAYS_INLINE vec load_table(const glz::uint8_t* p) noexcept { return load(p); }
    GLZ_ALWAYS_INLINE vec load_incomplete_max() noexcept { return load(incomplete_max + (64 - width)); }
    template <int N>
    GLZ_ALWAYS_INLINE vec prev(vec cur, vec prv) noexcept
@@ -305,11 +311,11 @@ namespace glz::detail::utf8_simd
 
 #elif defined(GLZ_USE_NEON64)
    using vec = uint8x16_t;
-   inline constexpr size_t width = 16;
+   inline constexpr glz::size_t width = 16;
 
-   GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept { return vld1q_u8(p); }
+   GLZ_ALWAYS_INLINE vec load(const glz::uint8_t* p) noexcept { return vld1q_u8(p); }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return vdupq_n_u8(0); }
-   GLZ_ALWAYS_INLINE vec set1(uint8_t v) noexcept { return vdupq_n_u8(v); }
+   GLZ_ALWAYS_INLINE vec set1(glz::uint8_t v) noexcept { return vdupq_n_u8(v); }
    GLZ_ALWAYS_INLINE vec and_(vec a, vec b) noexcept { return vandq_u8(a, b); }
    GLZ_ALWAYS_INLINE vec or_(vec a, vec b) noexcept { return vorrq_u8(a, b); }
    GLZ_ALWAYS_INLINE vec xor_(vec a, vec b) noexcept { return veorq_u8(a, b); }
@@ -317,7 +323,7 @@ namespace glz::detail::utf8_simd
    GLZ_ALWAYS_INLINE vec subs(vec a, vec b) noexcept { return vqsubq_u8(a, b); }
    GLZ_ALWAYS_INLINE vec lookup16(vec table, vec idx) noexcept { return vqtbl1q_u8(table, idx); }
    GLZ_ALWAYS_INLINE bool is_zero(vec a) noexcept { return vmaxvq_u8(a) == 0; }
-   GLZ_ALWAYS_INLINE vec load_table(const uint8_t* p) noexcept { return load(p); }
+   GLZ_ALWAYS_INLINE vec load_table(const glz::uint8_t* p) noexcept { return load(p); }
    GLZ_ALWAYS_INLINE vec load_incomplete_max() noexcept { return load(incomplete_max + (64 - width)); }
    template <int N>
    GLZ_ALWAYS_INLINE vec prev(vec cur, vec prv) noexcept
@@ -327,11 +333,11 @@ namespace glz::detail::utf8_simd
 
 #elif defined(GLZ_USE_WASM_SIMD128)
    using vec = v128_t;
-   inline constexpr size_t width = 16;
+   inline constexpr glz::size_t width = 16;
 
-   GLZ_ALWAYS_INLINE vec load(const uint8_t* p) noexcept { return wasm_v128_load(p); }
+   GLZ_ALWAYS_INLINE vec load(const glz::uint8_t* p) noexcept { return wasm_v128_load(p); }
    GLZ_ALWAYS_INLINE vec zero() noexcept { return wasm_i8x16_splat(0); }
-   GLZ_ALWAYS_INLINE vec set1(uint8_t v) noexcept { return wasm_i8x16_splat(static_cast<int8_t>(v)); }
+   GLZ_ALWAYS_INLINE vec set1(glz::uint8_t v) noexcept { return wasm_i8x16_splat(static_cast<glz::int8_t>(v)); }
    GLZ_ALWAYS_INLINE vec and_(vec a, vec b) noexcept { return wasm_v128_and(a, b); }
    GLZ_ALWAYS_INLINE vec or_(vec a, vec b) noexcept { return wasm_v128_or(a, b); }
    GLZ_ALWAYS_INLINE vec xor_(vec a, vec b) noexcept { return wasm_v128_xor(a, b); }
@@ -340,7 +346,7 @@ namespace glz::detail::utf8_simd
    // swizzle yields 0 for any index >= 16, matching pshufb's handling of out of range indices.
    GLZ_ALWAYS_INLINE vec lookup16(vec table, vec idx) noexcept { return wasm_i8x16_swizzle(table, idx); }
    GLZ_ALWAYS_INLINE bool is_zero(vec a) noexcept { return !wasm_v128_any_true(a); }
-   GLZ_ALWAYS_INLINE vec load_table(const uint8_t* p) noexcept { return load(p); }
+   GLZ_ALWAYS_INLINE vec load_table(const glz::uint8_t* p) noexcept { return load(p); }
    GLZ_ALWAYS_INLINE vec load_incomplete_max() noexcept { return load(incomplete_max + (64 - width)); }
    // No alignr; wasm_i8x16_shuffle selects lanes 0..15 from prv and 16..31 from cur.
    template <int N>
@@ -352,7 +358,7 @@ namespace glz::detail::utf8_simd
 #endif
 
    // Number of registers consumed per 64 byte step of the main loop.
-   inline constexpr size_t regs_per_step = 64 / width;
+   inline constexpr glz::size_t regs_per_step = 64 / width;
 
    struct checker
    {
@@ -407,19 +413,19 @@ namespace glz::detail::utf8_simd
       }
    };
 
-   inline bool validate(const uint8_t* it, const uint8_t* end) noexcept
+   inline bool validate(const glz::uint8_t* it, const glz::uint8_t* end) noexcept
    {
       checker c{};
       const vec high_bits = set1(0x80);
 
       // 64 bytes per step, with one ASCII test covering every register in the step.
-      while (static_cast<size_t>(end - it) >= 64) {
+      while (static_cast<glz::size_t>(end - it) >= 64) {
          vec b[regs_per_step];
-         for (size_t i = 0; i < regs_per_step; ++i) {
+         for (glz::size_t i = 0; i < regs_per_step; ++i) {
             b[i] = load(it + i * width);
          }
          vec any = b[0];
-         for (size_t i = 1; i < regs_per_step; ++i) {
+         for (glz::size_t i = 1; i < regs_per_step; ++i) {
             any = or_(any, b[i]);
          }
 
@@ -427,14 +433,14 @@ namespace glz::detail::utf8_simd
             c.check_ascii_step(b[regs_per_step - 1]);
          }
          else {
-            for (size_t i = 0; i < regs_per_step; ++i) {
+            for (glz::size_t i = 0; i < regs_per_step; ++i) {
                c.check_block(b[i]);
             }
          }
          it += 64;
       }
 
-      while (static_cast<size_t>(end - it) >= width) {
+      while (static_cast<glz::size_t>(end - it) >= width) {
          c.check_block(load(it));
          it += width;
       }
@@ -442,9 +448,9 @@ namespace glz::detail::utf8_simd
       if (it < end) {
          // Pad the final partial register with ASCII so a truncated sequence at the true end of the
          // input reports "too short" rather than being completed by whatever happens to follow.
-         alignas(64) uint8_t tail[width];
+         alignas(64) glz::uint8_t tail[width];
          std::memset(tail, ' ', sizeof(tail));
-         std::memcpy(tail, it, static_cast<size_t>(end - it));
+         std::memcpy(tail, it, static_cast<glz::size_t>(end - it));
          c.check_block(load(tail));
       }
 

@@ -2,9 +2,12 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/chrono_format.hpp"
 // glz:header std=<chrono>
-// glz:header std=<cstddef>
 // glz:header std=<string_view>
 // glz:header std=<type_traits>
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.chrono_format;
 
 import std;
@@ -17,8 +20,8 @@ import glaze.core.opts;
 
 import glaze.json.read;
 import glaze.json.write;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 // Per-field chrono customization wrappers.
 //
@@ -123,7 +126,7 @@ export namespace glz
          // to spare, plus a small constant for the surrounding quotes. Skipped on the
          // write_unchecked fast path, where the caller has already reserved the space.
          if constexpr (not check_write_unchecked(Opts)) {
-            const size_t max_size = fmt.size() * 6 + 4;
+            const glz::size_t max_size = fmt.size() * 6 + 4;
             if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
                return;
             }

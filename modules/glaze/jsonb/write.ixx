@@ -2,20 +2,24 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/jsonb/write.hpp"
 // glz:header std=<array>
+// glz:header std=<charconv>
 // glz:header std=<cmath>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
-// glz:header std=<expected>
-// glz:header std=<map>
-// glz:header std=<span>
-// glz:header std=<string>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<unordered_map>
-// glz:header std=<utility>
-// glz:header std=<variant>
+// glz:header std=<limits>
+// glz:header include="glaze/core/buffer_traits.hpp"
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/core/to.hpp"
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/core/write_chars.hpp"
+// glz:header include="glaze/json/generic.hpp"
+// glz:header include="glaze/jsonb/header.hpp"
+// glz:header include="glaze/util/dump.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/variant.hpp"
+// glz:header project_imports=ignore
 export module glaze.jsonb.write;
 
 import std;
@@ -49,15 +53,10 @@ import glaze.util.itoa;
 import glaze.util.string_literal;
 
 import glaze.tuplet;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::int64_t;
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 namespace glz
 {
@@ -77,10 +76,10 @@ namespace glz
       // Write a scalar element whose payload is already known (type + exact bytes).
       // Emits a minimal header followed by the payload bytes.
       template <class B, class IX>
-      GLZ_ALWAYS_INLINE bool write_scalar(is_context auto& ctx, uint8_t type_code, const char* data, size_t size, B& b,
+      GLZ_ALWAYS_INLINE bool write_scalar(is_context auto& ctx, glz::uint8_t type_code, const char* data, glz::size_t size, B& b,
                                           IX& ix)
       {
-         const size_t hdr_bytes = jsonb::header_bytes_for_payload(size);
+         const glz::size_t hdr_bytes = jsonb::header_bytes_for_payload(size);
          if (!ensure_space(ctx, b, ix + hdr_bytes + size + write_padding_bytes)) [[unlikely]] {
             return false;
          }
@@ -95,7 +94,7 @@ namespace glz
       // Reserve a 9-byte container header at the current ix. Returns the position of the
       // reserved slot; advances ix past it. Later callers patch with patch_header_9.
       template <class B, class IX>
-      GLZ_ALWAYS_INLINE bool reserve_container_header(is_context auto& ctx, B& b, IX& ix, size_t& header_pos)
+      GLZ_ALWAYS_INLINE bool reserve_container_header(is_context auto& ctx, B& b, IX& ix, glz::size_t& header_pos)
       {
          if (!ensure_space(ctx, b, ix + jsonb::max_header_bytes + write_padding_bytes)) [[unlikely]] {
             return false;
@@ -132,7 +131,7 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         const uint8_t byte =
+         const glz::uint8_t byte =
             value ? jsonb::make_initial(jsonb::type::true_, 0) : jsonb::make_initial(jsonb::type::false_, 0);
          b[ix] = static_cast<typename std::decay_t<decltype(b)>::value_type>(byte);
          ++ix;
@@ -154,7 +153,7 @@ namespace glz
          // int32_t/int64_t. Mirrors the JSON number writer's sized_integer_conversion.
          using X = std::decay_t<decltype(sized_integer_conversion<T>())>;
          auto* end_ptr = glz::to_chars(tmp.data(), static_cast<X>(value));
-         const size_t n = static_cast<size_t>(end_ptr - tmp.data());
+         const glz::size_t n = static_cast<glz::size_t>(end_ptr - tmp.data());
          jsonb_detail::write_scalar(ctx, jsonb::type::int_, tmp.data(), n, b, ix);
       }
    };
@@ -189,12 +188,12 @@ namespace glz
          // header (sufficient for any payload ≤ 255 bytes) plus the number bytes, write the
          // number, then patch the header and shift the payload left by 1 byte if we ended up
          // with ≤ 11 characters.
-         constexpr size_t kReserve = 2 + 64 + write_padding_bytes;
+         constexpr glz::size_t kReserve = 2 + 64 + write_padding_bytes;
          if (!ensure_space(ctx, b, ix + kReserve)) [[unlikely]] {
             return;
          }
-         const size_t num_start = ix + 2;
-         size_t tmp_ix = num_start;
+         const glz::size_t num_start = ix + 2;
+         glz::size_t tmp_ix = num_start;
          // Force JSON text formatting for the float payload, but preserve the caller's
          // optimization level so a size-optimized BEVE write does not link the ~16 KB
          // float pow-10 tables. Base `opts` has no optimization_level member, so the
@@ -208,11 +207,11 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         const size_t n = tmp_ix - num_start;
+         const glz::size_t n = tmp_ix - num_start;
          if (n <= 11) {
             // Use 1-byte inline header, shift payload 1 byte left.
             b[ix] = static_cast<typename std::decay_t<decltype(b)>::value_type>(
-               jsonb::make_initial(jsonb::type::float_, static_cast<uint8_t>(n)));
+               jsonb::make_initial(jsonb::type::float_, static_cast<glz::uint8_t>(n)));
             std::memmove(&b[ix + 1], &b[num_start], n);
             ix = ix + 1 + n;
          }
@@ -231,10 +230,10 @@ namespace glz
       // True if any byte in [data, data+size) is a control character (<0x20), an unescaped
       // double quote, or an unescaped backslash — i.e. the payload could not stand as the
       // body of a JSON string literal without modification.
-      GLZ_ALWAYS_INLINE bool string_needs_json_escape(const char* data, size_t size) noexcept
+      GLZ_ALWAYS_INLINE bool string_needs_json_escape(const char* data, glz::size_t size) noexcept
       {
-         for (size_t i = 0; i < size; ++i) {
-            const auto c = static_cast<uint8_t>(data[i]);
+         for (glz::size_t i = 0; i < size; ++i) {
+            const auto c = static_cast<glz::uint8_t>(data[i]);
             if (c < 0x20 || c == '"' || c == '\\') {
                return true;
             }
@@ -264,7 +263,7 @@ namespace glz
             }
          }();
 
-         const uint8_t tc =
+         const glz::uint8_t tc =
             jsonb_detail::string_needs_json_escape(str.data(), str.size()) ? jsonb::type::textraw : jsonb::type::text;
          jsonb_detail::write_scalar(ctx, tc, str.data(), str.size(), b, ix);
       }
@@ -277,11 +276,11 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         size_t header_pos{};
+         glz::size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;
          }
-         const size_t payload_start = ix;
+         const glz::size_t payload_start = ix;
 
          for (auto&& item : value) {
             serialize<JSONB>::op<Opts>(item, ctx, b, ix);
@@ -289,7 +288,7 @@ namespace glz
                return;
          }
 
-         const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+         const glz::uint64_t payload_size = static_cast<glz::uint64_t>(ix - payload_start);
          jsonb::patch_header_9(b, header_pos, jsonb::type::array, payload_size);
       }
    };
@@ -302,25 +301,25 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         size_t header_pos{};
+         glz::size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;
          }
-         const size_t payload_start = ix;
+         const glz::size_t payload_start = ix;
 
          static constexpr auto N = glz::tuple_size_v<T>;
          if constexpr (is_std_tuple<T>) {
-            [&]<size_t... I>(std::index_sequence<I...>) {
+            [&]<glz::size_t... I>(std::index_sequence<I...>) {
                (serialize<JSONB>::op<Opts>(std::get<I>(value), ctx, b, ix), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
-            [&]<size_t... I>(std::index_sequence<I...>) {
+            [&]<glz::size_t... I>(std::index_sequence<I...>) {
                (serialize<JSONB>::op<Opts>(glz::get<I>(value), ctx, b, ix), ...);
             }(std::make_index_sequence<N>{});
          }
 
-         const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+         const glz::uint64_t payload_size = static_cast<glz::uint64_t>(ix - payload_start);
          jsonb::patch_header_9(b, header_pos, jsonb::type::array, payload_size);
       }
    };
@@ -332,11 +331,11 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         size_t header_pos{};
+         glz::size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;
          }
-         const size_t payload_start = ix;
+         const glz::size_t payload_start = ix;
 
          using map_t = std::remove_cvref_t<decltype(value)>;
          using val_t = std::remove_cvref_t<detail::iterator_second_type<map_t>>;
@@ -354,7 +353,7 @@ namespace glz
                return;
          }
 
-         const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+         const glz::uint64_t payload_size = static_cast<glz::uint64_t>(ix - payload_start);
          jsonb::patch_header_9(b, header_pos, jsonb::type::object, payload_size);
       }
    };
@@ -366,11 +365,11 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         size_t header_pos{};
+         glz::size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;
          }
-         const size_t payload_start = ix;
+         const glz::size_t payload_start = ix;
 
          const auto& [k, v] = value;
          serialize<JSONB>::op<Opts>(k, ctx, b, ix);
@@ -380,14 +379,14 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+         const glz::uint64_t payload_size = static_cast<glz::uint64_t>(ix - payload_start);
          jsonb::patch_header_9(b, header_pos, jsonb::type::object, payload_size);
       }
    };
 
    namespace jsonb_detail
    {
-      template <class T, auto Opts, size_t I>
+      template <class T, auto Opts, glz::size_t I>
       consteval bool should_skip_reflected_field()
       {
          using V = field_t<T, I>;
@@ -420,7 +419,7 @@ namespace glz
             }
          }();
 
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
             if constexpr (should_skip_reflected_field<DT, Opts, I>()) {
@@ -487,7 +486,7 @@ namespace glz
    {
       static constexpr auto N = reflect<T>::size;
 
-      template <auto Opts, size_t I>
+      template <auto Opts, glz::size_t I>
       static consteval bool should_skip_field()
       {
          return jsonb_detail::should_skip_reflected_field<T, Opts, I>();
@@ -496,17 +495,17 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         size_t header_pos{};
+         glz::size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;
          }
-         const size_t payload_start = ix;
+         const glz::size_t payload_start = ix;
 
          jsonb_detail::write_reflected_body<Opts>(value, ctx, b, ix);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+         const glz::uint64_t payload_size = static_cast<glz::uint64_t>(ix - payload_start);
          jsonb::patch_header_9(b, header_pos, jsonb::type::object, payload_size);
       }
    };
@@ -519,20 +518,20 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         size_t header_pos{};
+         glz::size_t header_pos{};
          if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
             return;
          }
-         const size_t payload_start = ix;
+         const glz::size_t payload_start = ix;
 
          static constexpr auto Nf = reflect<T>::size;
-         for_each<Nf>([&]<size_t I>() {
+         for_each<Nf>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
             serialize<JSONB>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
          });
 
-         const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+         const glz::uint64_t payload_size = static_cast<glz::uint64_t>(ix - payload_start);
          jsonb::patch_header_9(b, header_pos, jsonb::type::array, payload_size);
       }
    };
@@ -585,7 +584,7 @@ namespace glz
       requires(std::is_array_v<T>)
    struct to<JSONB, T>
    {
-      template <auto Opts, class V, size_t N>
+      template <auto Opts, class V, glz::size_t N>
       GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, auto&& b, auto& ix)
       {
          serialize<JSONB>::op<Opts>(std::span{value, N}, ctx, b, ix);
@@ -605,7 +604,7 @@ namespace glz
             }
             else {
                // void value type on success → emit empty object
-               size_t header_pos{};
+               glz::size_t header_pos{};
                if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) return;
                jsonb::patch_header_9(b, header_pos, jsonb::type::object, 0);
             }
@@ -654,11 +653,11 @@ namespace glz
                      ctx.custom_error_message = variant_ids_string_v<T>;
                      return;
                   }
-                  size_t header_pos{};
+                  glz::size_t header_pos{};
                   if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
                      return;
                   }
-                  const size_t payload_start = ix;
+                  const glz::size_t payload_start = ix;
 
                   // Write the tag key + id pair first, then the alternative's fields inline.
                   static constexpr auto tag = tag_v<T>;
@@ -682,7 +681,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+                  const glz::uint64_t payload_size = static_cast<glz::uint64_t>(ix - payload_start);
                   jsonb::patch_header_9(b, header_pos, jsonb::type::object, payload_size);
                }
                else {

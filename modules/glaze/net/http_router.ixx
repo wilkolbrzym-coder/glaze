@@ -1,24 +1,27 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/net/http_router.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<functional>
+// glz:header std=<future>
+// glz:header std=<iostream>
+// glz:header std=<memory>
+// glz:header std=<optional>
+// glz:header std=<source_location>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<unordered_map>
+// glz:header std=<vector>
+// glz:header include="glaze/json/generic.hpp"
+// glz:header include="glaze/net/http.hpp"
+// glz:header include="glaze/net/url.hpp"
+// glz:header include="glaze/util/key_transformers.hpp"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit std
 
-#include <algorithm>
-#include <functional>
-#include <future>
-#include <iostream>
-#include <memory>
-#include <optional>
-#include <source_location>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <vector>
-
-#include "glaze/json/generic.hpp"
-#include "glaze/net/http.hpp"
-#include "glaze/net/url.hpp"
-#include "glaze/util/key_transformers.hpp"
+// glz:emit project
 
 // To deconflict Windows.h, which defines a DELETE macro that collides with the
 // http_method::DELETE used in the route helpers below. http.hpp's own undef is
@@ -28,7 +31,17 @@
 #undef DELETE
 #endif
 
-namespace glz
+export module glaze.net.http_router;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.json.generic;
+import glaze.net.http;
+import glaze.net.url;
+import glaze.util.key_transformers;
+
+export namespace glz
 {
    namespace detail
    {
@@ -51,7 +64,7 @@ namespace glz
       std::unordered_map<std::string, std::string> headers{};
       std::string body{};
       std::string remote_ip{};
-      uint16_t remote_port{};
+      glz::uint16_t remote_port{};
    };
 
    // Serialized to the response body when response::body<Opts>(value) fails
@@ -60,14 +73,14 @@ namespace glz
    struct glz_write_error
    {
       std::string_view error{"glaze write failure"};
-      uint32_t code{};
+      glz::uint32_t code{};
       std::string_view message{};
    };
 
    // Response builder
    struct response
    {
-      enum header_flag : uint8_t {
+      enum header_flag : glz::uint8_t {
          has_content_length = 1,
          has_date = 2,
          has_server = 4,
@@ -77,7 +90,7 @@ namespace glz
       int status_code = 200;
       std::unordered_map<std::string, std::string> response_headers{};
       std::string response_body{};
-      uint8_t user_headers_set{};
+      glz::uint8_t user_headers_set{};
 
       inline response& status(int code)
       {
@@ -146,7 +159,7 @@ namespace glz
             // any custom_error_message are surfaced so callers can debug
             // failed writes without having to reproduce them locally.
             glz_write_error info{
-               .code = uint32_t(ec.ec),
+               .code = glz::uint32_t(ec.ec),
                .message = ec.custom_error_message,
             };
             if (auto write_ec = glz::write_json(info, response_body); write_ec) {
@@ -329,14 +342,14 @@ namespace glz
          std::vector<std::string> segments;
          segments.reserve(std::count(path.begin(), path.end(), '/') + 1);
 
-         size_t start = 0;
+         glz::size_t start = 0;
          while (start < path.size()) {
             if (path[start] == '/') {
                start++;
                continue;
             }
 
-            size_t end = path.find('/', start);
+            glz::size_t end = path.find('/', start);
             if (end == std::string::npos) end = path.size();
 
             segments.push_back(std::string(path.substr(start, end - start)));
@@ -364,10 +377,10 @@ namespace glz
        */
       static bool has_dot_dot_segment(std::string_view path) noexcept
       {
-         size_t start = 0;
+         glz::size_t start = 0;
          while (true) {
-            const size_t sep = path.find_first_of("/\\", start);
-            const size_t seg_len = (sep == std::string_view::npos ? path.size() : sep) - start;
+            const glz::size_t sep = path.find_first_of("/\\", start);
+            const glz::size_t seg_len = (sep == std::string_view::npos ? path.size() : sep) - start;
             if (seg_len == 2 && path[start] == '.' && path[start + 1] == '.') {
                return true;
             }
@@ -465,7 +478,7 @@ namespace glz
 
          radix_node* current = &root;
 
-         for (size_t i = 0; i < segments.size(); ++i) {
+         for (glz::size_t i = 0; i < segments.size(); ++i) {
             const std::string& segment = segments[i];
 
             if (segment.empty()) continue;
@@ -528,7 +541,7 @@ namespace glz
          }
       }
 
-      bool match_node(radix_node* node, const std::vector<std::string>& segments, size_t index, http_method method,
+      bool match_node(radix_node* node, const std::vector<std::string>& segments, glz::size_t index, http_method method,
                       std::unordered_map<std::string, std::string>& params, H& result) const
       {
          if (index == segments.size()) {
@@ -589,7 +602,7 @@ namespace glz
 
          if (node->wildcard_child) {
             std::string full_capture;
-            for (size_t i = index; i < segments.size(); i++) {
+            for (glz::size_t i = index; i < segments.size(); i++) {
                if (i > index) full_capture += "/";
                full_capture += url_decode(segments[i]);
             }
@@ -695,12 +708,12 @@ namespace glz
 
       if (pattern.empty()) return true; // Empty pattern matches anything
 
-      size_t v_pos = 0;
-      size_t p_pos = 0;
+      glz::size_t v_pos = 0;
+      glz::size_t p_pos = 0;
 
       // For backtracking when we encounter *
-      std::optional<size_t> backtrack_pattern;
-      std::optional<size_t> backtrack_value;
+      std::optional<glz::size_t> backtrack_pattern;
+      std::optional<glz::size_t> backtrack_value;
 
       // For character classes
       State state = State::Literal;

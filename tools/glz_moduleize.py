@@ -472,11 +472,16 @@ class Converter:
         # only when it sits in the pre-code region of a balanced unit.  Anywhere
         # else a textual include would land in the module purview, where it would
         # attach foreign declarations to this module; such includes are replaced
-        # by a marker and compiled from a hidden fragment copy instead.
+        # by a marker and compiled from a hidden fragment copy instead.  A bare
+        # sibling name (`types.hpp`) never compiles from the unit's location, so
+        # it is always managed and re-emitted with its resolved path.
+        def literal_ok(inc: Include) -> bool:
+            return inc.angle or ("/" in inc.inner and not inc.inner.startswith((".", "/")))
+
         managed: list[tuple[Include, tuple[str, ...]]] = [
             (inc, guards)
             for i, inc, guards in located
-            if not (prologue_mode and i < body_start)
+            if not literal_ok(inc) or not (prologue_mode and i < body_start)
         ]
 
         metadata: list[str] = [f'// glz:header path="{self.header_rel}"']
@@ -714,51 +719,64 @@ def qualify_builtin_aliases(text: str) -> tuple[str, bool]:
 # `export` placement
 # ---------------------------------------------------------------------------
 
+def _blank_preserving_newlines(segment: str) -> str:
+    return "".join("\n" if c == "\n" else " " for c in segment)
+
+
 def _strip_to_code(lines: list[str]) -> list[str]:
-    """Blank comments and literals across the whole body, line by line."""
-    result: list[str] = []
-    in_block = False
-    for line in lines:
-        out: list[str] = []
-        i, n = 0, len(line)
-        while i < n:
-            if in_block:
-                end = line.find("*/", i)
-                if end == -1:
-                    out.append(" " * (n - i))
-                    i = n
-                else:
-                    out.append(" " * (end + 2 - i))
-                    i = end + 2
-                    in_block = False
-                continue
-            ch = line[i]
-            if ch == "/" and i + 1 < n and line[i + 1] == "/":
-                out.append(" " * (n - i))
-                i = n
-                continue
-            if ch == "/" and i + 1 < n and line[i + 1] == "*":
-                in_block = True
-                out.append("  ")
-                i += 2
-                continue
-            if ch in {'"', "'"}:
-                j = i + 1
-                while j < n:
-                    if line[j] == "\\":
-                        j += 2
-                        continue
-                    if line[j] == ch:
-                        j += 1
-                        break
+    """Blank comments and literals across the whole body.
+
+    Works on the joined text so that block comments and raw string literals that
+    span lines are handled correctly; the line count is preserved.  A brace
+    inside a raw string (``R"({"a":1})"``) must never be mistaken for real code,
+    or the declaration scanner loses its place and marks statements ``export``.
+    """
+    text = "\n".join(lines)
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            end = text.find("\n", i)
+            end = n if end == -1 else end
+            out.append(" " * (end - i))
+            i = end
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            end = text.find("*/", i + 2)
+            end = n if end == -1 else end + 2
+            out.append(_blank_preserving_newlines(text[i:end]))
+            i = end
+            continue
+        if ch == "R" and i + 1 < n and text[i + 1] == '"':
+            open_paren = text.find("(", i + 2)
+            if open_paren != -1 and open_paren - (i + 2) <= 16:
+                delimiter = text[i + 2 : open_paren]
+                terminator = ")" + delimiter + '"'
+                end = text.find(terminator, open_paren + 1)
+                if end != -1:
+                    end += len(terminator)
+                    out.append(_blank_preserving_newlines(text[i:end]))
+                    i = end
+                    continue
+        if ch in {'"', "'"}:
+            j = i + 1
+            while j < n:
+                if text[j] == "\\":
+                    j += 2
+                    continue
+                if text[j] == ch:
                     j += 1
-                out.append(" " * (j - i))
-                i = j
-                continue
-            out.append(ch)
-            i += 1
-        result.append("".join(out))
-    return result
+                    break
+                if text[j] == "\n":
+                    break
+                j += 1
+            out.append(_blank_preserving_newlines(text[i:j]))
+            i = j
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out).split("\n")
 
 
 def _classify_scope(header: str) -> str:
@@ -813,13 +831,13 @@ def export_body(body: list[str]) -> list[str]:
         if stripped.startswith("#"):
             continue
         if not open_decl and at_namespace_scope() and not stripped.startswith(("}", "{")):
-            if stripped.startswith("namespace"):
-                begins = False
+            if re.match(r"^(?:inline\s+)?namespace\b", stripped):
+                begins = False  # export the members, not the namespace
             elif re.match(r"^export\b", stripped):
                 begins = False
             elif re.match(r"^static\b", stripped):
                 begins = False
-            elif re.search(r"\w\s*::\s*[\w~]+\s*\(", declaration_signature(index)):
+            elif re.search(r"\w(?:<[^>]*>)?\s*::\s*[\w~]+\s*\(", declaration_signature(index)):
                 # out-of-class member definition
                 begins = False
             else:

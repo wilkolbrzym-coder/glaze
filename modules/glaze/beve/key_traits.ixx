@@ -1,8 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/beve/key_traits.hpp"
-// glz:header std=<cstdint>
-// glz:header std=<type_traits>
+// glz:header include="glaze/beve/header.hpp"
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/core/common.hpp"
+// glz:header project_imports=ignore
 export module glaze.beve.key_traits;
 
 import std;
@@ -14,8 +16,8 @@ import glaze.core.common;
 import glaze.core.cast;
 import glaze.core.meta;
 import glaze.concepts.container_concepts;
+import glaze.core.basic_types;
 
-using std::uint8_t;
 
 namespace glz
 {
@@ -89,16 +91,13 @@ namespace glz
       static constexpr bool as_string = str_t<underlying> || !numeric;
       static constexpr bool as_number = !as_string;
 
-      static constexpr uint8_t type =
-         as_string ? uint8_t(0)
-                   : (std::is_signed_v<numeric_type> ? uint8_t(0b000'01'000) : uint8_t(0b000'10'000));
+      static constexpr glz::uint8_t type =
+         as_string ? glz::uint8_t(0) : (std::is_signed_v<numeric_type> ? glz::uint8_t(0b000'01'000) : glz::uint8_t(0b000'10'000));
 
-      static constexpr uint8_t width =
-         as_string ? uint8_t(0) : glz::byte_count<numeric_type>;
+      static constexpr glz::uint8_t width = as_string ? glz::uint8_t(0) : glz::byte_count<numeric_type>;
 
-      static constexpr uint8_t header = uint8_t(tag::object | type | (width << 5));
+      static constexpr glz::uint8_t header = glz::uint8_t(tag::object | type | (width << 5));
 
-      static constexpr uint8_t key_tag =
-         as_string ? uint8_t(tag::string) : uint8_t(tag::number | type | (width << 5));
+      static constexpr glz::uint8_t key_tag = as_string ? glz::uint8_t(tag::string) : glz::uint8_t(tag::number | type | (width << 5));
    };
 }

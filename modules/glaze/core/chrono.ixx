@@ -2,11 +2,13 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/chrono.hpp"
 // glz:header std=<chrono>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<string_view>
 // glz:header std=<type_traits>
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/core/meta.hpp"
+// glz:header include="glaze/core/traits.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.chrono;
 
 import std;
@@ -15,12 +17,8 @@ import glaze.core.context;
 import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.traits;
+import glaze.core.basic_types;
 
-using std::uint8_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::int64_t;
-using std::size_t;
 
 export namespace glz
 {
@@ -163,7 +161,7 @@ export namespace glz
    // element model requires a per-type `type_code`, so it delegates to the rep
    // type's writer itself.
 
-   template <uint32_t Format, is_duration T>
+   template <glz::uint32_t Format, is_duration T>
       requires(not custom_write<T>)
    struct to<Format, T>
    {
@@ -186,7 +184,7 @@ export namespace glz
       }
    };
 
-   template <uint32_t Format, is_duration T>
+   template <glz::uint32_t Format, is_duration T>
       requires(not custom_read<T>)
    struct from<Format, T>
    {
@@ -209,7 +207,7 @@ export namespace glz
       // no_header contexts. Selected unambiguously over the overload above because
       // its second parameter is the tag byte rather than the context.
       template <auto Opts, class... Args>
-      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, Args&&... args) noexcept
+      static void op(auto&& value, const glz::uint8_t tag, is_context auto&& ctx, Args&&... args) noexcept
       {
          using V = std::remove_cvref_t<T>;
          typename V::rep count{};
@@ -229,7 +227,7 @@ export namespace glz
    // is format-agnostic and defined once here. As with durations, BSON overrides it with a
    // type_code-bearing specialization; every other format uses this generic.
 
-   template <uint32_t Format, is_count_time_point T>
+   template <glz::uint32_t Format, is_count_time_point T>
       requires(not custom_write<T>)
    struct to<Format, T>
    {
@@ -248,7 +246,7 @@ export namespace glz
       }
    };
 
-   template <uint32_t Format, is_count_time_point T>
+   template <glz::uint32_t Format, is_count_time_point T>
       requires(not custom_read<T>)
    struct from<Format, T>
    {
@@ -265,7 +263,7 @@ export namespace glz
       }
 
       template <auto Opts, class... Args>
-      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, Args&&... args) noexcept
+      static void op(auto&& value, const glz::uint8_t tag, is_context auto&& ctx, Args&&... args) noexcept
       {
          using V = std::remove_cvref_t<T>;
          using Duration = typename V::duration;
@@ -282,10 +280,10 @@ export namespace glz
       // Parse `count` decimal digits starting at s[start]. Returns -1 if any character
       // is not a digit. Precondition: `count > 0` and `count` digits are readable at
       // s[start..start+count). `count == 0` returns 0 rather than an error.
-      inline int parse_digits(const char* s, size_t start, size_t count) noexcept
+      inline int parse_digits(const char* s, glz::size_t start, glz::size_t count) noexcept
       {
          int val = 0;
-         for (size_t i = 0; i < count; ++i) {
+         for (glz::size_t i = 0; i < count; ++i) {
             const char c = s[start + i];
             if (c < '0' || c > '9') return -1;
             val = val * 10 + (c - '0');
@@ -295,10 +293,10 @@ export namespace glz
 
       // Write `val` as exactly N zero-padded decimal digits to b starting at ix, advancing ix.
       // Caller must ensure b has at least N bytes of capacity at ix.
-      template <size_t N, class B>
-      inline void write_digits(B& b, auto& ix, uint64_t val) noexcept
+      template <glz::size_t N, class B>
+      inline void write_digits(B& b, auto& ix, glz::uint64_t val) noexcept
       {
-         for (size_t i = N; i > 0; --i) {
+         for (glz::size_t i = N; i > 0; --i) {
             b[ix + i - 1] = static_cast<char>('0' + val % 10);
             val /= 10;
          }
@@ -322,7 +320,7 @@ export namespace glz
       // nanoseconds is still rendered at nanosecond precision, matching RFC 3339's
       // practical limit.
       template <class Period>
-      inline constexpr size_t iso_frac_digits = [] {
+      inline constexpr glz::size_t iso_frac_digits = [] {
          if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
             return 0; // seconds or coarser
          }
@@ -338,11 +336,11 @@ export namespace glz
       }();
 
       // "YYYY-MM-DD" plus both quotes.
-      inline constexpr size_t iso_date_max_size = 12;
+      inline constexpr glz::size_t iso_date_max_size = 12;
 
       // "YYYY-MM-DDTHH:MM:SSZ" (20) plus both quotes, plus '.' and the fraction.
       template <class Period>
-      inline constexpr size_t iso_time_point_max_size =
+      inline constexpr glz::size_t iso_time_point_max_size =
          22 + (iso_frac_digits<Period> > 0 ? 1 + iso_frac_digits<Period> : 0);
 
       // Write "YYYY-MM-DD". RFC 3339 requires a 4-digit year, and the fixed-width parsers
@@ -359,7 +357,7 @@ export namespace glz
          if constexpr (Quote) {
             b[ix++] = '"';
          }
-         write_digits<4>(b, ix, static_cast<uint64_t>(yr));
+         write_digits<4>(b, ix, static_cast<glz::uint64_t>(yr));
          b[ix++] = '-';
          write_digits<2>(b, ix, mo);
          b[ix++] = '-';
@@ -407,7 +405,7 @@ export namespace glz
             if constexpr (Quote) {
                b[ix++] = '"';
             }
-            write_digits<4>(b, ix, static_cast<uint64_t>(yr));
+            write_digits<4>(b, ix, static_cast<glz::uint64_t>(yr));
             b[ix++] = '-';
             write_digits<2>(b, ix, mo);
             b[ix++] = '-';
@@ -419,18 +417,18 @@ export namespace glz
             b[ix++] = ':';
             write_digits<2>(b, ix, sc);
 
-            constexpr size_t frac_digits = iso_frac_digits<Period>;
+            constexpr glz::size_t frac_digits = iso_frac_digits<Period>;
             if constexpr (frac_digits > 0) {
                b[ix++] = '.';
                const auto subsec = tod.subseconds();
                if constexpr (frac_digits == 3) {
-                  write_digits<3>(b, ix, static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+                  write_digits<3>(b, ix, static_cast<glz::uint64_t>(duration_cast<milliseconds>(subsec).count()));
                }
                else if constexpr (frac_digits == 6) {
-                  write_digits<6>(b, ix, static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+                  write_digits<6>(b, ix, static_cast<glz::uint64_t>(duration_cast<microseconds>(subsec).count()));
                }
                else {
-                  write_digits<9>(b, ix, static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+                  write_digits<9>(b, ix, static_cast<glz::uint64_t>(duration_cast<nanoseconds>(subsec).count()));
                }
             }
 
@@ -517,11 +515,11 @@ export namespace glz
             return;
          }
 
-         size_t pos = 19;
-         int64_t subsec_nanos = 0;
+         glz::size_t pos = 19;
+         glz::int64_t subsec_nanos = 0;
          if (pos < n && s[pos] == '.') {
             ++pos;
-            int64_t frac = 0;
+            glz::int64_t frac = 0;
             int digits = 0;
             while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
                if (digits < 9) {
@@ -534,7 +532,7 @@ export namespace glz
                ec = error_code::parse_error;
                return;
             }
-            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+            static constexpr glz::int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
                                                 10000,      1000,      100,      10,      1};
             subsec_nanos = frac * scale[digits];
          }
@@ -642,7 +640,7 @@ export namespace glz
       // Compile-time validation: every '%' must introduce a supported token.
       inline consteval bool date_format_tokens_valid(std::string_view fmt) noexcept
       {
-         for (size_t i = 0; i < fmt.size(); ++i) {
+         for (glz::size_t i = 0; i < fmt.size(); ++i) {
             if (fmt[i] != '%') continue;
             if (i + 1 >= fmt.size()) return false; // dangling '%'
             switch (fmt[i + 1]) {
@@ -670,7 +668,7 @@ export namespace glz
       inline consteval bool date_format_has_full_date(std::string_view fmt) noexcept
       {
          bool y = false, mo = false, d = false, f = false;
-         for (size_t i = 0; i < fmt.size(); ++i) {
+         for (glz::size_t i = 0; i < fmt.size(); ++i) {
             if (fmt[i] != '%' || i + 1 >= fmt.size()) continue;
             switch (fmt[i + 1]) {
             case 'Y':
@@ -694,7 +692,7 @@ export namespace glz
       // Compile-time check: the format references any time-of-day field.
       inline consteval bool date_format_has_time(std::string_view fmt) noexcept
       {
-         for (size_t i = 0; i < fmt.size(); ++i) {
+         for (glz::size_t i = 0; i < fmt.size(); ++i) {
             if (fmt[i] != '%' || i + 1 >= fmt.size()) continue;
             switch (fmt[i + 1]) {
             case 'H':
@@ -715,7 +713,7 @@ export namespace glz
       template <class B>
       inline void write_date_format(std::string_view fmt, const date_time_fields& f, B& b, auto& ix) noexcept
       {
-         for (size_t i = 0; i < fmt.size(); ++i) {
+         for (glz::size_t i = 0; i < fmt.size(); ++i) {
             const char c = fmt[i];
             if (c != '%') {
                b[ix++] = c;
@@ -723,36 +721,36 @@ export namespace glz
             }
             switch (fmt[++i]) {
             case 'Y':
-               write_digits<4>(b, ix, static_cast<uint64_t>(f.year));
+               write_digits<4>(b, ix, static_cast<glz::uint64_t>(f.year));
                break;
             case 'm':
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.month));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.month));
                break;
             case 'd':
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.day));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.day));
                break;
             case 'H':
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.hour));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.hour));
                break;
             case 'M':
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.minute));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.minute));
                break;
             case 'S':
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.second));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.second));
                break;
             case 'F':
-               write_digits<4>(b, ix, static_cast<uint64_t>(f.year));
+               write_digits<4>(b, ix, static_cast<glz::uint64_t>(f.year));
                b[ix++] = '-';
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.month));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.month));
                b[ix++] = '-';
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.day));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.day));
                break;
             case 'T':
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.hour));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.hour));
                b[ix++] = ':';
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.minute));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.minute));
                b[ix++] = ':';
-               write_digits<2>(b, ix, static_cast<uint64_t>(f.second));
+               write_digits<2>(b, ix, static_cast<glz::uint64_t>(f.second));
                break;
             case '%':
                b[ix++] = '%';
@@ -768,12 +766,12 @@ export namespace glz
                                     error_code& ec) noexcept
       {
          const char* s = str.data();
-         const size_t n = str.size();
-         size_t si = 0;
+         const glz::size_t n = str.size();
+         glz::size_t si = 0;
 
          // Consume exactly `count` digits at the current position, advancing si on
          // success. Returns -1 on non-digit or if fewer than `count` chars remain.
-         const auto take = [&](size_t count) -> int {
+         const auto take = [&](glz::size_t count) -> int {
             if (si + count > n) return -1;
             const int v = parse_digits(s, si, count);
             if (v >= 0) si += count;
@@ -796,7 +794,7 @@ export namespace glz
             return true;
          };
 
-         for (size_t i = 0; i < fmt.size(); ++i) {
+         for (glz::size_t i = 0; i < fmt.size(); ++i) {
             const char c = fmt[i];
             if (c != '%') {
                if (!expect_literal(c)) {

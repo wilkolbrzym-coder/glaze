@@ -1,13 +1,27 @@
 // Glaze Library - For the license information refer to glaze.hpp
-#pragma once
+// glz:header path="glaze/net/openapi.hpp"
+// glz:header std=<unordered_map>
+// glz:header include="glaze/json.hpp"
+// glz:header include="glaze/json/schema.hpp"
+// glz:header include="glaze/net/http_router.hpp"
+// glz:header project_imports=ignore
+// glz:header license_gap=none
+module;
 
-#include <unordered_map>
+// glz:emit std
 
-#include "glaze/json.hpp"
-#include "glaze/json/schema.hpp"
-#include "glaze/net/http_router.hpp"
+// glz:emit project
 
-namespace glz
+export module glaze.net.openapi;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.json.schema;
+import glaze.json;
+import glaze.net.http_router;
+
+export namespace glz
 {
    struct openapi_info
    {

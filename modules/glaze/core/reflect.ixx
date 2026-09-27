@@ -36,6 +36,7 @@ import glaze.core.cast;
 import glaze.util.primes_64;
 import glaze.util.for_each;
 import glaze.util.string_literal;
+import glaze.util.bit;
 import glaze.util.bit_array;
 import glaze.util.tuple;
 import glaze.util.type_traits;
@@ -136,7 +137,7 @@ namespace glz
 
    // Convert N bytes to uint64_t (template version for compile-time N)
    export template <glz::size_t N = 8>
-   export constexpr glz::uint64_t to_uint64(const char* bytes) noexcept
+   constexpr glz::uint64_t to_uint64(const char* bytes) noexcept
    {
       static_assert(N <= sizeof(glz::uint64_t));
       if consteval {
@@ -169,7 +170,7 @@ namespace glz
    // Named helper instead of IIFE so MSVC's lambda name mangling doesn't alias it
    // against unrelated IIFEs at deeper template instantiation depths.
    export template <class Tuple, template <class> class Predicate, glz::size_t... Is>
-   export consteval auto filter_indices_expand(std::index_sequence<Is...>)
+   consteval auto filter_indices_expand(std::index_sequence<Is...>)
    {
       constexpr bool matches[] = {Predicate<glz::tuple_element_t<Is, Tuple>>::value...};
       constexpr glz::size_t count = (matches[Is] + ...);
@@ -182,7 +183,7 @@ namespace glz
 
    // Get indices of elements satisfying a predicate
    export template <class Tuple, template <class> class Predicate>
-   export consteval auto filter_indices()
+   consteval auto filter_indices()
    {
       constexpr auto N = tuple_size_v<Tuple>;
       if constexpr (N == 0) {
@@ -194,20 +195,20 @@ namespace glz
    }
 
    export template <class T>
-   export concept is_object_key_type = std::convertible_to<T, std::string_view>;
+   concept is_object_key_type = std::convertible_to<T, std::string_view>;
 
    export template <class T>
-   export using object_key_type = std::bool_constant<is_object_key_type<T>>;
+   using object_key_type = std::bool_constant<is_object_key_type<T>>;
 
    export template <class T>
-   export using not_object_key_type = std::bool_constant<not is_object_key_type<T>>;
+   using not_object_key_type = std::bool_constant<not is_object_key_type<T>>;
 
    namespace detail
    {
       // The purpose of this is to allocate a new string_view to only the portion of memory
       // that we are concerned with. This lets the compiler reduce the binary on
       // reflected names;
-      template <glz::size_t I, class V>
+      export template <glz::size_t I, class V>
       struct get_name_alloc
       {
          static constexpr auto alias = get_name<get<I>(meta_v<V>)>();
@@ -216,7 +217,7 @@ namespace glz
    }
 
    export template <class T, glz::size_t I>
-   export consteval sv get_key_element()
+   consteval sv get_key_element()
    {
       using V = std::decay_t<T>;
       if constexpr (I == 0) {
@@ -238,7 +239,7 @@ namespace glz
    };
 
    export template <class T>
-   export struct reflect;
+   struct reflect;
 
    // ============================================================================
    // keys_wrapper: A pseudo-type that provides reflect<> interface for arbitrary key arrays
@@ -246,25 +247,25 @@ namespace glz
    // ============================================================================
 
    export template <const auto& Keys>
-   export struct keys_wrapper
+   struct keys_wrapper
    {
       // This type exists only to satisfy template parameters for hash_info and decode_hash
    };
 
    export template <class T>
-   export struct is_keys_wrapper_t : std::false_type
+   struct is_keys_wrapper_t : std::false_type
    {};
 
    export template <const auto& Keys>
-   export struct is_keys_wrapper_t<keys_wrapper<Keys>> : std::true_type
+   struct is_keys_wrapper_t<keys_wrapper<Keys>> : std::true_type
    {};
 
    export template <class T>
-   export inline constexpr bool is_keys_wrapper_v = is_keys_wrapper_t<T>::value;
+   inline constexpr bool is_keys_wrapper_v = is_keys_wrapper_t<T>::value;
 
    // Specialize reflect for keys_wrapper to provide the keys interface
    export template <const auto& Keys>
-   export struct reflect<keys_wrapper<Keys>>
+   struct reflect<keys_wrapper<Keys>>
    {
       static constexpr auto size = Keys.size();
 
@@ -296,7 +297,7 @@ namespace glz
    export template <class T>
       requires(!glaze_merge_t<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> == 0))
-   export struct reflect<T>
+   struct reflect<T>
    {
       static constexpr auto size = 0;
       static constexpr auto values = tuple{};
@@ -309,7 +310,7 @@ namespace glz
    export template <class T>
       requires(!meta_keys<T> && !glaze_merge_t<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> != 0))
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
       static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
@@ -347,7 +348,7 @@ namespace glz
    namespace detail
    {
       // Chains an outer member pointer with inner sub-field access for merge-in-meta types.
-      template <class ParentType, glz::size_t OuterIdx, glz::size_t InnerIdx>
+      export template <class ParentType, glz::size_t OuterIdx, glz::size_t InnerIdx>
       struct merge_accessor
       {
          static constexpr auto outer_ptr = get<OuterIdx>(meta_v<ParentType>);
@@ -366,7 +367,7 @@ namespace glz
          }
       };
 
-      struct merge_index_pair
+      export struct merge_index_pair
       {
          glz::size_t outer;
          glz::size_t inner;
@@ -375,7 +376,7 @@ namespace glz
 
    export template <class T>
       requires(glaze_merge_t<T>)
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
 
@@ -454,7 +455,7 @@ namespace glz
    };
 
    export template <class T, glz::size_t N>
-   export inline constexpr auto c_style_to_sv(const std::array<T, N>& arr)
+   inline constexpr auto c_style_to_sv(const std::array<T, N>& arr)
    {
       std::array<sv, N> ret{};
       for (glz::size_t i = 0; i < N; ++i) {
@@ -465,7 +466,7 @@ namespace glz
 
    export template <class T>
       requires(meta_keys<T> && glaze_t<T>)
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
       static constexpr auto size = tuple_size_v<meta_keys_t<T>>;
@@ -491,12 +492,12 @@ namespace glz
 
    export template <class T>
       requires(is_memory_object<T>)
-   export struct reflect<T> : reflect<memory_type<T>>
+   struct reflect<T> : reflect<memory_type<T>>
    {};
 
    export template <class T>
       requires(glaze_array_t<T>)
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
 
@@ -513,7 +514,7 @@ namespace glz
 
    export template <class T>
       requires reflectable<T>
-   export struct reflect<T>
+   struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
       using tie_type = decltype(to_tie(std::declval<T&>()));
@@ -530,27 +531,27 @@ namespace glz
 
    export template <class T>
       requires readable_map_t<T>
-   export struct reflect<T>
+   struct reflect<T>
    {
       static constexpr auto size = 0;
    };
 
    // The type of the field before get_member is applied
    export template <class T, glz::size_t I>
-   export using elem_t = reflect<T>::template elem<I>;
+   using elem_t = reflect<T>::template elem<I>;
 
    // The type of the field after get_member is applied
    export template <class T, glz::size_t I>
-   export using refl_t = reflect<T>::template type<I>;
+   using refl_t = reflect<T>::template type<I>;
 
    // The decayed type after get_member is called
    export template <class T, glz::size_t I>
-   export using field_t = std::remove_cvref_t<refl_t<T, I>>;
+   using field_t = std::remove_cvref_t<refl_t<T, I>>;
 
    // Check if a custom_t getter (To) returns a nullable type (write side).
    // Complement of custom_type_is_nullable which checks the From/setter (read side).
    export template <class V>
-   export consteval bool custom_getter_returns_nullable()
+   consteval bool custom_getter_returns_nullable()
    {
       if constexpr (!is_specialization_v<V, custom_t>) {
          return false;
@@ -598,7 +599,7 @@ namespace glz
 
    // Check if a glaze_value_t wraps a nullable inner type (write side).
    export template <class V>
-   export consteval bool glaze_value_is_nullable()
+   consteval bool glaze_value_is_nullable()
    {
       if constexpr (glaze_value_t<V>) {
          return null_t<remove_meta_wrapper_t<V>>;
@@ -610,7 +611,7 @@ namespace glz
 
    // Runtime check: is a glaze_value_t field currently null?
    export template <class T, glz::size_t I, class Value, class Tie>
-   export bool is_glaze_value_field_null(Value&& value, Tie&& t)
+   bool is_glaze_value_field_null(Value&& value, Tie&& t)
    {
       using val_t = field_t<T, I>;
       using Inner = remove_meta_wrapper_t<val_t>;
@@ -633,11 +634,11 @@ namespace glz
 
    // A type whose default value can be detected at runtime for skip_default_members
    export template <class T>
-   export concept has_skippable_default = str_t<T> || bool_t<T> || num_t<T> || (range<T> && !str_t<T> && has_empty<T>);
+   concept has_skippable_default = str_t<T> || bool_t<T> || num_t<T> || (range<T> && !str_t<T> && has_empty<T>);
 
    // Check if a member value equals its default (for skip_default_members)
    export template <class T>
-   export GLZ_ALWAYS_INLINE bool is_default_value(const T& value)
+   GLZ_ALWAYS_INLINE bool is_default_value(const T& value)
    {
       if constexpr (str_t<T> && has_empty<T>) {
          return value.empty();
@@ -665,7 +666,7 @@ namespace glz
    // cannot be serialized in this context (a type with no `to`/`from`, or a non-owning view that
    // GLZ_ASSERT_OWNS_ITS_BYTES rejects for a streaming read) still breaks the build.
    export template <class T, glz::size_t I, operation Op>
-   export inline constexpr bool skipped_by_meta = [] {
+   inline constexpr bool skipped_by_meta = [] {
       using V = std::remove_cvref_t<T>;
       if constexpr (meta_has_skip<V>) {
          return meta<V>::skip(reflect<V>::keys[I], meta_context{.op = Op});
@@ -679,7 +680,7 @@ namespace glz
    // of serialization (`always_skipped`), or it is a function pointer and `write_function_pointers` is
    // off. This is the test for positional layouts (`structs_as_arrays`), which have no keys to skip by.
    export template <auto Opts, class V>
-   export inline constexpr bool never_written =
+   inline constexpr bool never_written =
       always_skipped<V> || (!check_write_function_pointers(Opts) && is_any_function_ptr<V>);
 
    // Whether a keyed object writer leaves the field at index I of T out of its output, decided at
@@ -689,7 +690,7 @@ namespace glz
    //
    // Consume it like `skipped_by_meta`, as the condition that guards the field's writer.
    export template <auto Opts, class T, glz::size_t I>
-   export inline constexpr bool skipped_on_write =
+   inline constexpr bool skipped_on_write =
       never_written<Opts, field_t<T, I>> || skipped_by_meta<T, I, operation::serialize>;
 
    // Whether `meta<T>::skip` excludes any field at all from the given operation.
@@ -698,7 +699,7 @@ namespace glz
    // that operation nothing. Asking this rather than whether `meta<T>::skip` merely exists is what
    // lets a read-side skip leave the writers alone.
    export template <class T, operation Op>
-   export inline constexpr bool any_skipped_by_meta = [] {
+   inline constexpr bool any_skipped_by_meta = [] {
       constexpr auto N = reflect<T>::size;
       if constexpr (meta_has_skip<T> && N > 0) {
          return []<glz::size_t... I>(std::index_sequence<I...>) {
@@ -711,7 +712,7 @@ namespace glz
    }();
 
    export template <auto Opts, class T>
-   export inline constexpr bool maybe_skipped = [] {
+   inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
          constexpr auto N = reflect<T>::size;
          // skip_if decides per value at runtime, so its mere presence forces the dynamic path. skip
@@ -744,7 +745,7 @@ namespace glz
 namespace glz
 {
    export template <glz::size_t I, class T>
-   export constexpr auto key_name_v = [] {
+   constexpr auto key_name_v = [] {
       if constexpr (reflectable<T>) {
          return get<I>(member_names<T>);
       }
@@ -756,7 +757,7 @@ namespace glz
    // Check if a custom_t setter (From) accepts a nullable type (read side).
    // Complement of custom_getter_returns_nullable which checks the To/getter (write side).
    export template <class V, class From>
-   export consteval bool custom_type_is_nullable()
+   consteval bool custom_type_is_nullable()
    {
       if constexpr (std::is_member_pointer_v<From>) {
          if constexpr (std::is_member_function_pointer_v<From>) {
@@ -806,7 +807,7 @@ namespace glz
 
    // Runtime check: invoke a custom_t getter and return whether the result is null
    export template <class V>
-   export bool custom_getter_is_null(V&& custom_val, auto&& ctx)
+   bool custom_getter_is_null(V&& custom_val, auto&& ctx)
    {
       using CV = std::remove_cvref_t<V>;
       using To = typename CV::to_t;
@@ -853,7 +854,7 @@ namespace glz
    // Check if a custom_t field at index I is null, given the parent value and tie.
    // Used by JSON/CBOR/BEVE write paths to skip null custom getter results.
    export template <class T, glz::size_t I, class Value, class Tie, class Ctx>
-   export bool is_custom_field_null(Value&& value, Tie&& t, Ctx&& ctx)
+   bool is_custom_field_null(Value&& value, Tie&& t, Ctx&& ctx)
    {
       decltype(auto) custom_val = [&]() -> decltype(auto) {
          if constexpr (reflectable<T>) {
@@ -869,7 +870,7 @@ namespace glz
    // Whether any member of T performs a file include. Only these objects pay for the key-bit
    // bookkeeping that lets an included document satisfy the including object's missing-key check.
    export template <class T>
-   export constexpr bool has_includer_member = []() constexpr {
+   constexpr bool has_includer_member = []() constexpr {
       if constexpr (glaze_object_t<T> || reflectable<T>) {
          bool found = false;
          for_each<reflect<T>::size>([&]<auto I>() constexpr {
@@ -885,7 +886,7 @@ namespace glz
    }();
 
    export template <class T, auto Opts>
-   export constexpr auto required_fields()
+   constexpr auto required_fields()
    {
       constexpr auto N = reflect<T>::size;
 
@@ -963,62 +964,62 @@ namespace glz::detail
    // from
    // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
    export template <class T, class... Ts>
-   export struct unique
+   struct unique
    {
       using type = T;
    };
 
    export template <template <class...> class T, class... Ts, class U, class... Us>
-   export struct unique<T<Ts...>, U, Us...>
+   struct unique<T<Ts...>, U, Us...>
       : std::conditional_t<(std::is_same_v<U, Ts> || ...), unique<T<Ts...>, Us...>, unique<T<Ts..., U>, Us...>>
    {};
 
    export template <class... Ts>
-   export struct unique_variant : unique<std::variant<>, Ts...>
+   struct unique_variant : unique<std::variant<>, Ts...>
    {};
 
    export template <class T>
-   export struct tuple_ptr_variant;
+   struct tuple_ptr_variant;
 
    export template <class... Ts>
-   export struct tuple_ptr_variant<glz::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+   struct tuple_ptr_variant<glz::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
    {};
 
    export template <class... Ts>
-   export struct tuple_ptr_variant<std::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+   struct tuple_ptr_variant<std::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
    {};
 
    export template <class... Ts>
-   export struct tuple_ptr_variant<std::pair<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+   struct tuple_ptr_variant<std::pair<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
    {};
 
    export template <class T, class = std::make_index_sequence<reflect<T>::size>>
-   export struct member_tuple_type;
+   struct member_tuple_type;
 
    export template <class T, glz::size_t... I>
-   export struct member_tuple_type<T, std::index_sequence<I...>>
+   struct member_tuple_type<T, std::index_sequence<I...>>
    {
       using type =
          std::conditional_t<sizeof...(I) == 0, tuple<>, tuple<std::remove_cvref_t<member_t<T, refl_t<T, I>>>...>>;
    };
 
    export template <class T>
-   export using member_tuple_t = typename member_tuple_type<T>::type;
+   using member_tuple_t = typename member_tuple_type<T>::type;
 
    export template <class T, class = std::make_index_sequence<reflect<T>::size>>
-   export struct value_variant;
+   struct value_variant;
 
    export template <class T, glz::size_t... I>
-   export struct value_variant<T, std::index_sequence<I...>>
+   struct value_variant<T, std::index_sequence<I...>>
    {
       using type = typename unique_variant<std::remove_cvref_t<elem_t<T, I>>...>::type;
    };
 
    export template <class T>
-   export using value_variant_t = typename value_variant<T>::type;
+   using value_variant_t = typename value_variant<T>::type;
 
    export template <class T>
-   export inline constexpr auto make_array()
+   inline constexpr auto make_array()
    {
       return []<glz::size_t... I>(std::index_sequence<I...>) {
          using value_t = value_variant_t<T>;
@@ -1027,7 +1028,7 @@ namespace glz::detail
    }
 
    export template <class Tuple, std::size_t... Is>
-   export inline constexpr auto tuple_runtime_getter(std::index_sequence<Is...>)
+   inline constexpr auto tuple_runtime_getter(std::index_sequence<Is...>)
    {
       using value_t = typename tuple_ptr_variant<Tuple>::type;
       using tuple_ref = std::add_lvalue_reference_t<Tuple>;
@@ -1043,7 +1044,7 @@ namespace glz::detail
    }
 
    export template <class Tuple>
-   export inline auto get_runtime(Tuple&& t, const glz::size_t index)
+   inline auto get_runtime(Tuple&& t, const glz::size_t index)
    {
       using T = std::decay_t<Tuple>;
       static constexpr auto indices = std::make_index_sequence<glz::tuple_size_v<T>>{};
@@ -1056,7 +1057,7 @@ namespace glz
 {
    export template <auto Enum>
       requires(std::is_enum_v<decltype(Enum)>)
-   export constexpr sv enum_name_v = []() -> std::string_view {
+   constexpr sv enum_name_v = []() -> std::string_view {
       using T = std::decay_t<decltype(Enum)>;
 
       if constexpr (glaze_t<T>) {
@@ -1088,7 +1089,7 @@ namespace glz
    };
 
    export template <glz::size_t N, glz::size_t TableSize>
-   export struct int_keys_info_t
+   struct int_keys_info_t
    {
       // Note: table must be first to work around Apple clang NTTP bug where
       // arrays at the end of structs get corrupted when passed as template parameters
@@ -1103,7 +1104,7 @@ namespace glz
 
    // Specialization for when no table is needed
    export template <glz::size_t N>
-   export struct int_keys_info_t<N, 0>
+   struct int_keys_info_t<N, 0>
    {
       int_hash_type type{};
       glz::int64_t min_value{};
@@ -1115,7 +1116,7 @@ namespace glz
 
    export template <class T>
       requires std::is_enum_v<T>
-   export constexpr auto make_int_keys_info()
+   constexpr auto make_int_keys_info()
    {
       using U = std::underlying_type_t<T>;
       constexpr auto N = reflect<T>::size;
@@ -1338,18 +1339,18 @@ namespace glz
 
    export template <class T>
       requires std::is_enum_v<T>
-   export constexpr auto enum_index_info = make_int_keys_info<T>();
+   constexpr auto enum_index_info = make_int_keys_info<T>();
 
    // Array of enum underlying values for runtime indexing
    export template <class T>
       requires std::is_enum_v<T>
-   export constexpr auto enum_values_array = []<glz::size_t... I>(std::index_sequence<I...>) {
+   constexpr auto enum_values_array = []<glz::size_t... I>(std::index_sequence<I...>) {
       using U = std::underlying_type_t<T>;
       return std::array<U, sizeof...(I)>{static_cast<U>(glz::get<I>(reflect<T>::values))...};
    }(std::make_index_sequence<reflect<T>::size>{});
 
    export template <class T, auto Info>
-   export struct enum_value_to_index
+   struct enum_value_to_index
    {
       using U = std::underlying_type_t<T>;
       static constexpr auto N = reflect<T>::size;
@@ -1479,7 +1480,7 @@ namespace glz
    // Note: is_reflect_enum types are handled separately because P2996 requires inline consteval context
    export template <class T>
       requires(glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
-   export constexpr auto get_enum_name(T&& enum_value)
+   constexpr auto get_enum_name(T&& enum_value)
    {
       using V = std::decay_t<T>;
       using U = std::underlying_type_t<V>;
@@ -1513,7 +1514,7 @@ namespace glz
    }
 
    export template <glaze_flags_t T>
-   export consteval auto byte_length() noexcept
+   consteval auto byte_length() noexcept
    {
       constexpr auto N = reflect<T>::size;
 
@@ -1526,11 +1527,9 @@ namespace glz
    }
 }
 
-#include <initializer_list>
+// glz:emit init_list
 
-#include "glaze/core/common.hpp"
-#include "glaze/reflection/get_name.hpp"
-#include "glaze/reflection/to_tuple.hpp"
+// glz:emit mid
 
 namespace glz
 {
@@ -1548,7 +1547,7 @@ namespace glz
 {
    // TODO: This is returning the total keys and not the max keys for a particular variant object
    export template <class T, glz::size_t N>
-   export constexpr glz::size_t get_max_keys = [] {
+   constexpr glz::size_t get_max_keys = [] {
       glz::size_t res{};
       for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
@@ -1563,7 +1562,7 @@ namespace glz
    }();
 
    export template <class T>
-   export constexpr auto get_combined_keys_from_variant()
+   constexpr auto get_combined_keys_from_variant()
    {
       constexpr auto N = std::variant_size_v<T>;
 
@@ -1592,7 +1591,7 @@ namespace glz
 namespace glz
 {
    export template <class T>
-   export consteval glz::size_t key_index(const std::string_view key)
+   consteval glz::size_t key_index(const std::string_view key)
    {
       const auto n = reflect<T>::keys.size();
       for (glz::size_t i = 0; i < n; ++i) {
@@ -1606,14 +1605,14 @@ namespace glz
 
 namespace glz
 {
-   export GLZ_ALWAYS_INLINE constexpr glz::uint64_t bitmix(glz::uint64_t h, const glz::uint64_t seed) noexcept
+   GLZ_ALWAYS_INLINE constexpr glz::uint64_t bitmix(glz::uint64_t h, const glz::uint64_t seed) noexcept
    {
       h *= seed;
       return h ^ std::rotr(h, 49);
    };
 
    // Use when hashing large chunks of characters that are likely very similar
-   export GLZ_ALWAYS_INLINE constexpr glz::uint64_t rich_bitmix(glz::uint64_t h, const glz::uint64_t seed) noexcept
+   GLZ_ALWAYS_INLINE constexpr glz::uint64_t rich_bitmix(glz::uint64_t h, const glz::uint64_t seed) noexcept
    {
       h ^= h >> 23;
       h *= 0x2127599bf4325c37ULL;
@@ -1624,7 +1623,7 @@ namespace glz
    }
 
    export template <glz::size_t N>
-   export using bucket_value_t = std::conditional_t < N<256, glz::uint8_t, glz::uint16_t>;
+   using bucket_value_t = std::conditional_t < N<256, glz::uint8_t, glz::uint16_t>;
 
    // The larger the underlying bucket the more we avoid collisions with invalid keys.
    // This improves performance of rejecting invalid keys because we don't have to do
@@ -1726,7 +1725,7 @@ namespace glz
    }
 
    export template <class T>
-   export inline constexpr auto per_length_info = unique_per_length_info(reflect<T>::keys);
+   inline constexpr auto per_length_info = unique_per_length_info(reflect<T>::keys);
 
    export consteval glz::size_t bucket_size(hash_type type, glz::size_t N)
    {
@@ -1785,7 +1784,7 @@ namespace glz
 
    // A value of N in the bucket indicates an invalid hash
    export template <class T, glz::size_t Slots>
-   export struct hash_info_t
+   struct hash_info_t
    {
       hash_type type{};
 
@@ -1982,7 +1981,7 @@ namespace glz
    // runtime full hash algorithm
    // Must stay bit for bit identical to full_hash_impl, which built the table this indexes
    export template <glz::uint64_t min_length, glz::uint64_t max_length, glz::uint64_t seed>
-   export inline constexpr glz::uint64_t full_hash(const auto* it, const glz::size_t n) noexcept
+   inline constexpr glz::uint64_t full_hash(const auto* it, const glz::size_t n) noexcept
    {
       if constexpr (max_length < 8) {
          if (n > 7) {
@@ -2018,7 +2017,7 @@ namespace glz
    }
 
    export template <std::integral ChunkType, glz::size_t N>
-   export constexpr bool front_bytes_hash_info(const std::array<sv, N>& keys, keys_info_t& info) noexcept
+   constexpr bool front_bytes_hash_info(const std::array<sv, N>& keys, keys_info_t& info) noexcept
    {
       if (info.min_length < sizeof(ChunkType)) {
          return false;
@@ -2132,7 +2131,7 @@ namespace glz
 
    // The sequence of hashing algorithms written here determines the selection preference
    export template <glz::size_t N>
-   export constexpr auto make_keys_info(const std::array<sv, N>& keys)
+   constexpr auto make_keys_info(const std::array<sv, N>& keys)
    {
       namespace ranges = std::ranges;
 
@@ -2377,10 +2376,10 @@ namespace glz
    }
 
    export template <class T>
-   export constexpr auto keys_info = make_keys_info(reflect<T>::keys);
+   constexpr auto keys_info = make_keys_info(reflect<T>::keys);
 
    export template <class T>
-   export constexpr auto hash_info = [] {
+   constexpr auto hash_info = [] {
       if constexpr ((glaze_object_t<T> || reflectable<T> || glaze_flags_t<T> ||
                      ((std::is_enum_v<std::remove_cvref_t<T>> && meta_keys<T>) || glaze_enum_t<T>) ||
                      is_keys_wrapper_v<T>) &&
@@ -2539,7 +2538,7 @@ namespace glz
    // scan the better choice over std::memchr, whose call overhead alone outweighs walking the two
    // or three words a key spans.
    export template <glz::size_t min_length, glz::size_t max_length>
-   export GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto end) noexcept
    {
       // A key shorter than min_length matches nothing either, so starting the scan there is safe:
       // it can only fail to find the quote, which is the answer such a key deserves.
@@ -2577,22 +2576,22 @@ namespace glz
    }
 
    export template <glz::uint32_t Format, class T, auto HashInfo, hash_type Type>
-   export struct decode_hash;
+   struct decode_hash;
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::single_element>
+   struct decode_hash<JSON, T, HashInfo, hash_type::single_element>
    {
       GLZ_ALWAYS_INLINE static constexpr glz::size_t op(auto&& /*it*/, auto&& /*end*/) noexcept { return 0; }
    };
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::mod4>
+   struct decode_hash<JSON, T, HashInfo, hash_type::mod4>
    {
       GLZ_ALWAYS_INLINE static constexpr glz::size_t op(auto&& it, auto&& /*end*/) noexcept { return glz::uint8_t(*it) % 4; }
    };
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::xor_mod4>
+   struct decode_hash<JSON, T, HashInfo, hash_type::xor_mod4>
    {
       static constexpr auto first_key_char = reflect<T>::keys[0][0];
 
@@ -2603,7 +2602,7 @@ namespace glz
    };
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::minus_mod4>
+   struct decode_hash<JSON, T, HashInfo, hash_type::minus_mod4>
    {
       static constexpr auto first_key_char = reflect<T>::keys[0][0];
 
@@ -2614,7 +2613,7 @@ namespace glz
    };
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::unique_index>
+   struct decode_hash<JSON, T, HashInfo, hash_type::unique_index>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
@@ -2661,7 +2660,7 @@ namespace glz
    };
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::three_element_unique_index>
+   struct decode_hash<JSON, T, HashInfo, hash_type::three_element_unique_index>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto uindex = HashInfo.unique_index;
@@ -2680,7 +2679,7 @@ namespace glz
    };
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::front_hash>
+   struct decode_hash<JSON, T, HashInfo, hash_type::front_hash>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
@@ -2751,7 +2750,7 @@ namespace glz
    };
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::unique_per_length>
+   struct decode_hash<JSON, T, HashInfo, hash_type::unique_per_length>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
@@ -2775,7 +2774,7 @@ namespace glz
    };
 
    export template <class T, auto HashInfo>
-   export struct decode_hash<JSON, T, HashInfo, hash_type::full_flat>
+   struct decode_hash<JSON, T, HashInfo, hash_type::full_flat>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
@@ -2826,7 +2825,7 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo, hash_type Type>
-   export struct decode_hash_with_size_impl;
+   struct decode_hash_with_size_impl;
 
    // Single entry point for the in-place key-hash readers (BSON, MessagePack, CBOR, CSV, TOML, plus
    // the compile-time-key callers). Every reader below dereferences key bytes only at offsets that
@@ -2837,7 +2836,7 @@ namespace glz
    // the individual readers carry no per-read bounds checks; the sole exception is unique_per_length,
    // whose length-indexed table yields 255 for absent lengths and so keeps its own end check.
    export template <glz::uint32_t Format, class T, auto HashInfo, hash_type Type>
-   export struct decode_hash_with_size
+   struct decode_hash_with_size
    {
       static constexpr auto N = reflect<T>::size;
 
@@ -2851,13 +2850,13 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::single_element>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::single_element>
    {
       GLZ_ALWAYS_INLINE static constexpr glz::size_t op(auto&&, auto&&, const glz::size_t) noexcept { return 0; }
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::mod4>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::mod4>
    {
       GLZ_ALWAYS_INLINE static constexpr glz::size_t op(auto&& it, auto&&, const glz::size_t) noexcept
       {
@@ -2866,7 +2865,7 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::xor_mod4>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::xor_mod4>
    {
       static constexpr auto first_key_char = reflect<T>::keys[0][0];
 
@@ -2877,7 +2876,7 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::minus_mod4>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::minus_mod4>
    {
       static constexpr auto first_key_char = reflect<T>::keys[0][0];
 
@@ -2888,7 +2887,7 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::unique_index>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::unique_index>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
@@ -2916,7 +2915,7 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::three_element_unique_index>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::three_element_unique_index>
    {
       static constexpr auto uindex = HashInfo.unique_index;
 
@@ -2930,7 +2929,7 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::front_hash>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::front_hash>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
@@ -2994,7 +2993,7 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::unique_per_length>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::unique_per_length>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
@@ -3015,7 +3014,7 @@ namespace glz
    };
 
    export template <glz::uint32_t Format, class T, auto HashInfo>
-   export struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::full_flat>
+   struct decode_hash_with_size_impl<Format, T, HashInfo, hash_type::full_flat>
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
@@ -3034,11 +3033,11 @@ namespace glz
 
    // Number of unique keys from all variant types
    export template <is_variant T>
-   export constexpr glz::size_t variant_deduction_key_count = get_combined_keys_from_variant<T>().second;
+   constexpr glz::size_t variant_deduction_key_count = get_combined_keys_from_variant<T>().second;
 
    // Array of unique keys (sorted) from all variant types
    export template <is_variant T>
-   export constexpr auto variant_deduction_keys = []() {
+   constexpr auto variant_deduction_keys = []() {
       constexpr auto pair = get_combined_keys_from_variant<T>();
       std::array<sv, variant_deduction_key_count<T>> result{};
       for (glz::size_t i = 0; i < variant_deduction_key_count<T>; ++i) {
@@ -3049,7 +3048,7 @@ namespace glz
 
    // Variant deduction bits - for each unique key, tracks which variant types contain it
    export template <is_variant T>
-   export constexpr auto variant_deduction_bits = []() {
+   constexpr auto variant_deduction_bits = []() {
       static constexpr glz::size_t K = variant_deduction_key_count<T>;
       using bits_type = bit_array<std::variant_size_v<T>>;
       std::array<bits_type, K> bits{};
@@ -3088,7 +3087,7 @@ namespace glz
    // Helper to create int_keys_info from ids_v<T> for integral variant IDs
    export template <is_variant T>
       requires(std::integral<std::decay_t<decltype(ids_v<T>[0])>>)
-   export constexpr auto make_variant_int_keys_info()
+   constexpr auto make_variant_int_keys_info()
    {
       using U = std::decay_t<decltype(ids_v<T>[0])>;
       constexpr auto N = ids_v<T>.size();
@@ -3310,11 +3309,11 @@ namespace glz
 
    // Primary template for variant_id_to_index
    export template <is_variant T, bool IsIntegral = std::integral<std::decay_t<decltype(ids_v<T>[0])>>>
-   export struct variant_id_to_index;
+   struct variant_id_to_index;
 
    // Specialization for string IDs
    export template <is_variant T>
-   export struct variant_id_to_index<T, false>
+   struct variant_id_to_index<T, false>
    {
       using keys_t = keys_wrapper<ids_v<T>>;
       static constexpr auto& HashInfo = hash_info<keys_t>;
@@ -3336,7 +3335,7 @@ namespace glz
 
    // Specialization for integral IDs
    export template <is_variant T>
-   export struct variant_id_to_index<T, true>
+   struct variant_id_to_index<T, true>
    {
       using U = std::decay_t<decltype(ids_v<T>[0])>;
       static constexpr auto Info = make_variant_int_keys_info<T>();
@@ -3481,7 +3480,7 @@ namespace glz
    }
 
    export template <class T>
-   export [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe, const auto& buffer)
+   [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe, const auto& buffer)
    {
       if (not pe) {
          return format_error(pe.error(), buffer);
@@ -3492,7 +3491,7 @@ namespace glz
    }
 
    export template <class T>
-   export [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe)
+   [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe)
    {
       if (not pe) {
          return format_error(pe.error());
@@ -3503,7 +3502,7 @@ namespace glz
    }
 
    export template <class T>
-   export inline constexpr glz::size_t maximum_key_size = [] {
+   inline constexpr glz::size_t maximum_key_size = [] {
       constexpr auto N = reflect<T>::size;
       glz::size_t maximum{};
       for (glz::size_t i = 0; i < N; ++i) {
@@ -3522,7 +3521,7 @@ namespace glz
    // The Callable comes second as ranges::for_each puts the callable at the end
 
    export template <class Callable, reflectable T>
-   export void for_each_field(T&& value, Callable&& callable)
+   void for_each_field(T&& value, Callable&& callable)
    {
       constexpr auto N = reflect<T>::size;
       if constexpr (N > 0) {
@@ -3533,7 +3532,7 @@ namespace glz
    }
 
    export template <class Callable, glaze_object_t T>
-   export void for_each_field(T&& value, Callable&& callable)
+   void for_each_field(T&& value, Callable&& callable)
    {
       constexpr auto N = reflect<T>::size;
       if constexpr (N > 0) {
@@ -3545,7 +3544,7 @@ namespace glz
 
    // Check if a type has a member with a specific name
    export template <class T>
-   export consteval bool has_member_with_name(const sv& name) noexcept
+   consteval bool has_member_with_name(const sv& name) noexcept
    {
       if constexpr (reflectable<T> || glaze_object_t<T>) {
          constexpr auto N = reflect<T>::size;
@@ -3561,7 +3560,7 @@ namespace glz
    // Concept to check if glz::reflect<T> can be instantiated and used
    // This concept is automatically satisfied by any type that has a valid reflect<T> specialization
    export template <class T>
-   export concept has_reflect = requires {
+   concept has_reflect = requires {
       sizeof(reflect<T>); // Ensure reflect<T> is complete
       { reflect<T>::size } -> std::convertible_to<std::size_t>;
    };
@@ -3596,7 +3595,7 @@ namespace glz
    // The object type an alternative presents to the serializers: memory objects (smart pointers,
    // std::optional of a struct, ...) tag through the type they point to.
    export template <class V>
-   export using variant_alternative_object_t = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+   using variant_alternative_object_t = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
 
    // A unit alternative carries no data at all: std::monostate, std::nullptr_t, std::nullopt_t.
    // Internal tagging renders it as a discriminator-only object -- exactly the object an empty struct
@@ -3606,7 +3605,7 @@ namespace glz
    // `null` writer simply predates the tagging machinery. Untagged variants still write it as `null`,
    // and both readers still accept `null` for it so existing data keeps parsing.
    export template <class V>
-   export inline constexpr bool variant_unit_alternative = always_null_t<std::decay_t<V>>;
+   inline constexpr bool variant_unit_alternative = always_null_t<std::decay_t<V>>;
 
    // An alternative can host a merged discriminator only if it serializes as an object whose members
    // Glaze itself emits, so one more member can be spliced in, or if it carries no data and can be
@@ -3618,7 +3617,7 @@ namespace glz
    // length-prefixed and the member count of a custom body is not knowable in advance -- the BEVE
    // writer static_asserts on that combination rather than silently dropping the discriminator.
    export template <class V>
-   export inline constexpr bool internally_taggable_alternative =
+   inline constexpr bool internally_taggable_alternative =
       glaze_object_t<variant_alternative_object_t<V>> || reflectable<variant_alternative_object_t<V>> ||
       custom_write<V> || variant_unit_alternative<V>;
 
@@ -3627,7 +3626,7 @@ namespace glz
       // An empty reflected object, used to consume the body of a discriminator-only object on behalf
       // of a unit alternative. Routing through it reuses the object readers' key handling, unknown-key
       // policy, and terminator consumption rather than duplicating them per format.
-      struct variant_unit_body
+      export struct variant_unit_body
       {};
    }
 
@@ -3637,7 +3636,7 @@ namespace glz
    // into that member. The custom cases are excluded because their serializer, not reflection,
    // decides which members exist.
    export template <class V>
-   export consteval bool alternative_declares_key(const sv& name) noexcept
+   consteval bool alternative_declares_key(const sv& name) noexcept
    {
       if constexpr (custom_write<V>) {
          return false;
@@ -3651,23 +3650,23 @@ namespace glz
    {
       // Instantiated only to fail, so the compiler's instantiation backtrace names the alternative
       // that internal tagging cannot represent.
-      template <class Variant, class Alternative>
+      export template <class Variant, class Alternative>
       struct internal_tagging_requires_object_alternatives : std::false_type
       {};
 
       // Same trick for the two representation limits that are specific to BEVE rather than to the
       // variant's declaration, and so are diagnosed where they bite instead of here.
-      template <class Variant, class Alternative>
+      export template <class Variant, class Alternative>
       struct beve_internal_tagging_needs_reflected_alternative : std::false_type
       {};
 
-      template <class Variant>
+      export template <class Variant>
       struct beve_positional_tagging_needs_content : std::false_type
       {};
 
       // MessagePack and CBOR maps are length-prefixed exactly as BEVE objects are, so they inherit
       // the same representation limit: the member count of a custom body is not knowable in advance.
-      template <class Variant, class Alternative>
+      export template <class Variant, class Alternative>
       struct binary_internal_tagging_needs_reflected_alternative : std::false_type
       {};
    }
@@ -3677,7 +3676,7 @@ namespace glz
    // `ids` has no id to write. Indexing there reads past a static array. A valueless variant has no
    // alternative to name at all, and neither does an index past the alternative list.
    export template <is_variant T>
-   export [[nodiscard]] inline bool variant_missing_id(auto&& value, is_context auto&& ctx) noexcept
+   [[nodiscard]] inline bool variant_missing_id(auto&& value, is_context auto&& ctx) noexcept
    {
       if (value.index() >= ids_v<T>.size()) [[unlikely]] {
          ctx.error = error_code::no_matching_variant_type;
@@ -3691,7 +3690,7 @@ namespace glz
    // names no alternative and there is no unlabeled default. The formats differ only in how they
    // decode the id from their own bytes; this rule is the same for all of them.
    export template <is_variant T>
-   export [[nodiscard]] constexpr glz::size_t variant_index_from_id(glz::size_t index) noexcept
+   [[nodiscard]] constexpr glz::size_t variant_index_from_id(glz::size_t index) noexcept
    {
       if (index < ids_v<T>.size()) [[likely]] {
          return index;
@@ -3705,7 +3704,7 @@ namespace glz
    }
 
    export template <is_variant T>
-   export struct variant_tagging
+   struct variant_tagging
    {
       static constexpr glz::size_t size = std::variant_size_v<T>;
       static constexpr bool has_tag = not tag_v<T>.empty();
@@ -3752,13 +3751,13 @@ namespace glz
    };
 
    export template <is_variant T>
-   export inline constexpr variant_tagging_kind variant_tagging_v = variant_tagging<T>::kind;
+   inline constexpr variant_tagging_kind variant_tagging_v = variant_tagging<T>::kind;
 
    export template <is_variant T>
-   export inline constexpr bool internally_tagged_v = variant_tagging_v<T> == variant_tagging_kind::internal;
+   inline constexpr bool internally_tagged_v = variant_tagging_v<T> == variant_tagging_kind::internal;
 
    export template <is_variant T>
-   export inline constexpr bool adjacently_tagged_v = variant_tagging_v<T> == variant_tagging_kind::adjacent;
+   inline constexpr bool adjacently_tagged_v = variant_tagging_v<T> == variant_tagging_kind::adjacent;
 
    // The kinds of self-describing value a MessagePack or CBOR reader for a type accepts, with
    // conversions allowed. Undeclared variant resolution uses them to find the alternatives that can
@@ -3766,18 +3765,18 @@ namespace glz
    // safe: it only keeps a strict pass that might have been skipped.
    namespace binary_value_kind
    {
-      inline constexpr glz::uint8_t null = 1 << 0;
-      inline constexpr glz::uint8_t boolean = 1 << 1;
-      inline constexpr glz::uint8_t integer = 1 << 2;
-      inline constexpr glz::uint8_t floating = 1 << 3;
-      inline constexpr glz::uint8_t string = 1 << 4;
-      inline constexpr glz::uint8_t sequence = 1 << 5; // arrays, byte strings, and typed-array tags
-      inline constexpr glz::uint8_t map = 1 << 6;
-      inline constexpr glz::uint8_t any = 0xff;
+      export inline constexpr glz::uint8_t null = 1 << 0;
+      export inline constexpr glz::uint8_t boolean = 1 << 1;
+      export inline constexpr glz::uint8_t integer = 1 << 2;
+      export inline constexpr glz::uint8_t floating = 1 << 3;
+      export inline constexpr glz::uint8_t string = 1 << 4;
+      export inline constexpr glz::uint8_t sequence = 1 << 5; // arrays, byte strings, and typed-array tags
+      export inline constexpr glz::uint8_t map = 1 << 6;
+      export inline constexpr glz::uint8_t any = 0xff;
    }
 
    export template <class T>
-   export consteval glz::uint8_t binary_value_kinds() noexcept
+   consteval glz::uint8_t binary_value_kinds() noexcept
    {
       using V = std::remove_cvref_t<T>;
       namespace kind = binary_value_kind;
@@ -3825,7 +3824,7 @@ namespace glz
    // sole candidate for every value it accepts, so a single lenient read lands where the strict and
    // lenient pair would, without parsing its subtree twice at every level of a nest.
    export template <is_variant T>
-   export inline constexpr auto binary_contested_alternatives_v = [] {
+   inline constexpr auto binary_contested_alternatives_v = [] {
       constexpr glz::size_t N = std::variant_size_v<T>;
       const auto kinds = []<glz::size_t... I>(std::index_sequence<I...>) {
          return std::array<glz::uint8_t, N>{binary_value_kinds<std::variant_alternative_t<I, T>>()...};

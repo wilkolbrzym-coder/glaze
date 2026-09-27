@@ -13,7 +13,6 @@ export module glaze.util.bit_array;
 import std;
 import glaze.core.basic_types;
 
-
 namespace glz
 {
    // Basically std::bitset but exposes things normally not available like the bitscan functions

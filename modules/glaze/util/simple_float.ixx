@@ -7,16 +7,9 @@
 // glz:header std=<cstring>
 // glz:header std=<limits>
 // glz:header std=<type_traits>
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.simple_float;
-
-import std;
-
-#include "glaze/util/inline.hpp"
-
-using std::int16_t;
-using std::int32_t;
-using std::uint32_t;
-using std::uint64_t;
 
 // Simple computational float parsing for size-optimized builds.
 // Uses minimal lookup tables (~1KB) instead of fast_float (~20KB+), trading
@@ -24,6 +17,11 @@ using std::uint64_t;
 // Suitable for embedded systems and bare-metal environments.
 // (Serialization is handled by glz::to_chars in glaze/util/zmij.hpp; with
 // `OptSize=true` it offers a similarly small footprint at higher throughput.)
+
+import std;
+import glaze.core.basic_types;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz::simple_float
 {
@@ -37,12 +35,12 @@ namespace glz::simple_float
       struct decimal_number
       {
          bool negative{};
-         uint64_t mantissa{};
-         int32_t exp10{};
+         glz::uint64_t mantissa{};
+         glz::int32_t exp10{};
       };
 
-      inline constexpr int32_t max_exp10 = 400;
-      inline constexpr int32_t min_exp10 = -400;
+      inline constexpr glz::int32_t max_exp10 = 400;
+      inline constexpr glz::int32_t min_exp10 = -400;
 
       // Strict JSON-compliant number parser
       // JSON number format (RFC 8259):
@@ -92,8 +90,8 @@ namespace glz::simple_float
          }
 
          constexpr int max_sig_digits = 17;
-         uint64_t mantissa = 0;
-         int32_t exp10 = 0;
+         glz::uint64_t mantissa = 0;
+         glz::int32_t exp10 = 0;
          int sig_digits = 0;
 
          // Parse integer part
@@ -165,11 +163,11 @@ namespace glz::simple_float
                return nullptr; // Error: exponent without digits (e.g., "1e", "1e+", "1e-")
             }
 
-            int32_t exp_part = 0;
+            glz::int32_t exp_part = 0;
             while (!at_end() && is_digit(peek())) {
                unsigned digit = static_cast<unsigned>(*p - '0');
                if (exp_part < max_exp10) {
-                  exp_part = exp_part * 10 + static_cast<int32_t>(digit);
+                  exp_part = exp_part * 10 + static_cast<glz::int32_t>(digit);
                   if (exp_part > max_exp10) exp_part = max_exp10;
                }
                ++p;
@@ -202,9 +200,9 @@ namespace glz::simple_float
       // mantissa has MSB at bit 127, value = mantissa × 2^exp
       struct pow5_128
       {
-         uint64_t hi;
-         uint64_t lo;
-         int32_t exp;
+         glz::uint64_t hi;
+         glz::uint64_t lo;
+         glz::int32_t exp;
       };
 
       // Positive powers: 5^(2^k) for k = 0..8
@@ -258,11 +256,11 @@ namespace glz::simple_float
          }
 
          const bool is_negative = q < 0;
-         uint32_t e = static_cast<uint32_t>(is_negative ? -q : q);
+         glz::uint32_t e = static_cast<glz::uint32_t>(is_negative ? -q : q);
 
          // Start with 1.0 normalized
          u128 mantissa = u128(1) << 127;
-         int32_t exp = -127;
+         glz::int32_t exp = -127;
 
          // Binary exponentiation using the base pow5 tables
          for (int k = 0; k < 9 && e != 0; ++k) {
@@ -271,17 +269,17 @@ namespace glz::simple_float
                u128 p_mantissa = (u128(p.hi) << 64) | p.lo;
 
                // 128x128 multiply, keep high 128 bits
-               uint64_t a_lo = static_cast<uint64_t>(mantissa);
-               uint64_t a_hi = static_cast<uint64_t>(mantissa >> 64);
-               uint64_t b_lo = static_cast<uint64_t>(p_mantissa);
-               uint64_t b_hi = static_cast<uint64_t>(p_mantissa >> 64);
+               glz::uint64_t a_lo = static_cast<glz::uint64_t>(mantissa);
+               glz::uint64_t a_hi = static_cast<glz::uint64_t>(mantissa >> 64);
+               glz::uint64_t b_lo = static_cast<glz::uint64_t>(p_mantissa);
+               glz::uint64_t b_hi = static_cast<glz::uint64_t>(p_mantissa >> 64);
 
                u128 p0 = u128(a_lo) * b_lo;
                u128 p1 = u128(a_lo) * b_hi;
                u128 p2 = u128(a_hi) * b_lo;
                u128 p3 = u128(a_hi) * b_hi;
 
-               u128 mid = (p0 >> 64) + uint64_t(p1) + uint64_t(p2);
+               u128 mid = (p0 >> 64) + glz::uint64_t(p1) + glz::uint64_t(p2);
                u128 prod_hi = p3 + (p1 >> 64) + (p2 >> 64) + (mid >> 64);
 
                mantissa = prod_hi;
@@ -295,7 +293,7 @@ namespace glz::simple_float
                      lz = 64;
                      tmp <<= 64;
                   }
-                  uint64_t hi = uint64_t(tmp >> 64);
+                  glz::uint64_t hi = glz::uint64_t(tmp >> 64);
                   if (!(hi >> 32)) {
                      lz += 32;
                      hi <<= 32;
@@ -328,7 +326,7 @@ namespace glz::simple_float
             e >>= 1;
          }
 
-         return {static_cast<uint64_t>(mantissa >> 64), static_cast<uint64_t>(mantissa), exp};
+         return {static_cast<glz::uint64_t>(mantissa >> 64), static_cast<glz::uint64_t>(mantissa), exp};
       }
 
       // Compact table bounds: covers -16 to +16 (33 entries, 594 bytes total)
@@ -348,7 +346,7 @@ namespace glz::simple_float
       {
          struct table_type
          {
-            uint64_t entries[pow5_compact_size];
+            glz::uint64_t entries[pow5_compact_size];
          };
          table_type result{};
          for (int i = 0; i < pow5_compact_size; ++i) {
@@ -362,7 +360,7 @@ namespace glz::simple_float
       {
          struct table_type
          {
-            uint64_t entries[pow5_compact_size];
+            glz::uint64_t entries[pow5_compact_size];
          };
          table_type result{};
          for (int i = 0; i < pow5_compact_size; ++i) {
@@ -376,12 +374,12 @@ namespace glz::simple_float
       {
          struct table_type
          {
-            int16_t entries[pow5_compact_size];
+            glz::int16_t entries[pow5_compact_size];
          };
          table_type result{};
          for (int i = 0; i < pow5_compact_size; ++i) {
             auto entry = compute_pow5_entry(pow5_compact_min + i);
-            result.entries[i] = static_cast<int16_t>(entry.exp);
+            result.entries[i] = static_cast<glz::int16_t>(entry.exp);
          }
          return result;
       }
@@ -412,12 +410,12 @@ namespace glz::simple_float
       // Fallback: software 128-bit multiplication
       struct uint128_native
       {
-         uint64_t lo, hi;
+         glz::uint64_t lo, hi;
       };
 #endif
 
       // Multiply two 64-bit numbers, return full 128-bit result
-      GLZ_ALWAYS_INLINE constexpr void mul64(uint64_t a, uint64_t b, uint64_t& hi, uint64_t& lo) noexcept
+      GLZ_ALWAYS_INLINE constexpr void mul64(glz::uint64_t a, glz::uint64_t b, glz::uint64_t& hi, glz::uint64_t& lo) noexcept
       {
 #ifdef __SIZEOF_INT128__
 #if defined(__GNUC__) && !defined(__clang__)
@@ -425,24 +423,24 @@ namespace glz::simple_float
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
          uint128_native prod = static_cast<uint128_native>(a) * b;
-         hi = static_cast<uint64_t>(prod >> 64);
-         lo = static_cast<uint64_t>(prod);
+         hi = static_cast<glz::uint64_t>(prod >> 64);
+         lo = static_cast<glz::uint64_t>(prod);
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
 #else
          // Software implementation
-         uint64_t a_lo = a & 0xFFFFFFFF;
-         uint64_t a_hi = a >> 32;
-         uint64_t b_lo = b & 0xFFFFFFFF;
-         uint64_t b_hi = b >> 32;
+         glz::uint64_t a_lo = a & 0xFFFFFFFF;
+         glz::uint64_t a_hi = a >> 32;
+         glz::uint64_t b_lo = b & 0xFFFFFFFF;
+         glz::uint64_t b_hi = b >> 32;
 
-         uint64_t p0 = a_lo * b_lo;
-         uint64_t p1 = a_lo * b_hi;
-         uint64_t p2 = a_hi * b_lo;
-         uint64_t p3 = a_hi * b_hi;
+         glz::uint64_t p0 = a_lo * b_lo;
+         glz::uint64_t p1 = a_lo * b_hi;
+         glz::uint64_t p2 = a_hi * b_lo;
+         glz::uint64_t p3 = a_hi * b_hi;
 
-         uint64_t mid = (p0 >> 32) + (p1 & 0xFFFFFFFF) + (p2 & 0xFFFFFFFF);
+         glz::uint64_t mid = (p0 >> 32) + (p1 & 0xFFFFFFFF) + (p2 & 0xFFFFFFFF);
          hi = p3 + (p1 >> 32) + (p2 >> 32) + (mid >> 32);
          lo = (mid << 32) | (p0 & 0xFFFFFFFF);
 #endif
@@ -451,20 +449,20 @@ namespace glz::simple_float
       // Multiply 64-bit mantissa by 128-bit pow5 entry
       // Returns high 128 bits of the 192-bit product
       // exp is updated: exp_out = exp_in + p.exp + 64
-      GLZ_ALWAYS_INLINE constexpr void mul64_pow5(uint64_t m, const pow5_128& p, uint64_t& rh, uint64_t& rl,
-                                                  int32_t& exp, bool& round_bit, bool& sticky_bit) noexcept
+      GLZ_ALWAYS_INLINE constexpr void mul64_pow5(glz::uint64_t m, const pow5_128& p, glz::uint64_t& rh, glz::uint64_t& rl,
+                                                  glz::int32_t& exp, bool& round_bit, bool& sticky_bit) noexcept
       {
          // m × (p.hi : p.lo) = m×p.hi × 2^64 + m×p.lo
          // This is 64 × 128 = 192 bits, we keep high 128
 
-         uint64_t ph_hi, ph_lo, pl_hi, pl_lo;
+         glz::uint64_t ph_hi, ph_lo, pl_hi, pl_lo;
          mul64(m, p.hi, ph_hi, ph_lo);
          mul64(m, p.lo, pl_hi, pl_lo);
 
          // Add pl_hi to ph_lo with carry
-         uint64_t sum_lo = ph_lo + pl_hi;
-         uint64_t carry = (sum_lo < ph_lo) ? 1 : 0;
-         uint64_t sum_hi = ph_hi + carry;
+         glz::uint64_t sum_lo = ph_lo + pl_hi;
+         glz::uint64_t carry = (sum_lo < ph_lo) ? 1 : 0;
+         glz::uint64_t sum_hi = ph_hi + carry;
 
          rh = sum_hi;
          rl = sum_lo;
@@ -476,16 +474,16 @@ namespace glz::simple_float
       }
 
       // Multiply two 128-bit numbers, return high 128 bits of 256-bit product
-      GLZ_ALWAYS_INLINE constexpr void mul128(uint64_t ah, uint64_t al, uint64_t bh, uint64_t bl, uint64_t& rh,
-                                              uint64_t& rl, bool& round_bit, bool& sticky_bit) noexcept
+      GLZ_ALWAYS_INLINE constexpr void mul128(glz::uint64_t ah, glz::uint64_t al, glz::uint64_t bh, glz::uint64_t bl, glz::uint64_t& rh,
+                                              glz::uint64_t& rl, bool& round_bit, bool& sticky_bit) noexcept
       {
          // (ah:al) × (bh:bl) = ah×bh × 2^128 + (ah×bl + al×bh) × 2^64 + al×bl
          // We need bits 255..128 (high 128 bits)
 
-         uint64_t hh_hi, hh_lo; // ah × bh (bits 128-255)
-         uint64_t hl_hi, hl_lo; // ah × bl (bits 64-191)
-         uint64_t lh_hi, lh_lo; // al × bh (bits 64-191)
-         uint64_t ll_hi, ll_lo; // al × bl (bits 0-127)
+         glz::uint64_t hh_hi, hh_lo; // ah × bh (bits 128-255)
+         glz::uint64_t hl_hi, hl_lo; // ah × bl (bits 64-191)
+         glz::uint64_t lh_hi, lh_lo; // al × bh (bits 64-191)
+         glz::uint64_t ll_hi, ll_lo; // al × bl (bits 0-127)
 
          mul64(ah, bh, hh_hi, hh_lo);
          mul64(ah, bl, hl_hi, hl_lo);
@@ -494,10 +492,10 @@ namespace glz::simple_float
 
          // Sum the middle terms with ll_hi to get carry into high 128 bits
          // mid = hl_lo + lh_lo + ll_hi (with carries tracked)
-         uint64_t mid = hl_lo;
-         uint64_t mid_carry = 0;
+         glz::uint64_t mid = hl_lo;
+         glz::uint64_t mid_carry = 0;
 
-         uint64_t tmp = mid + lh_lo;
+         glz::uint64_t tmp = mid + lh_lo;
          mid_carry += (tmp < mid) ? 1 : 0;
          mid = tmp;
 
@@ -506,8 +504,8 @@ namespace glz::simple_float
          mid = tmp;
 
          // Compute bits 128-191: hh_lo + hl_hi + lh_hi + mid_carry
-         uint64_t high_lo = hh_lo;
-         uint64_t high_carry = 0;
+         glz::uint64_t high_lo = hh_lo;
+         glz::uint64_t high_carry = 0;
 
          tmp = high_lo + hl_hi;
          high_carry += (tmp < high_lo) ? 1 : 0;
@@ -522,7 +520,7 @@ namespace glz::simple_float
          high_lo = tmp;
 
          // Compute bits 192-255: hh_hi + high_carry
-         uint64_t high_hi = hh_hi + high_carry;
+         glz::uint64_t high_hi = hh_hi + high_carry;
 
          rh = high_hi;
          rl = high_lo;
@@ -533,7 +531,7 @@ namespace glz::simple_float
       }
 
       // Count leading zeros
-      GLZ_ALWAYS_INLINE constexpr int clz64(uint64_t x) noexcept
+      GLZ_ALWAYS_INLINE constexpr int clz64(glz::uint64_t x) noexcept
       {
          if (x == 0) return 64;
 #if defined(__GNUC__) || defined(__clang__)
@@ -568,7 +566,7 @@ namespace glz::simple_float
       }
 
       // Convert 128-bit mantissa + binary exponent to double with correct IEEE 754 rounding
-      GLZ_ALWAYS_INLINE constexpr double assemble_double(uint64_t hi, uint64_t lo, int32_t exp2, bool negative,
+      GLZ_ALWAYS_INLINE constexpr double assemble_double(glz::uint64_t hi, glz::uint64_t lo, glz::int32_t exp2, bool negative,
                                                          bool round_bit, bool sticky_bit) noexcept
       {
          // Normalize: ensure MSB of hi is set
@@ -593,11 +591,11 @@ namespace glz::simple_float
          // This means biased_exp = exp2 + 127 + 1023 (before extracting mantissa)
          // But we extract mantissa53 = hi >> 11, adding 11 to the implicit bit position
          // So: biased_exp = exp2 + 127 + 1023 (after all adjustments)
-         int32_t biased_exp = exp2 + 127 + 1023;
+         glz::int32_t biased_exp = exp2 + 127 + 1023;
 
          // Handle overflow
          if (biased_exp >= 2047) {
-            uint64_t bits = 0x7FF0000000000000ULL;
+            glz::uint64_t bits = 0x7FF0000000000000ULL;
             if (negative) bits |= 0x8000000000000000ULL;
             double result;
             std::memcpy(&result, &bits, sizeof(result));
@@ -612,7 +610,7 @@ namespace glz::simple_float
             return negative ? -0.0 : 0.0;
          }
 
-         uint64_t mantissa;
+         glz::uint64_t mantissa;
          bool final_round, final_sticky;
 
          if (biased_exp > 0) {
@@ -634,8 +632,8 @@ namespace glz::simple_float
             if (total_shift < 64) {
                // Shift is within hi
                mantissa = hi >> total_shift;
-               uint64_t round_bit_mask = 1ULL << (total_shift - 1);
-               uint64_t sticky_bits_mask = round_bit_mask - 1;
+               glz::uint64_t round_bit_mask = 1ULL << (total_shift - 1);
+               glz::uint64_t sticky_bits_mask = round_bit_mask - 1;
                final_round = (hi & round_bit_mask) != 0;
                final_sticky = ((hi & sticky_bits_mask) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
             }
@@ -653,8 +651,8 @@ namespace glz::simple_float
                   // (hi:lo) >> total_shift = (hi >> lo_shift) | (bits shifted out)
                   mantissa = hi >> lo_shift;
                   // Round bit is at position (lo_shift - 1) of hi
-                  uint64_t round_bit_mask = 1ULL << (lo_shift - 1);
-                  uint64_t sticky_bits_mask = round_bit_mask - 1;
+                  glz::uint64_t round_bit_mask = 1ULL << (lo_shift - 1);
+                  glz::uint64_t sticky_bits_mask = round_bit_mask - 1;
                   final_round = (hi & round_bit_mask) != 0;
                   // Sticky includes lower bits of hi plus all of lo
                   final_sticky = ((hi & sticky_bits_mask) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
@@ -685,7 +683,7 @@ namespace glz::simple_float
                mantissa >>= 1;
                ++biased_exp;
                if (biased_exp >= 2047) {
-                  uint64_t bits = 0x7FF0000000000000ULL;
+                  glz::uint64_t bits = 0x7FF0000000000000ULL;
                   if (negative) bits |= 0x8000000000000000ULL;
                   double result;
                   std::memcpy(&result, &bits, sizeof(result));
@@ -702,7 +700,7 @@ namespace glz::simple_float
          }
 
          // Assemble IEEE 754 double
-         uint64_t bits = (static_cast<uint64_t>(biased_exp) << 52) | mantissa;
+         glz::uint64_t bits = (static_cast<glz::uint64_t>(biased_exp) << 52) | mantissa;
          if (negative) bits |= 0x8000000000000000ULL;
 
          double result;
@@ -711,7 +709,7 @@ namespace glz::simple_float
       }
 
       // Convert 128-bit mantissa + binary exponent to float
-      GLZ_ALWAYS_INLINE constexpr float assemble_float(uint64_t hi, uint64_t lo, int32_t exp2, bool negative,
+      GLZ_ALWAYS_INLINE constexpr float assemble_float(glz::uint64_t hi, glz::uint64_t lo, glz::int32_t exp2, bool negative,
                                                        bool round_bit, bool sticky_bit) noexcept
       {
          // Similar to assemble_double but for 24-bit mantissa
@@ -732,11 +730,11 @@ namespace glz::simple_float
          }
 
          // Compute biased exponent first to determine if we need subnormal handling
-         int32_t biased_exp = exp2 + 127 + 127;
+         glz::int32_t biased_exp = exp2 + 127 + 127;
 
          // Handle overflow
          if (biased_exp >= 255) {
-            uint32_t bits = 0x7F800000U;
+            glz::uint32_t bits = 0x7F800000U;
             if (negative) bits |= 0x80000000U;
             float result;
             std::memcpy(&result, &bits, sizeof(result));
@@ -748,12 +746,12 @@ namespace glz::simple_float
             return negative ? -0.0f : 0.0f;
          }
 
-         uint32_t mantissa;
+         glz::uint32_t mantissa;
          bool final_round, final_sticky;
 
          if (biased_exp > 0) {
             // Normal number: extract 24 bits (bits 63..40 of hi)
-            mantissa = static_cast<uint32_t>(hi >> 40);
+            mantissa = static_cast<glz::uint32_t>(hi >> 40);
             final_round = (hi >> 39) & 1;
             final_sticky = ((hi & 0x7FFFFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
          }
@@ -769,9 +767,9 @@ namespace glz::simple_float
 
             if (total_shift < 64) {
                // Shift is within hi
-               mantissa = static_cast<uint32_t>(hi >> total_shift);
-               uint64_t round_bit_mask = 1ULL << (total_shift - 1);
-               uint64_t sticky_bits_mask = round_bit_mask - 1;
+               mantissa = static_cast<glz::uint32_t>(hi >> total_shift);
+               glz::uint64_t round_bit_mask = 1ULL << (total_shift - 1);
+               glz::uint64_t sticky_bits_mask = round_bit_mask - 1;
                final_round = (hi & round_bit_mask) != 0;
                final_sticky = ((hi & sticky_bits_mask) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
             }
@@ -782,14 +780,14 @@ namespace glz::simple_float
                   // Special case: total_shift == 64
                   // (hi:lo) >> 64 = hi, but we need the HIGH bits of hi for the mantissa
                   // The mantissa bits are in the top of hi, extract them
-                  mantissa = static_cast<uint32_t>(hi >> 32);
+                  mantissa = static_cast<glz::uint32_t>(hi >> 32);
                   final_round = (hi >> 31) & 1;
                   final_sticky = ((hi & 0x7FFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
                }
                else {
-                  mantissa = static_cast<uint32_t>(hi >> lo_shift);
-                  uint64_t round_bit_mask = 1ULL << (lo_shift - 1);
-                  uint64_t sticky_bits_mask = round_bit_mask - 1;
+                  mantissa = static_cast<glz::uint32_t>(hi >> lo_shift);
+                  glz::uint64_t round_bit_mask = 1ULL << (lo_shift - 1);
+                  glz::uint64_t sticky_bits_mask = round_bit_mask - 1;
                   final_round = (hi & round_bit_mask) != 0;
                   final_sticky = ((hi & sticky_bits_mask) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
                }
@@ -819,7 +817,7 @@ namespace glz::simple_float
                mantissa >>= 1;
                ++biased_exp;
                if (biased_exp >= 255) {
-                  uint32_t bits = 0x7F800000U;
+                  glz::uint32_t bits = 0x7F800000U;
                   if (negative) bits |= 0x80000000U;
                   float result;
                   std::memcpy(&result, &bits, sizeof(result));
@@ -833,7 +831,7 @@ namespace glz::simple_float
             mantissa &= ~(1U << 23);
          }
 
-         uint32_t bits = (static_cast<uint32_t>(biased_exp) << 23) | mantissa;
+         glz::uint32_t bits = (static_cast<glz::uint32_t>(biased_exp) << 23) | mantissa;
          if (negative) bits |= 0x80000000U;
 
          float result;
@@ -845,7 +843,7 @@ namespace glz::simple_float
       // Returns 128-bit result (rh:rl) and binary exponent exp2
       // Value = (rh × 2^64 + rl) × 2^exp2
       // Note: table parameter allows sharing code between positive/negative exponents
-      inline constexpr void apply_pow5_impl(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl, int32_t& exp2,
+      inline constexpr void apply_pow5_impl(glz::uint64_t mantissa, glz::int32_t q, glz::uint64_t& rh, glz::uint64_t& rl, glz::int32_t& exp2,
                                             bool& round_bit, bool& sticky_bit, const pow5_128* table) noexcept
       {
          // Normalize mantissa to have MSB at bit 63 of rh
@@ -859,12 +857,12 @@ namespace glz::simple_float
          round_bit = false;
          sticky_bit = false;
 
-         uint32_t e = static_cast<uint32_t>(q);
+         glz::uint32_t e = static_cast<glz::uint32_t>(q);
 
          for (int k = 0; k < 9 && e != 0; ++k) {
             if (e & 1) {
                // Multiply current 128-bit result by table[k]
-               uint64_t th, tl;
+               glz::uint64_t th, tl;
                bool tr, ts;
 
                if (rl == 0 && rh < (1ULL << 63)) {
@@ -900,32 +898,32 @@ namespace glz::simple_float
 #ifdef __SIZEOF_INT128__
       // Hybrid pow5 application: uses compact table for common exponents, binary exp for extreme values
       // This gives O(1) performance for typical JSON numbers (exponents -16..+16) using 594 bytes
-      GLZ_ALWAYS_INLINE constexpr void apply_pow5_hybrid(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl,
-                                                         int32_t& exp2, bool& round_bit, bool& sticky_bit) noexcept
+      GLZ_ALWAYS_INLINE constexpr void apply_pow5_hybrid(glz::uint64_t mantissa, glz::int32_t q, glz::uint64_t& rh, glz::uint64_t& rl,
+                                                         glz::int32_t& exp2, bool& round_bit, bool& sticky_bit) noexcept
       {
          // Check if we can use the compact table (exponents -16 to +16)
          if (q >= pow5_compact_min && q <= pow5_compact_max) {
             // O(1) direct lookup from separate hi/lo/exp arrays
             const int idx = q - pow5_compact_min;
-            const uint64_t p_hi = pow5_hi_table.entries[idx];
-            const uint64_t p_lo = pow5_lo_table.entries[idx];
-            const int32_t p_exp = pow5_exp_table.entries[idx];
+            const glz::uint64_t p_hi = pow5_hi_table.entries[idx];
+            const glz::uint64_t p_lo = pow5_lo_table.entries[idx];
+            const glz::int32_t p_exp = pow5_exp_table.entries[idx];
 
             // Normalize mantissa to have MSB at bit 63
             int lz = clz64(mantissa);
-            uint64_t norm_mantissa = mantissa << lz;
-            int32_t mantissa_exp = -lz;
+            glz::uint64_t norm_mantissa = mantissa << lz;
+            glz::int32_t mantissa_exp = -lz;
 
             // Multiply: norm_mantissa (64-bit) × (p_hi:p_lo) (128-bit) = 192-bit result
             // We keep the high 128 bits for maximum precision
-            uint64_t ph_hi, ph_lo, pl_hi, pl_lo;
+            glz::uint64_t ph_hi, ph_lo, pl_hi, pl_lo;
             mul64(norm_mantissa, p_hi, ph_hi, ph_lo);
             mul64(norm_mantissa, p_lo, pl_hi, pl_lo);
 
             // Add pl_hi to ph_lo with carry
-            uint64_t sum_lo = ph_lo + pl_hi;
-            uint64_t carry = (sum_lo < ph_lo) ? 1 : 0;
-            uint64_t sum_hi = ph_hi + carry;
+            glz::uint64_t sum_lo = ph_lo + pl_hi;
+            glz::uint64_t carry = (sum_lo < ph_lo) ? 1 : 0;
+            glz::uint64_t sum_hi = ph_hi + carry;
 
             rh = sum_hi;
             rl = sum_lo;
@@ -965,12 +963,12 @@ namespace glz::simple_float
 
       inline constexpr long double pow10_neg[] = {1e-1L, 1e-2L, 1e-4L, 1e-8L, 1e-16L, 1e-32L, 1e-64L, 1e-128L, 1e-256L};
 
-      GLZ_ALWAYS_INLINE constexpr long double scale_by_pow10(long double value, int32_t exp10) noexcept
+      GLZ_ALWAYS_INLINE constexpr long double scale_by_pow10(long double value, glz::int32_t exp10) noexcept
       {
          if (exp10 == 0 || value == 0.0L) return value;
 
          bool negative_exp = exp10 < 0;
-         uint32_t e = static_cast<uint32_t>(negative_exp ? -exp10 : exp10);
+         glz::uint32_t e = static_cast<glz::uint32_t>(negative_exp ? -exp10 : exp10);
 
          long double result = value;
          unsigned idx = 0;
@@ -996,7 +994,7 @@ namespace glz::simple_float
 
       // Fast float parsing for common cases (small exponents, normal values)
       // Returns true if fast path succeeded, false if 128-bit path needed
-      GLZ_ALWAYS_INLINE bool try_fast_float_parse(uint64_t mantissa, int32_t exp10, bool negative,
+      GLZ_ALWAYS_INLINE bool try_fast_float_parse(glz::uint64_t mantissa, glz::int32_t exp10, bool negative,
                                                   float& result) noexcept
       {
          // Fast path uses double precision arithmetic which has 53-bit mantissa.
@@ -1014,9 +1012,9 @@ namespace glz::simple_float
 
             // Check if result is a normal float (not subnormal, zero, or overflow)
             float f = static_cast<float>(d);
-            uint32_t bits;
+            glz::uint32_t bits;
             std::memcpy(&bits, &f, sizeof(bits));
-            uint32_t exp_field = (bits >> 23) & 0xFF;
+            glz::uint32_t exp_field = (bits >> 23) & 0xFF;
 
             // Only use fast path for normal floats (exp_field in [1, 254])
             if (exp_field != 0 && exp_field != 0xFF) {
@@ -1041,9 +1039,9 @@ namespace glz::simple_float
 
                if (ld >= float_min_normal && ld <= float_max) {
                   float f = static_cast<float>(ld);
-                  uint32_t bits;
+                  glz::uint32_t bits;
                   std::memcpy(&bits, &f, sizeof(bits));
-                  uint32_t exp_field = (bits >> 23) & 0xFF;
+                  glz::uint32_t exp_field = (bits >> 23) & 0xFF;
 
                   if (exp_field != 0 && exp_field != 0xFF) {
                      result = negative ? -f : f;
@@ -1052,9 +1050,9 @@ namespace glz::simple_float
                }
                else if (ld >= -float_max && ld <= -float_min_normal) {
                   float f = static_cast<float>(ld);
-                  uint32_t bits;
+                  glz::uint32_t bits;
                   std::memcpy(&bits, &f, sizeof(bits));
-                  uint32_t exp_field = (bits >> 23) & 0xFF;
+                  glz::uint32_t exp_field = (bits >> 23) & 0xFF;
 
                   if (exp_field != 0 && exp_field != 0xFF) {
                      result = negative ? -f : f;
@@ -1101,8 +1099,8 @@ namespace glz::simple_float
       }
 
       // Use 128-bit arithmetic for correct rounding
-      uint64_t rh, rl;
-      int32_t exp2;
+      glz::uint64_t rh, rl;
+      glz::int32_t exp2;
       bool round_bit, sticky_bit;
 #ifdef __SIZEOF_INT128__
       // Hybrid approach: O(1) table lookup for common exponents (-16..+16), binary exp for extreme values

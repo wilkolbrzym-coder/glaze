@@ -2,18 +2,23 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/parse.hpp"
 // glz:header std=<algorithm>
-// glz:header std=<array>
 // glz:header std=<bit>
-// glz:header std=<charconv>
-// glz:header std=<concepts>
 // glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
 // glz:header std=<iterator>
-// glz:header std=<optional>
-// glz:header std=<span>
-// glz:header std=<string_view>
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/core/meta.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/simd/utf8_validation.hpp"
+// glz:header include="glaze/util/atoi.hpp"
+// glz:header include="glaze/util/bit.hpp"
+// glz:header include="glaze/util/compare.hpp"
+// glz:header include="glaze/util/convert.hpp"
+// glz:header include="glaze/util/expected.hpp"
+// glz:header include="glaze/util/inline.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.parse;
 
 import std;
@@ -28,14 +33,10 @@ import glaze.util.compare;
 import glaze.util.convert;
 import glaze.util.expected;
 import glaze.util.string_literal;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 export namespace glz
 {
@@ -108,7 +109,7 @@ export namespace glz
    }();
 
    // Character classification for lazy JSON value skipping
-   enum class lazy_char_type : uint8_t {
+   enum class lazy_char_type : glz::uint8_t {
       other = 0, // whitespace, separators, literals - just advance
       quote = 1, // " - skip string
       open = 2, // { or [ - increase depth
@@ -148,9 +149,9 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<uint8_t, 256> digit_hex_table = [] {
-      std::array<uint8_t, 256> t;
-      std::fill(t.begin(), t.end(), uint8_t(255));
+   inline constexpr std::array<glz::uint8_t, 256> digit_hex_table = [] {
+      std::array<glz::uint8_t, 256> t;
+      std::fill(t.begin(), t.end(), glz::uint8_t(255));
       t['0'] = 0;
       t['1'] = 1;
       t['2'] = 2;
@@ -176,20 +177,20 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<uint16_t, 256> char_escape_table = [] {
-      // Build std::uint16_t so that memcpy produces chars in correct order.
+   inline constexpr std::array<glz::uint16_t, 256> char_escape_table = [] {
+      // Build uint16_t so that memcpy produces chars in correct order.
       // On LE: chars[0] in low byte, chars[1] in high byte -> memcpy writes [chars[0]][chars[1]]
       // On BE: chars[0] in high byte, chars[1] in low byte -> memcpy writes [chars[0]][chars[1]]
-      auto combine = [](const char chars[2]) -> uint16_t {
+      auto combine = [](const char chars[2]) -> glz::uint16_t {
          if constexpr (std::endian::native == std::endian::big) {
-            return (uint16_t(uint8_t(chars[0])) << 8) | uint16_t(uint8_t(chars[1]));
+            return (glz::uint16_t(glz::uint8_t(chars[0])) << 8) | glz::uint16_t(glz::uint8_t(chars[1]));
          }
          else {
-            return uint16_t(uint8_t(chars[0])) | (uint16_t(uint8_t(chars[1])) << 8);
+            return glz::uint16_t(glz::uint8_t(chars[0])) | (glz::uint16_t(glz::uint8_t(chars[1])) << 8);
          }
       };
 
-      std::array<uint16_t, 256> t{};
+      std::array<glz::uint16_t, 256> t{};
       t['\b'] = combine(R"(\b)");
       t['\t'] = combine(R"(\t)");
       t['\n'] = combine(R"(\n)");
@@ -200,25 +201,25 @@ export namespace glz
       return t;
    }();
 
-   consteval uint32_t repeat_byte4(const auto repeat) { return uint32_t(0x01010101u) * uint8_t(repeat); }
+   consteval glz::uint32_t repeat_byte4(const auto repeat) { return glz::uint32_t(0x01010101u) * glz::uint8_t(repeat); }
 
-   consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
+   consteval glz::uint64_t repeat_byte8(const glz::uint8_t repeat) { return 0x0101010101010101ull * repeat; }
 
 #if defined(__SIZEOF_INT128__)
-   consteval __uint128_t repeat_byte16(const uint8_t repeat)
+   consteval __uint128_t repeat_byte16(const glz::uint8_t repeat)
    {
       __uint128_t multiplier = (__uint128_t(0x0101010101010101ull) << 64) | 0x0101010101010101ull;
       return multiplier * repeat;
    }
 #endif
 
-   consteval uint64_t not_repeat_byte8(const uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
+   consteval glz::uint64_t not_repeat_byte8(const glz::uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t hex_to_u32(const char* c) noexcept
    {
       constexpr auto& t = digit_hex_table;
-      const uint8_t arr[4]{t[uint8_t(c[3])], t[uint8_t(c[2])], t[uint8_t(c[1])], t[uint8_t(c[0])]};
-      auto chunk = std::bit_cast<uint32_t>(arr);
+      const glz::uint8_t arr[4]{t[glz::uint8_t(c[3])], t[glz::uint8_t(c[2])], t[glz::uint8_t(c[1])], t[glz::uint8_t(c[0])]};
+      auto chunk = std::bit_cast<glz::uint32_t>(arr);
       // On big-endian, bit_cast produces bytes in opposite order than expected
       // byteswap to get consistent little-endian representation
       if constexpr (std::endian::native == std::endian::big) {
@@ -229,8 +230,8 @@ export namespace glz
          return 0xFFFFFFFFu;
       }
 
-      // now pack into first four bytes of std::uint32_t
-      uint32_t packed{};
+      // now pack into first four bytes of uint32_t
+      glz::uint32_t packed{};
       packed |= (chunk & 0x0000000F);
       packed |= (chunk & 0x00000F00) >> 4;
       packed |= (chunk & 0x000F0000) >> 8;
@@ -239,7 +240,7 @@ export namespace glz
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t code_point_to_utf8(const glz::uint32_t code_point, Char* c) noexcept
    {
       if (code_point <= 0x7F) {
          c[0] = Char(code_point);
@@ -266,7 +267,7 @@ export namespace glz
       return 0;
    }
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t skip_code_point(const glz::uint32_t code_point) noexcept
    {
       if (code_point <= 0x7F) {
          return 1;
@@ -285,20 +286,20 @@ export namespace glz
 
    namespace unicode
    {
-      inline constexpr uint32_t generic_surrogate_mask = 0xF800;
-      inline constexpr uint32_t generic_surrogate_value = 0xD800;
+      inline constexpr glz::uint32_t generic_surrogate_mask = 0xF800;
+      inline constexpr glz::uint32_t generic_surrogate_value = 0xD800;
 
-      inline constexpr uint32_t surrogate_mask = 0xFC00;
-      inline constexpr uint32_t high_surrogate_value = 0xD800;
-      inline constexpr uint32_t low_surrogate_value = 0xDC00;
+      inline constexpr glz::uint32_t surrogate_mask = 0xFC00;
+      inline constexpr glz::uint32_t high_surrogate_value = 0xD800;
+      inline constexpr glz::uint32_t low_surrogate_value = 0xDC00;
 
-      inline constexpr uint32_t surrogate_codepoint_offset = 0x10000;
-      inline constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
-      inline constexpr uint32_t surrogate_codepoint_bits = 10;
+      inline constexpr glz::uint32_t surrogate_codepoint_offset = 0x10000;
+      inline constexpr glz::uint32_t surrogate_codepoint_mask = 0x03FF;
+      inline constexpr glz::uint32_t surrogate_codepoint_bits = 10;
    }
 
    template <class SrcChar, class DstChar = SrcChar>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
+   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
                                                                       const SrcChar* end) noexcept
    {
       using namespace unicode;
@@ -306,13 +307,13 @@ export namespace glz
       if (it + 4 >= end) [[unlikely]] {
          return false;
       }
-      const uint32_t high = hex_to_u32(it);
+      const glz::uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       it += 4; // skip the code point characters
 
-      uint32_t code_point;
+      glz::uint32_t code_point;
 
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
@@ -324,14 +325,14 @@ export namespace glz
             return false;
          }
          // The next two characters must be `\u`
-         uint16_t u;
+         glz::uint16_t u;
          std::memcpy(&u, it, 2);
          if (u != to_uint16_t(R"(\u)")) [[unlikely]] {
             return false;
          }
          it += 2;
          // verify that second unicode escape sequence is present
-         const uint32_t low = hex_to_u32(it);
+         const glz::uint32_t low = hex_to_u32(it);
          if (low == 0xFFFFFFFFu) [[unlikely]] {
             return false;
          }
@@ -348,7 +349,7 @@ export namespace glz
       else {
          code_point = high;
       }
-      const uint32_t offset = code_point_to_utf8(code_point, dst);
+      const glz::uint32_t offset = code_point_to_utf8(code_point, dst);
       dst += offset;
       return offset;
    }
@@ -361,13 +362,13 @@ export namespace glz
          return false;
       }
 
-      const uint32_t high = hex_to_u32(it);
+      const glz::uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       it += 4; // skip the code point characters
 
-      uint32_t code_point;
+      glz::uint32_t code_point;
 
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
@@ -379,14 +380,14 @@ export namespace glz
             return false;
          }
          // The next two characters must be `\u`
-         uint16_t u;
+         glz::uint16_t u;
          std::memcpy(&u, it, 2);
          if (u != to_uint16_t(R"(\u)")) [[unlikely]] {
             return false;
          }
          it += 2;
          // verify that second unicode escape sequence is present
-         const uint32_t low = hex_to_u32(it);
+         const glz::uint32_t low = hex_to_u32(it);
          if (low == 0xFFFFFFFFu) [[unlikely]] {
             return false;
          }
@@ -504,7 +505,7 @@ export namespace glz
       requires(!check_is_padded(Opts))
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      const auto n = size_t(end - it);
+      const auto n = glz::size_t(end - it);
       static constexpr auto S = str.sv();
       if ((n < str.size()) || not comparitor<S>(it)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
@@ -540,28 +541,28 @@ export namespace glz
       }
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_zero(const glz::uint64_t chunk) noexcept
    {
       return (((chunk - 0x0101010101010101u) & ~chunk) & 0x8080808080808080u);
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_quote(const glz::uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8('"'));
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_escape(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_escape(const glz::uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8('\\'));
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_space(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_space(const glz::uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8(' '));
    }
 
    template <char Char>
-   GLZ_ALWAYS_INLINE constexpr auto has_char(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_char(const glz::uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8(Char));
    }
@@ -580,14 +581,14 @@ export namespace glz
       // short ranges, and is diagnosable UB on a null range. Pointer difference is well defined
       // for both, including two null pointers.
       while (end - p >= 8) {
-         uint64_t chunk;
+         glz::uint64_t chunk;
          std::memcpy(&chunk, p, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
          // has_char marks the low bit-group of each matching byte, so the first match is the
          // lowest set bit regardless of how many bytes in the chunk match.
-         const uint64_t test = (has_char<Chars>(chunk) | ...);
+         const glz::uint64_t test = (has_char<Chars>(chunk) | ...);
          if (test) {
             return p + (countr_zero(test) >> 3);
          }
@@ -599,12 +600,12 @@ export namespace glz
       return p;
    }
 
-   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_32(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr glz::uint64_t is_less_32(const glz::uint64_t chunk) noexcept
    {
       return has_zero(chunk & repeat_byte8(0b11100000u));
    }
 
-   GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr glz::uint64_t is_greater_15(const glz::uint64_t chunk) noexcept
    {
       return (chunk & repeat_byte8(0b11110000u));
    }
@@ -640,7 +641,7 @@ export namespace glz
       if constexpr (not Opts.minified) {
          if constexpr (Opts.null_terminated) {
             if constexpr (Opts.comments) {
-               while (whitespace_comment_table[uint8_t(*it)]) {
+               while (whitespace_comment_table[glz::uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
@@ -653,14 +654,14 @@ export namespace glz
                }
             }
             else {
-               while (whitespace_table[uint8_t(*it)]) {
+               while (whitespace_table[glz::uint8_t(*it)]) {
                   ++it;
                }
             }
          }
          else {
             if constexpr (Opts.comments) {
-               while (it < end && whitespace_comment_table[uint8_t(*it)]) {
+               while (it < end && whitespace_comment_table[glz::uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
@@ -677,7 +678,7 @@ export namespace glz
                }
             }
             else {
-               while (it < end && whitespace_table[uint8_t(*it)]) {
+               while (it < end && whitespace_table[glz::uint8_t(*it)]) {
                   ++it;
                }
                if (it == end) [[unlikely]] {
@@ -700,10 +701,10 @@ export namespace glz
       return false;
    }
 
-   GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
+   GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, glz::uint64_t length) noexcept
    {
       if (length > 7) {
-         uint64_t v[2];
+         glz::uint64_t v[2];
          while (length > 8) {
             std::memcpy(v, ws, 8);
             std::memcpy(v + 1, it, 8);
@@ -728,9 +729,9 @@ export namespace glz
          return;
       }
       {
-         constexpr uint64_t n{sizeof(uint32_t)};
+         constexpr glz::uint64_t n{sizeof(glz::uint32_t)};
          if (length >= n) {
-            uint32_t v[2];
+            glz::uint32_t v[2];
             std::memcpy(v, ws, n);
             std::memcpy(v + 1, it, n);
             if (v[0] != v[1]) {
@@ -742,9 +743,9 @@ export namespace glz
          }
       }
       {
-         constexpr uint64_t n{sizeof(uint16_t)};
+         constexpr glz::uint64_t n{sizeof(glz::uint16_t)};
          if (length >= n) {
-            uint16_t v[2];
+            glz::uint16_t v[2];
             std::memcpy(v, ws, n);
             std::memcpy(v + 1, it, n);
             if (v[0] != v[1]) {
@@ -763,12 +764,12 @@ export namespace glz
       }*/
    }
 
-   inline bool validate_utf8_scalar(const uint8_t* it, const uint8_t* end) noexcept
+   inline bool validate_utf8_scalar(const glz::uint8_t* it, const glz::uint8_t* end) noexcept
    {
       while (it < end) {
          // Optimistic SWAR check for ASCII
          if (it + 8 <= end) {
-            uint64_t chunk;
+            glz::uint64_t chunk;
             std::memcpy(&chunk, it, 8);
             if ((chunk & glz::repeat_byte8(0x80)) == 0) {
                it += 8;
@@ -777,7 +778,7 @@ export namespace glz
          }
 
          // Byte-by-byte validation (standard conformant)
-         uint8_t byte = *it;
+         glz::uint8_t byte = *it;
 
          if (byte < 0x80) {
             it++;
@@ -812,10 +813,10 @@ export namespace glz
       return true;
    }
 
-   inline bool validate_utf8(const auto* str, const size_t size) noexcept
+   inline bool validate_utf8(const auto* str, const glz::size_t size) noexcept
    {
-      const uint8_t* it = reinterpret_cast<const uint8_t*>(str);
-      const uint8_t* const end = it + size;
+      const glz::uint8_t* it = reinterpret_cast<const glz::uint8_t*>(str);
+      const glz::uint8_t* const end = it + size;
 #if defined(GLZ_UTF8_SIMD)
       // 16 is a measured compromise, not a register-size coincidence. The scalar path skips ASCII 8
       // bytes at a time, so on ASCII it stays ahead of the vector path's fixed setup cost until the
@@ -841,12 +842,12 @@ export namespace glz
    // needless validation pass, it never skips one. Callers with no accumulator take the default
    // and always validate.
    GLZ_ALWAYS_INLINE bool validate_utf8_span(is_context auto&& ctx, const auto* start, const auto* fin,
-                                             const uint64_t ascii_acc = repeat_byte8(0b10000000)) noexcept
+                                             const glz::uint64_t ascii_acc = repeat_byte8(0b10000000)) noexcept
    {
       if ((ascii_acc & repeat_byte8(0b10000000)) == 0) {
          return false; // pure ASCII is trivially well formed UTF-8
       }
-      if (!validate_utf8(start, size_t(fin - start))) [[unlikely]] {
+      if (!validate_utf8(start, glz::size_t(fin - start))) [[unlikely]] {
          ctx.error = error_code::invalid_utf8;
          return true;
       }
@@ -855,7 +856,7 @@ export namespace glz
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      const auto* pc = std::memchr(it, '"', size_t(end - it));
+      const auto* pc = std::memchr(it, '"', glz::size_t(end - it));
       if (pc) [[likely]] {
          it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
          return;
@@ -867,14 +868,14 @@ export namespace glz
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       while (it < end) [[likely]] {
-         const auto* pc = std::memchr(it, '"', size_t(end - it));
+         const auto* pc = std::memchr(it, '"', glz::size_t(end - it));
          if (pc) [[likely]] {
             it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
             auto* prev = it - 1;
             while (*prev == '\\') {
                --prev;
             }
-            if (size_t(it - prev) % 2) {
+            if (glz::size_t(it - prev) % 2) {
                return;
             }
             ++it; // skip the escaped quote
@@ -928,18 +929,18 @@ export namespace glz
 
       if constexpr (Opts.validate_skipped) {
          while (true) {
-            uint64_t swar;
+            glz::uint64_t swar;
             std::memcpy(&swar, it, 8);
             if constexpr (std::endian::native == std::endian::big) {
                swar = std::byteswap(swar);
             }
 
-            constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
-            const uint64_t lo7 = swar & lo7_mask;
-            const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-            const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
-            const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-            uint64_t next = ~((backslash & quote & less_32) | swar);
+            constexpr glz::uint64_t lo7_mask = repeat_byte8(0b01111111);
+            const glz::uint64_t lo7 = swar & lo7_mask;
+            const glz::uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+            const glz::uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
+            const glz::uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+            glz::uint64_t next = ~((backslash & quote & less_32) | swar);
             next &= repeat_byte8(0b10000000);
 
             if (next == 0) {
@@ -949,7 +950,7 @@ export namespace glz
             }
 
             // Find the first occurrence
-            size_t offset = (countr_zero(next) >> 3);
+            glz::size_t offset = (countr_zero(next) >> 3);
             it += offset;
 
             const auto c = *it;
@@ -991,7 +992,7 @@ export namespace glz
                   }
                }
                else {
-                  if (not char_unescape_table[uint8_t(*it)]) [[unlikely]] {
+                  if (not char_unescape_table[glz::uint8_t(*it)]) [[unlikely]] {
                      ctx.error = error_code::invalid_escape;
                      return;
                   }
@@ -1055,7 +1056,7 @@ export namespace glz
                      return;
                   }
                }
-               if (char_unescape_table[uint8_t(*it)]) {
+               if (char_unescape_table[glz::uint8_t(*it)]) {
                   ++it;
                   continue;
                }
@@ -1103,22 +1104,22 @@ export namespace glz
       consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept : padded{padded_}, comments{comments_} {}
    };
 
-   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+   template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
       requires(Opts.padded && not Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
 
-      size_t depth = Depth;
+      glz::size_t depth = Depth;
 
       while (it < end) [[likely]] {
-         uint64_t chunk;
+         glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const glz::uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
@@ -1157,22 +1158,22 @@ export namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+   template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
       requires(Opts.padded && Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
 
-      size_t depth = Depth;
+      glz::size_t depth = Depth;
 
       while (it < end) [[likely]] {
-         uint64_t chunk;
+         glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const glz::uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
@@ -1218,22 +1219,22 @@ export namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+   template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
       requires(not Opts.padded && not Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
 
-      size_t depth = Depth;
+      glz::size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
-         uint64_t chunk;
+         glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const glz::uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
@@ -1308,22 +1309,22 @@ export namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+   template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
       requires(not Opts.padded && Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
 
-      size_t depth = Depth;
+      glz::size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
-         uint64_t chunk;
+         glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const glz::uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
@@ -1413,13 +1414,13 @@ export namespace glz
    // bare character array reads past its end, and a view of the first few digits of a longer run
    // consumes the rest of them. String literals and std::string satisfy this; a subview of a larger
    // buffer does not, unless the character just past it is a non-digit.
-   inline constexpr std::optional<uint64_t> stoui(const std::string_view s) noexcept
+   inline constexpr std::optional<glz::uint64_t> stoui(const std::string_view s) noexcept
    {
       if (s.empty()) {
          return {};
       }
 
-      uint64_t ret;
+      glz::uint64_t ret;
       auto* c = s.data();
       bool valid = detail::stoui64(ret, c);
       if (valid) {
@@ -1500,12 +1501,12 @@ export namespace glz
       if constexpr (not Opts.validate) {
          if constexpr (Opts.null_terminated) {
             // Relies on the trailing '\0' sentinel (numeric_table['\0'] == false) to terminate.
-            while (numeric_table[uint8_t(*it)]) {
+            while (numeric_table[glz::uint8_t(*it)]) {
                ++it;
             }
          }
          else {
-            while (it < end && numeric_table[uint8_t(*it)]) {
+            while (it < end && numeric_table[glz::uint8_t(*it)]) {
                ++it;
             }
          }
@@ -1529,10 +1530,10 @@ export namespace glz
       skip_till_quote(ctx, it, end);
       if (bool(ctx.error)) [[unlikely]]
          return {};
-      return sv{start, static_cast<size_t>(it++ - start)};
+      return sv{start, static_cast<glz::size_t>(it++ - start)};
    }
 
-   template <size_t multiple>
+   template <glz::size_t multiple>
    GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const std::integral auto val) noexcept
    {
       return val + (multiple - (val % multiple)) % multiple;
@@ -1548,7 +1549,7 @@ export namespace glz
          valid_ = true;
       }
 
-      GLZ_ALWAYS_INLINE bool consume(const auto* str, const size_t size) noexcept
+      GLZ_ALWAYS_INLINE bool consume(const auto* str, const glz::size_t size) noexcept
       {
          if (!valid_) [[unlikely]] {
             return false;
@@ -1558,16 +1559,16 @@ export namespace glz
             return true;
          }
 
-         const uint8_t* it = reinterpret_cast<const uint8_t*>(str);
-         const uint8_t* end = it + size;
+         const glz::uint8_t* it = reinterpret_cast<const glz::uint8_t*>(str);
+         const glz::uint8_t* end = it + size;
 
          // Copy state to locals to avoid intermediate stores to 'this' in the hot loop.
          // When uint8_t == unsigned char, '*it' may alias the object representation of
          // this validator, so the compiler cannot reliably move direct member updates
          // out of the loop on its own since loop reads '*it' between writes
-         uint32_t remaining = remaining_;
-         uint32_t lower_bound = lower_bound_;
-         uint32_t upper_bound = upper_bound_;
+         glz::uint32_t remaining = remaining_;
+         glz::uint32_t lower_bound = lower_bound_;
+         glz::uint32_t upper_bound = upper_bound_;
          const bool had_pending = remaining != 0;
 
          // First finish a codepoint that was saved from the previous .consume()
@@ -1583,7 +1584,7 @@ export namespace glz
          }
 
          // Small chunks probably won't benefit much from the wider bulk loop
-         if (static_cast<size_t>(end - it) <= 32) {
+         if (static_cast<glz::size_t>(end - it) <= 32) {
             if (!consume_small(it, end, remaining, lower_bound, upper_bound)) [[unlikely]] {
                return fail();
             }
@@ -1596,13 +1597,13 @@ export namespace glz
          }
 
          // Bulk path. Four bytes for checking any complete UTF-8 code point safely
-         while (static_cast<size_t>(end - it) >= 4) {
-            uint32_t byte = *it;
+         while (static_cast<glz::size_t>(end - it) >= 4) {
+            glz::uint32_t byte = *it;
 
             // Avoid wide ASCII probes when already at a non-ASCII byte
             if (byte < 0x80) {
                it = skip_ascii_adaptive(it, end);
-               if (static_cast<size_t>(end - it) < 4) {
+               if (static_cast<glz::size_t>(end - it) < 4) {
                   break;
                }
 
@@ -1616,7 +1617,7 @@ export namespace glz
                   return fail();
                }
 
-               if (static_cast<size_t>(end - it) < 4) {
+               if (static_cast<glz::size_t>(end - it) < 4) {
                   break;
                }
 
@@ -1639,39 +1640,39 @@ export namespace glz
       [[nodiscard]] GLZ_ALWAYS_INLINE bool complete() const noexcept { return valid_ && remaining_ == 0; }
 
      private:
-      GLZ_ALWAYS_INLINE static bool is_continuation(const uint32_t byte) noexcept { return (byte & 0xC0) == 0x80; }
+      GLZ_ALWAYS_INLINE static bool is_continuation(const glz::uint32_t byte) noexcept { return (byte & 0xC0) == 0x80; }
 
-      GLZ_ALWAYS_INLINE static bool is_in_range(const uint32_t byte, const uint32_t lower_bound,
-                                                const uint32_t upper_bound) noexcept
+      GLZ_ALWAYS_INLINE static bool is_in_range(const glz::uint32_t byte, const glz::uint32_t lower_bound,
+                                                const glz::uint32_t upper_bound) noexcept
       {
          return byte - lower_bound <= upper_bound - lower_bound;
       }
 
-      GLZ_ALWAYS_INLINE static uint64_t load_u64(const uint8_t* ptr) noexcept
+      GLZ_ALWAYS_INLINE static glz::uint64_t load_u64(const glz::uint8_t* ptr) noexcept
       {
-         uint64_t value;
+         glz::uint64_t value;
          std::memcpy(&value, ptr, sizeof(value));
          return value;
       }
 
-      GLZ_ALWAYS_INLINE static size_t first_non_ascii_offset(const uint64_t high_bits) noexcept
+      GLZ_ALWAYS_INLINE static glz::size_t first_non_ascii_offset(const glz::uint64_t high_bits) noexcept
       {
          // Offset of the first non-ASCII byte within the 8-byte word
          if constexpr (std::endian::native == std::endian::big) {
-            return static_cast<size_t>(std::countl_zero(high_bits) >> 3);
+            return static_cast<glz::size_t>(std::countl_zero(high_bits) >> 3);
          }
          else {
-            return static_cast<size_t>(std::countr_zero(high_bits) >> 3);
+            return static_cast<glz::size_t>(std::countr_zero(high_bits) >> 3);
          }
       }
 
-      GLZ_ALWAYS_INLINE static const uint8_t* skip_ascii8(const uint8_t* it, const uint8_t* end) noexcept
+      GLZ_ALWAYS_INLINE static const glz::uint8_t* skip_ascii8(const glz::uint8_t* it, const glz::uint8_t* end) noexcept
       {
-         constexpr uint64_t mask = glz::repeat_byte8(0x80);
+         constexpr glz::uint64_t mask = glz::repeat_byte8(0x80);
 
          // Cheap scanner for small buffers
-         while (static_cast<size_t>(end - it) >= 8) {
-            const uint64_t high_bits = load_u64(it) & mask;
+         while (static_cast<glz::size_t>(end - it) >= 8) {
+            const glz::uint64_t high_bits = load_u64(it) & mask;
             if (high_bits != 0) {
                return it + first_non_ascii_offset(high_bits);
             }
@@ -1686,14 +1687,14 @@ export namespace glz
          return it;
       }
 
-      GLZ_ALWAYS_INLINE static const uint8_t* skip_ascii_adaptive(const uint8_t* it, const uint8_t* end) noexcept
+      GLZ_ALWAYS_INLINE static const glz::uint8_t* skip_ascii_adaptive(const glz::uint8_t* it, const glz::uint8_t* end) noexcept
       {
-         constexpr uint64_t mask = glz::repeat_byte8(0x80);
+         constexpr glz::uint64_t mask = glz::repeat_byte8(0x80);
 
          // Probe the first few chunks one at a time. This will make short ASCII
          // runs cheaper, which matters for mixed cases
-         for (uint32_t checked_chunks = 0; checked_chunks < 4; ++checked_chunks) {
-            if (static_cast<size_t>(end - it) < 8) {
+         for (glz::uint32_t checked_chunks = 0; checked_chunks < 4; ++checked_chunks) {
+            if (static_cast<glz::size_t>(end - it) < 8) {
                while (it != end && *it < 0x80) {
                   ++it;
                }
@@ -1701,7 +1702,7 @@ export namespace glz
                return it;
             }
 
-            const uint64_t high_bits = load_u64(it) & mask;
+            const glz::uint64_t high_bits = load_u64(it) & mask;
             if (high_bits != 0) {
                return it + first_non_ascii_offset(high_bits);
             }
@@ -1711,11 +1712,11 @@ export namespace glz
 
          // After 32 ASCII bytes, assume this is a longer ASCII run and use the
          // wider scanner to reduce loop overhead
-         while (static_cast<size_t>(end - it) >= 32) {
-            const uint64_t first_high_bits = load_u64(it) & mask;
-            const uint64_t second_high_bits = load_u64(it + 8) & mask;
-            const uint64_t third_high_bits = load_u64(it + 16) & mask;
-            const uint64_t fourth_high_bits = load_u64(it + 24) & mask;
+         while (static_cast<glz::size_t>(end - it) >= 32) {
+            const glz::uint64_t first_high_bits = load_u64(it) & mask;
+            const glz::uint64_t second_high_bits = load_u64(it + 8) & mask;
+            const glz::uint64_t third_high_bits = load_u64(it + 16) & mask;
+            const glz::uint64_t fourth_high_bits = load_u64(it + 24) & mask;
 
             if ((first_high_bits | second_high_bits | third_high_bits | fourth_high_bits) == 0) {
                it += 32;
@@ -1740,13 +1741,13 @@ export namespace glz
          return skip_ascii8(it, end);
       }
 
-      GLZ_ALWAYS_INLINE static bool consume_full_non_ascii(const uint8_t*& it, const uint32_t byte0) noexcept
+      GLZ_ALWAYS_INLINE static bool consume_full_non_ascii(const glz::uint8_t*& it, const glz::uint32_t byte0) noexcept
       {
          // Called only when at least four bytes remaining, so
          // no boundary checks are needed here
 
          if ((byte0 & 0xE0) == 0xC0) {
-            const uint32_t byte1 = it[1];
+            const glz::uint32_t byte1 = it[1];
 
             // C0/C1 would be overlong encodings for ASCII
             if (((byte1 & 0xC0) != 0x80) || ((byte0 & 0x1E) == 0)) [[unlikely]] {
@@ -1758,8 +1759,8 @@ export namespace glz
          }
 
          if ((byte0 & 0xF0) == 0xE0) {
-            const uint32_t byte1 = it[1];
-            const uint32_t byte2 = it[2];
+            const glz::uint32_t byte1 = it[1];
+            const glz::uint32_t byte2 = it[2];
 
             // E0 requires A0-BF to reject overlong 3-byte sequences.
             // ED requires 80-9F to reject UTF-16 surrogate codepoints
@@ -1773,9 +1774,9 @@ export namespace glz
          }
 
          if ((byte0 & 0xF8) == 0xF0) {
-            const uint32_t byte1 = it[1];
-            const uint32_t byte2 = it[2];
-            const uint32_t byte3 = it[3];
+            const glz::uint32_t byte1 = it[1];
+            const glz::uint32_t byte2 = it[2];
+            const glz::uint32_t byte3 = it[3];
 
             // F5..FF are invalid. F0 requires 90-BF to reject overlong sequences.
             // F4 requires 80-8F to keep the decoded value within U+10FFFF
@@ -1792,14 +1793,14 @@ export namespace glz
          return false;
       }
 
-      GLZ_ALWAYS_INLINE static bool consume_non_ascii_checked(const uint8_t*& it, const uint8_t* end,
-                                                              uint32_t& remaining, uint32_t& lower_bound,
-                                                              uint32_t& upper_bound) noexcept
+      GLZ_ALWAYS_INLINE static bool consume_non_ascii_checked(const glz::uint8_t*& it, const glz::uint8_t* end,
+                                                              glz::uint32_t& remaining, glz::uint32_t& lower_bound,
+                                                              glz::uint32_t& upper_bound) noexcept
       {
          // Boundary-safe version for small chunks and tails.
          // May leave pending state instead of failing at the buffer end
 
-         const uint32_t byte0 = *it++;
+         const glz::uint32_t byte0 = *it++;
 
          if ((byte0 & 0xE0) == 0xC0) {
             // C0/C1 would be overlong encodings for ASCII
@@ -1814,7 +1815,7 @@ export namespace glz
                return true;
             }
 
-            const uint32_t byte1 = *it++;
+            const glz::uint32_t byte1 = *it++;
 
             if (!is_continuation(byte1)) [[unlikely]] {
                return false;
@@ -1826,20 +1827,20 @@ export namespace glz
          if ((byte0 & 0xF0) == 0xE0) {
             // Normal 3-byte starts use 80-BF for the first continuation.
             // E0 and ED are special to preserve shortest form and reject surrogates
-            const uint32_t first_lower_bound = byte0 == 0xE0 ? 0xA0 : 0x80;
-            const uint32_t first_upper_bound = byte0 == 0xED ? 0x9F : 0xBF;
+            const glz::uint32_t first_lower_bound = byte0 == 0xE0 ? 0xA0 : 0x80;
+            const glz::uint32_t first_upper_bound = byte0 == 0xED ? 0x9F : 0xBF;
 
             // Not enough bytes to finish this codepoint in the current buffer.
             // Validate what is available and keep the remaining bounds as state
-            if (static_cast<size_t>(end - it) < 2) [[unlikely]] {
+            if (static_cast<glz::size_t>(end - it) < 2) [[unlikely]] {
                remaining = 2;
                lower_bound = first_lower_bound;
                upper_bound = first_upper_bound;
                return consume_pending(it, end, remaining, lower_bound, upper_bound);
             }
 
-            const uint32_t byte1 = *it++;
-            const uint32_t byte2 = *it++;
+            const glz::uint32_t byte1 = *it++;
+            const glz::uint32_t byte2 = *it++;
 
             if (!is_in_range(byte1, first_lower_bound, first_upper_bound) || !is_continuation(byte2)) [[unlikely]] {
                return false;
@@ -1856,22 +1857,22 @@ export namespace glz
 
             // Normal 4-byte starts use 80-BF for the first continuation.
             // F0 rejects overlong sequences
-            const uint32_t first_lower_bound = byte0 == 0xF0 ? 0x90 : 0x80;
+            const glz::uint32_t first_lower_bound = byte0 == 0xF0 ? 0x90 : 0x80;
             // F4 rejects values above U+10FFFF
-            const uint32_t first_upper_bound = byte0 == 0xF4 ? 0x8F : 0xBF;
+            const glz::uint32_t first_upper_bound = byte0 == 0xF4 ? 0x8F : 0xBF;
 
             // Same split-sequence handling as the 3-byte path but with three
             // continuation bytes in total
-            if (static_cast<size_t>(end - it) < 3) [[unlikely]] {
+            if (static_cast<glz::size_t>(end - it) < 3) [[unlikely]] {
                remaining = 3;
                lower_bound = first_lower_bound;
                upper_bound = first_upper_bound;
                return consume_pending(it, end, remaining, lower_bound, upper_bound);
             }
 
-            const uint32_t byte1 = *it++;
-            const uint32_t byte2 = *it++;
-            const uint32_t byte3 = *it++;
+            const glz::uint32_t byte1 = *it++;
+            const glz::uint32_t byte2 = *it++;
+            const glz::uint32_t byte3 = *it++;
 
             if (!is_in_range(byte1, first_lower_bound, first_upper_bound) || !is_continuation(byte2) ||
                 !is_continuation(byte3)) [[unlikely]] {
@@ -1884,8 +1885,8 @@ export namespace glz
          return false;
       }
 
-      GLZ_ALWAYS_INLINE static bool consume_small(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
-                                                  uint32_t& lower_bound, uint32_t& upper_bound) noexcept
+      GLZ_ALWAYS_INLINE static bool consume_small(const glz::uint8_t*& it, const glz::uint8_t* end, glz::uint32_t& remaining,
+                                                  glz::uint32_t& lower_bound, glz::uint32_t& upper_bound) noexcept
       {
          // Small-buffer path. Avoid the larger bulk-loop setup and still
          // use 8-byte ASCII skipping when useful
@@ -1910,8 +1911,8 @@ export namespace glz
          return true;
       }
 
-      GLZ_ALWAYS_INLINE static bool consume_tail(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
-                                                 uint32_t& lower_bound, uint32_t& upper_bound) noexcept
+      GLZ_ALWAYS_INLINE static bool consume_tail(const glz::uint8_t*& it, const glz::uint8_t* end, glz::uint32_t& remaining,
+                                                 glz::uint32_t& lower_bound, glz::uint32_t& upper_bound) noexcept
       {
          // Tail normally should be 0..3 bytes after bulk loop
          while (it != end) {
@@ -1932,13 +1933,13 @@ export namespace glz
          return true;
       }
 
-      GLZ_ALWAYS_INLINE static bool consume_pending(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
-                                                    uint32_t& lower_bound, uint32_t& upper_bound) noexcept
+      GLZ_ALWAYS_INLINE static bool consume_pending(const glz::uint8_t*& it, const glz::uint8_t* end, glz::uint32_t& remaining,
+                                                    glz::uint32_t& lower_bound, glz::uint32_t& upper_bound) noexcept
       {
          // Continue a partially consumed codepoint.
          // Only the first continuation byte may have a tightened bound
          while (remaining != 0 && it != end) {
-            const uint32_t byte = *it++;
+            const glz::uint32_t byte = *it++;
             if (!is_in_range(byte, lower_bound, upper_bound)) [[unlikely]] {
                return false;
             }
@@ -1951,12 +1952,12 @@ export namespace glz
          return true;
       }
 
-      GLZ_ALWAYS_INLINE void store_pending(const uint32_t remaining, const uint32_t lower_bound,
-                                           const uint32_t upper_bound) noexcept
+      GLZ_ALWAYS_INLINE void store_pending(const glz::uint32_t remaining, const glz::uint32_t lower_bound,
+                                           const glz::uint32_t upper_bound) noexcept
       {
-         remaining_ = static_cast<uint8_t>(remaining);
-         lower_bound_ = static_cast<uint8_t>(lower_bound);
-         upper_bound_ = static_cast<uint8_t>(upper_bound);
+         remaining_ = static_cast<glz::uint8_t>(remaining);
+         lower_bound_ = static_cast<glz::uint8_t>(lower_bound);
+         upper_bound_ = static_cast<glz::uint8_t>(upper_bound);
       }
 
       GLZ_ALWAYS_INLINE bool fail() noexcept
@@ -1965,9 +1966,9 @@ export namespace glz
          return false;
       }
 
-      uint8_t remaining_{};
-      uint8_t lower_bound_{0x80};
-      uint8_t upper_bound_{0xBF};
+      glz::uint8_t remaining_{};
+      glz::uint8_t lower_bound_{0x80};
+      glz::uint8_t upper_bound_{0xBF};
       bool valid_{true};
    };
 

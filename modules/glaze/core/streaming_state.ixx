@@ -1,18 +1,19 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/streaming_state.hpp"
-// glz:header std=<concepts>
 // glz:header std=<cstddef>
 // glz:header std=<type_traits>
+// glz:header include="glaze/core/context.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.streaming_state;
 
 import std;
 
 import glaze.core.context;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::size_t;
 
 export namespace glz
 {
@@ -37,8 +38,8 @@ export namespace glz
 
       // Function pointers for type-erased operations
       const char* (*get_data)(void*) = nullptr;
-      size_t (*get_size)(void*) = nullptr;
-      void (*consume)(void*, size_t) = nullptr;
+      glz::size_t (*get_size)(void*) = nullptr;
+      void (*consume)(void*, glz::size_t) = nullptr;
       bool (*refill)(void*) = nullptr;
       bool (*eof)(void*) = nullptr;
       bool (*source_eof)(void*) = nullptr;
@@ -50,10 +51,10 @@ export namespace glz
       const char* data() const noexcept { return get_data(buffer_ptr); }
 
       // Get current available size
-      size_t size() const noexcept { return get_size(buffer_ptr); }
+      glz::size_t size() const noexcept { return get_size(buffer_ptr); }
 
       // Consume n bytes from buffer
-      void consume_bytes(size_t n) const noexcept { consume(buffer_ptr, n); }
+      void consume_bytes(glz::size_t n) const noexcept { consume(buffer_ptr, n); }
 
       // Refill buffer, returns true if data available
       bool refill_buffer() const noexcept { return refill(buffer_ptr); }
@@ -69,7 +70,7 @@ export namespace glz
       // Consume up to current position and refill
       // Returns new iterators via out parameters
       // it_offset is how far into current buffer we've parsed
-      bool consume_and_refill(size_t consumed_bytes, const char*& new_it, const char*& new_end) const noexcept
+      bool consume_and_refill(glz::size_t consumed_bytes, const char*& new_it, const char*& new_end) const noexcept
       {
          consume_bytes(consumed_bytes);
          bool has_data = refill_buffer();
@@ -86,8 +87,8 @@ export namespace glz
       streaming_state state;
       state.buffer_ptr = &buffer;
       state.get_data = [](void* p) -> const char* { return static_cast<Buffer*>(p)->data(); };
-      state.get_size = [](void* p) -> size_t { return static_cast<Buffer*>(p)->size(); };
-      state.consume = [](void* p, size_t n) { static_cast<Buffer*>(p)->consume(n); };
+      state.get_size = [](void* p) -> glz::size_t { return static_cast<Buffer*>(p)->size(); };
+      state.consume = [](void* p, glz::size_t n) { static_cast<Buffer*>(p)->consume(n); };
       state.refill = [](void* p) -> bool { return static_cast<Buffer*>(p)->refill(); };
       state.eof = [](void* p) -> bool { return static_cast<Buffer*>(p)->eof(); };
       if constexpr (requires(Buffer& b) {
@@ -117,18 +118,6 @@ export namespace glz
    concept has_streaming_state = is_context<std::remove_cvref_t<T>> && requires(std::remove_cvref_t<T>& ctx) {
       { ctx.stream } -> std::same_as<streaming_state&>;
    };
-
-   template <class Ctx>
-   consteval void assert_owns_its_bytes()
-   {
-      static_assert(!has_streaming_state<Ctx>,
-                    "This read fills a non-owning view (std::string_view, glz::raw_json_view, glz::text_view, or "
-                    "a std::span) that would point into the streaming window. A streaming read refills that "
-                    "window as it goes, so the view would address overwritten bytes by the time the read "
-                    "returns, and the read would report success while handing back silently wrong data. Read "
-                    "into the owning equivalent instead (std::string, glz::raw_json, glz::text, or an owning "
-                    "container), or read from a buffer that holds the whole document.");
-   }
 
    // Re-derive the window's edge after handing the input to another reader.
    //
@@ -164,9 +153,9 @@ export namespace glz
       if constexpr (has_streaming_state<Ctx>) {
          if (ctx.stream.enabled()) {
             const char* const window = ctx.stream.data();
-            const size_t size = ctx.stream.size();
-            const size_t offset = (it > window) ? size_t(it - window) : 0;
-            const size_t consumed = (offset < size) ? offset : size;
+            const glz::size_t size = ctx.stream.size();
+            const glz::size_t offset = (it > window) ? glz::size_t(it - window) : 0;
+            const glz::size_t consumed = (offset < size) ? offset : size;
 
             const char* new_it;
             const char* new_end;
@@ -189,4 +178,11 @@ export namespace glz
 // window moves, so it catches the case wherever the view sits -- behind a tuple, a map key, a
 // custom setter, or ten structs down -- and never fires on a type that merely looks like it holds
 // one. Every reader that aliases the input places this next to the assignment that does it.
-#define GLZ_ASSERT_OWNS_ITS_BYTES(Ctx) ::glz::assert_owns_its_bytes<Ctx>()
+#define GLZ_ASSERT_OWNS_ITS_BYTES(Ctx)                                                                          \
+   static_assert(!::glz::has_streaming_state<Ctx>,                                                              \
+                 "This read fills a non-owning view (std::string_view, glz::raw_json_view, glz::text_view, or " \
+                 "a std::span) that would point into the streaming window. A streaming read refills that "      \
+                 "window as it goes, so the view would address overwritten bytes by the time the read "         \
+                 "returns, and the read would report success while handing back silently wrong data. Read "     \
+                 "into the owning equivalent instead (std::string, glz::raw_json, glz::text, or an owning "     \
+                 "container), or read from a buffer that holds the whole document.")

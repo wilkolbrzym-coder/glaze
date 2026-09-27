@@ -330,37 +330,35 @@ def dedupe(items: list[str]) -> list[str]:
     return result
 
 
-def leading_guard_prefix(lines: list[str], start: int) -> tuple[list[str], set[int]]:
-    """Return a leading preprocessor guard block that must precede the includes.
+def leading_preamble(lines: list[str], start: int) -> tuple[list[str], set[int]]:
+    """Return the header preamble that sits between ``#pragma once`` and the includes.
 
-    Several reference headers open a feature-test guard *before* their include
-    block, e.g.::
+    The reference headers open with a fixed frame::
 
         #pragma once
 
-        #if __cpp_exceptions
+        [preamble: blank line, doc comments, an optional feature-test guard]
 
-        // ...doc comment...
+        #include ...
 
-        #include "..."
+    The preamble is a contiguous run of blank lines, comment lines and opening
+    preprocessor directives that precedes the module's first import or include.
+    Examples: the pre-include documentation block of ``util/itoa.hpp``, the
+    ``@class guard`` doxygen block of ``thread/guard.hpp``, and the
+    ``#if __cpp_exceptions`` guard of ``glaze_exceptions.hpp`` (whose matching
+    ``#endif`` stays at the end of the body, so the include block ends up inside
+    the guard exactly as in the reference).
 
-    The module cannot express that with the metadata include list alone (the
-    includes would move above the guard), so when the module body starts with an
-    opening ``#if`` we lift the guard (plus any blank/comment lines up to the
-    first import or include) out of the body and emit it before the include
-    block.  The matching ``#endif`` stays at the end of the body, so the include
-    block ends up inside the guard exactly as in the reference.
+    The module mirrors that region *verbatim* between its module declaration and
+    its first import, so the preamble text -- including its surrounding blank
+    lines, which are what separate it from ``#pragma once`` and from the include
+    block -- is recovered without any per-header knowledge here.
 
-    Returns ``(guard_lines, skipped_indices)``; both empty when the body does not
-    start with a guard.
+    Returns ``(preamble_lines, skipped_indices)``; both empty when the body opens
+    directly with an import, an include or code.
     """
     index = start
-    while index < len(lines) and lines[index].strip() == "":
-        index += 1
-    if index >= len(lines) or not PREPROCESSOR_OPEN_RE.match(lines[index]):
-        return [], set()
-
-    end = index
+    end = start
     while end < len(lines):
         stripped = lines[end].strip()
         if IMPORT_RE.match(lines[end]) or RAW_INCLUDE_RE.match(lines[end]) or MODULE_RE.match(lines[end]):
@@ -463,9 +461,10 @@ def transform_source(
         first_decl_index,
     )
 
-    # A feature-test guard that opens the body belongs *before* the include
-    # block in the reference header; lift it out of the body (see helper).
-    guard_lines, guard_indices = leading_guard_prefix(lines, export_index + 1)
+    # The header preamble (blank line, doc comment and/or feature-test guard)
+    # belongs *before* the include block in the reference header; lift it out of
+    # the body verbatim (see helper).
+    preamble_lines, preamble_indices = leading_preamble(lines, export_index + 1)
 
     # Include-only preprocessor blocks in the global module fragment are
     # module-internal (see helper); drop them entirely.
@@ -489,7 +488,7 @@ def transform_source(
     for index, line in enumerate(lines):
         if index < first_decl_index:
             continue
-        if index in guard_indices or index in block_drop:
+        if index in preamble_indices or index in block_drop:
             continue
         if HEADER_META_RE.match(line):
             continue
@@ -572,27 +571,28 @@ def transform_source(
 
     std_include_lines = [f"#include {include}" for include in sorted(dedupe(std_includes))]
     project_include_lines = [f"#include {include}" for include in sorted(dedupe(project_includes))]
+    preamble_lines = collapse_blank_runs(preamble_lines)
     output_lines: list[str] = []
     output_lines.extend(prefix)
     if output_lines and output_lines[-1] != "":
         output_lines.append("")
     output_lines.append("#pragma once")
-    guard_lines = trim_blank_edges(guard_lines)
-    if guard_lines:
+    if preamble_lines:
+        # Emitted verbatim: its blank lines are what separate it from
+        # `#pragma once` above and from the include block below, so no blank is
+        # injected around it.
+        output_lines.extend(preamble_lines)
+    first_block = True
+    for block in (std_include_lines, project_include_lines, prelude_lines, body_lines):
+        if not block:
+            continue
+        if first_block and preamble_lines:
+            first_block = False
+            output_lines.extend(block)
+            continue
+        first_block = False
         output_lines.append("")
-        output_lines.extend(guard_lines)
-    if std_include_lines:
-        output_lines.append("")
-        output_lines.extend(std_include_lines)
-    if project_include_lines:
-        output_lines.append("")
-        output_lines.extend(project_include_lines)
-    if prelude_lines:
-        output_lines.append("")
-        output_lines.extend(prelude_lines)
-    if body_lines:
-        output_lines.append("")
-        output_lines.extend(body_lines)
+        output_lines.extend(block)
 
     header_path = resolve_header_path(include_root, metadata.path)
     # No reference header carries trailing whitespace; strip it so that

@@ -32,7 +32,7 @@ namespace glz
    // reports being full only through try_emplace_back. Its resize(), reserve() and emplace_back()
    // throw std::bad_alloc past capacity, and abort outright when exceptions are disabled.
    export template <class T>
-   concept fixed_capacity_container = has_try_emplace_back<std::remove_cvref_t<T>> && requires(T& t) {
+   export concept fixed_capacity_container = has_try_emplace_back<std::remove_cvref_t<T>> && requires(T& t) {
       { t.max_size() } -> std::convertible_to<glz::size_t>;
    };
 
@@ -51,7 +51,7 @@ namespace glz
    }
 
    export template <auto Opts>
-   auto read_iterators(contiguous auto&& buffer) noexcept
+   export auto read_iterators(contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
@@ -76,7 +76,7 @@ namespace glz
    // Every entry point that builds iterators over a caller's buffer has to go through this. Reached
    // by two paths before, they disagreed, and the one that skipped it read out of bounds.
    export template <auto Opts, class Buf>
-   consteval auto parse_opts_for()
+   export consteval auto parse_opts_for()
    {
       auto o = is_padded_off<Opts>();
       using B = std::remove_cvref_t<Buf>;
@@ -141,7 +141,7 @@ namespace glz
    //   - running after the parse, because readers that take the buffer verbatim (glz::text,
    //     glz::raw_json) must see every byte; they complete without error and never reach this.
    export template <auto Opts>
-   GLZ_ALWAYS_INLINE void finalize_top_level_read(is_context auto&& ctx, const char* start, const char* it,
+   export GLZ_ALWAYS_INLINE void finalize_top_level_read(is_context auto&& ctx, const char* start, const char* it,
                                                   const char* end) noexcept
    {
       if constexpr (Opts.format == JSON && !check_null_terminated(Opts)) {
@@ -163,7 +163,7 @@ namespace glz
 
    export template <auto Opts, class T, contiguous Buf>
       requires read_supported<T, Opts.format> && (!is_input_streaming<Buf>)
-   [[nodiscard]] error_ctx read(T& value, Buf&& buffer, is_context auto&& ctx)
+   export [[nodiscard]] error_ctx read(T& value, Buf&& buffer, is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
@@ -243,22 +243,22 @@ namespace glz
 
    export template <auto Opts, class T, contiguous Buf>
       requires read_supported<T, Opts.format> && (!is_input_streaming<Buf>)
-   [[nodiscard]] error_ctx read(T& value, Buf&& buffer)
+   export [[nodiscard]] error_ctx read(T& value, Buf&& buffer)
    {
       format_context_t<Opts.format> ctx{};
       return read<Opts>(value, buffer, ctx);
    }
 
    export template <class T>
-   concept c_style_char_buffer = std::convertible_to<std::remove_cvref_t<T>, std::string_view> && !has_data<T>;
+   export concept c_style_char_buffer = std::convertible_to<std::remove_cvref_t<T>, std::string_view> && !has_data<T>;
 
    export template <class T>
-   concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
+   export concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
 
    // for char array input
    export template <auto Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<T, Opts.format>
-   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
+   export [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
@@ -269,7 +269,7 @@ namespace glz
 
    export template <auto Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<T, Opts.format>
-   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
+   export [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {
       format_context_t<Opts.format> ctx{};
       return read<Opts>(value, std::forward<Buffer>(buffer), ctx);
@@ -280,7 +280,7 @@ namespace glz
    // Returns error_ctx with total bytes consumed across all refills
    export template <auto Opts, class T, class Buffer, has_streaming_state Ctx>
       requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
-   [[nodiscard]] error_ctx read_streaming(T& value, Buffer&& buffer, Ctx&& ctx)
+   export [[nodiscard]] error_ctx read_streaming(T& value, Buffer&& buffer, Ctx&& ctx)
    {
       // For streaming, we need null_terminated = false to track depth
       static constexpr auto StreamingOpts = [] {
@@ -389,7 +389,7 @@ namespace glz
 
    export template <auto Opts, class T, class Buffer>
       requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
-   [[nodiscard]] error_ctx read_streaming(T& value, Buffer&& buffer)
+   export [[nodiscard]] error_ctx read_streaming(T& value, Buffer&& buffer)
    {
       streaming_context ctx{};
       return read_streaming<Opts>(value, std::forward<Buffer>(buffer), ctx);
@@ -403,7 +403,7 @@ namespace glz
    // helper that funnels through `read` from having to remember on its own.
    export template <auto Opts, class T, class Buffer>
       requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
-   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, is_context auto&& ctx)
+   export [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, is_context auto&& ctx)
    {
       if constexpr (has_streaming_state<decltype(ctx)>) {
          return read_streaming<Opts>(value, std::forward<Buffer>(buffer), ctx);
@@ -421,7 +421,7 @@ namespace glz
 
    export template <auto Opts, class T, class Buffer>
       requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
-   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
+   export [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {
       return read_streaming<Opts>(value, std::forward<Buffer>(buffer));
    }

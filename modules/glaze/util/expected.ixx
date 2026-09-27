@@ -3,9 +3,10 @@
 // glz:header path="glaze/util/expected.hpp"
 // glz:header std=<concepts>
 // glz:header std=<expected>
-// glz:header std=<type_traits>
 // glz:header std=<utility>
 // glz:header std=<version>
+// glz:header project_imports=ignore
+// glz:header trailing_newline=no
 export module glaze.util.expected;
 
 import std;

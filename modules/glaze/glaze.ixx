@@ -1,3 +1,15 @@
+// glz:header include="glaze/base64/base64.hpp"
+// glz:header include="glaze/beve.hpp"
+// glz:header include="glaze/beve/beve_to_json.hpp"
+// glz:header include="glaze/core/ostream_buffer.hpp"
+// glz:header include="glaze/csv.hpp"
+// glz:header include="glaze/file/file_ops.hpp"
+// glz:header include="glaze/file/read_directory.hpp"
+// glz:header include="glaze/file/write_directory.hpp"
+// glz:header include="glaze/json.hpp"
+// glz:header include="glaze/stencil/stencil.hpp"
+// glz:header include="glaze/util/key_transformers.hpp"
+// glz:header project_imports=ignore
 /*
   Glaze Library
 
@@ -30,9 +42,6 @@
   without including the above copyright and permission notices.
  */
 // glz:header path="glaze/glaze.hpp"
-// glz:header include="glaze/beve/beve_to_json.hpp"
-// glz:header include="glaze/stencil/stencil.hpp"
-// glz:header include="glaze/util/key_transformers.hpp"
 
 export module glaze;
 

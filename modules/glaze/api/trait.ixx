@@ -2,9 +2,12 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/api/trait.hpp"
 // glz:header std=<array>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<string_view>
+// glz:header include="glaze/api/hash.hpp"
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/meta.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header project_imports=ignore
 export module glaze.api.trait;
 
 import glaze.api.hash;
@@ -17,9 +20,8 @@ import glaze.core.reflect;
 import glaze.version;
 
 import glaze.util.string_literal;
+import glaze.core.basic_types;
 
-using std::uint64_t;
-using std::size_t;
 
 export namespace glz
 {
@@ -30,7 +32,7 @@ export namespace glz
       static constexpr sv type_name_unhashed = name_v<T>;
       static constexpr sv type_name_hash = hash128_v<type_name_unhashed>; // must hash for consistent length
 
-      static constexpr sv type_size_hash = hash128_v<int_to_sv_v<size_t, sizeof(T)>>; // must hash for consistent length
+      static constexpr sv type_size_hash = hash128_v<int_to_sv_v<glz::size_t, sizeof(T)>>; // must hash for consistent length
 
       static constexpr sv major_version = hash128_i_v<version_v<T>.major>; // must hash for consistent length
       static constexpr sv minor_version = hash128_i_v<version_v<T>.minor>; // must hash for consistent length
@@ -131,13 +133,13 @@ export namespace glz
 
    namespace detail
    {
-      template <std::unsigned_integral T, size_t N>
+      template <std::unsigned_integral T, glz::size_t N>
       constexpr std::array<T, N> uint_array_from_sv(sv str)
       {
          std::array<T, N> res{};
          constexpr auto bytes = sizeof(T);
-         for (size_t i = 0; i < N; ++i) {
-            for (size_t j = 0; j < bytes; ++j) {
+         for (glz::size_t i = 0; i < N; ++i) {
+            for (glz::size_t j = 0; j < bytes; ++j) {
                res[i] |= T(str[i * bytes + j]) << (8 * j);
             }
          }
@@ -145,10 +147,10 @@ export namespace glz
       }
    }
 
-   using hash_t = std::array<uint64_t, 2>;
+   using hash_t = std::array<glz::uint64_t, 2>;
    template <class T>
    consteval hash_t hash()
    {
-      return detail::uint_array_from_sv<uint64_t, 2>(trait<T>::hash);
+      return detail::uint_array_from_sv<glz::uint64_t, 2>(trait<T>::hash);
    }
 }

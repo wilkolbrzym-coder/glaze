@@ -2,13 +2,11 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/validate.hpp"
 // glz:header std=<algorithm>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<iterator>
 // glz:header std=<optional>
 // glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/write_chars.hpp"
+// glz:header include="glaze/util/dump.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.validate;
 
 import std;
@@ -21,8 +19,8 @@ import glaze.concepts.container_concepts;
 import glaze.core.write_chars;
 import glaze.core.opts;
 import glaze.core.context;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
@@ -30,12 +28,12 @@ namespace glz
    {
       export struct source_info final
       {
-         size_t line{};
-         size_t column{};
+         glz::size_t line{};
+         glz::size_t column{};
          std::string context{};
-         size_t index{};
-         size_t front_truncation{};
-         size_t rear_truncation{};
+         glz::size_t index{};
+         glz::size_t front_truncation{};
+         glz::size_t rear_truncation{};
       };
 
       // We convert to only single spaces for error messages in order to keep the source info
@@ -49,7 +47,7 @@ namespace glz
          }
       }
 
-      export inline source_info get_source_info(const has_size auto& buffer, const size_t index)
+      export inline source_info get_source_info(const has_size auto& buffer, const glz::size_t index)
       {
          using V = std::decay_t<decltype(buffer[0])>;
 
@@ -62,11 +60,11 @@ namespace glz
             }
 
             const auto start = std::begin(buffer) + index;
-            const auto line = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
+            const auto line = glz::size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
             const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
             const auto prev_new_line =
                std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
-            const auto column = size_t(std::distance(rstart, prev_new_line));
+            const auto column = glz::size_t(std::distance(rstart, prev_new_line));
             const auto next_new_line =
                std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
 
@@ -74,8 +72,8 @@ namespace glz
             auto context_begin = std::begin(buffer) + offset;
             auto context_end = next_new_line;
 
-            size_t front_truncation = 0;
-            size_t rear_truncation = 0;
+            glz::size_t front_truncation = 0;
+            glz::size_t rear_truncation = 0;
 
             if (std::distance(context_begin, context_end) > 64) {
                // reduce the context length so that we can more easily see errors, especially for non-prettified buffers
@@ -101,17 +99,17 @@ namespace glz
 
       export template <class B>
          requires(!has_size<B>)
-      inline source_info get_source_info(const B* buffer, const size_t index)
+      inline source_info get_source_info(const B* buffer, const glz::size_t index)
       {
          return get_source_info(sv{buffer}, index);
       }
 
       export inline std::string generate_error_string(const std::string_view error, const source_info& info,
-                                                     const std::string_view filename = "")
+                                               const std::string_view filename = "")
       {
          std::string b{};
          b.resize(error.size() + info.context.size() + filename.size() + 128);
-         size_t ix{};
+         glz::size_t ix{};
 
          if (not filename.empty()) {
             dump_not_empty(filename, b, ix);

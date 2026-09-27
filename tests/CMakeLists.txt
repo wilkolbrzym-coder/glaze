@@ -1,22 +1,3 @@
-include(FetchContent)
-
-FetchContent_Declare(
-  ut
-  GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG main
-  GIT_SHALLOW TRUE
-)
-
-set (UT_ENABLE_MODULES ON)
-
-message(STATUS "Fetching dependencies...")
-set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
-set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(ut)
-set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
-set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
-message(STATUS "...finished fetching dependencies.")
-
 # Setup the Asio backend (Boost / standalone / bundled) used by networking tests.
 # Selection plus the GLZ_USE_BOOST_ASIO bridge live in cmake/glaze-asio.cmake, the
 # single source of truth shared with the benchmarks, so glaze/ext/glaze_asio.hpp and
@@ -35,26 +16,24 @@ option(glaze_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSan
 
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
-target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glaze::asio)
+target_link_libraries(glz_test_common INTERFACE glaze::glaze glaze::asio)
+# Provides ut/ut.hpp (the vendored test framework, see ut/LICENSE) and the shared test
+# headers such as scratch_directory.hpp
+target_include_directories(glz_test_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(MSVC)
-    target_compile_options(glz_test_common INTERFACE /bigobj)
+    target_compile_options(glz_test_common INTERFACE /GR- /bigobj)
     target_compile_options(glz_test_common INTERFACE /W4 /wd4459 /wd4805)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(glz_test_common INTERFACE -fno-rtti)
+    target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti)
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
         target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic)
     else()
         target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
     endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
-    target_compile_options(glz_test_common INTERFACE -fno-rtti)
+    target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti)
     target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
-    target_compile_options(glz_test_common INTERFACE -Wno-error=reserved-module-identifier)
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        target_compile_options(glz_test_common INTERFACE -Wno-error=TU-local-entity-exposure)
-    endif()
-    target_compile_options(glz_test_common INTERFACE -Wno-error=missing-braces)
     target_compile_options(glz_test_common INTERFACE -ftime-trace)
     if(glaze_ENABLE_SANITIZERS)
         target_compile_options(glz_test_common INTERFACE -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
@@ -62,35 +41,20 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
     endif()
 endif()
 
-add_library(glz_test_noexceptions INTERFACE)
-target_compile_features(glz_test_noexceptions INTERFACE cxx_std_23)
-target_link_libraries(glz_test_noexceptions INTERFACE glz_test_common)
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(glz_test_noexceptions INTERFACE -fno-exceptions)
-endif()
-
 add_library(glz_test_exceptions INTERFACE)
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_23)
-target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze glaze::asio)
+target_link_libraries(glz_test_exceptions INTERFACE glaze::glaze glaze::asio)
+target_include_directories(glz_test_exceptions INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 if(MSVC)
-    target_compile_options(glz_test_exceptions INTERFACE /bigobj)
+    target_compile_options(glz_test_exceptions INTERFACE /GR- /bigobj)
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(glz_test_exceptions INTERFACE -Wall -Wextra -pedantic)
 endif()
 
-foreach(glz_test_support IN ITEMS glz_test_common glz_test_exceptions)
-    set_property(
-        TARGET ${glz_test_support}
-        PROPERTY INTERFACE_LINK_LIBRARIES_DIRECT
-            "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:ut::ut>"
-            "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:glaze::glaze>"
-    )
-endforeach()
-
 add_subdirectory(api_test)
 add_subdirectory(beve_test)
-# add_subdirectory(bson_test)
+add_subdirectory(bson_test)
 add_subdirectory(cbor_test)
 add_subdirectory(jsonb_test)
 add_subdirectory(jsonb_sqlite_test)
@@ -99,14 +63,16 @@ add_subdirectory(cli_menu_test)
 add_subdirectory(compare_test)
 add_subdirectory(ordered_small_map_test)
 add_subdirectory(ordered_map_test)
+add_subdirectory(flat_map_test)
 add_subdirectory(csv_test)
-# add_subdirectory(eigen_test) unfinished
+add_subdirectory(custom_formats)
+add_subdirectory(eigen_test)
+add_subdirectory(embedded_null_test)
 add_subdirectory(example_json)
 add_subdirectory(exceptions_test)
-# Temporarily disabled for Clang std-module builds due to exception-mode BMI mismatch.
-# add_subdirectory(inplace_vector)
 add_subdirectory(float_write_test)
 add_subdirectory(size_optimization_test)
+add_subdirectory(inplace_vector)
 option(glaze_BUILD_PERFORMANCE_TESTS "Build performance tests" ON)
 if(glaze_BUILD_PERFORMANCE_TESTS)
     add_subdirectory(int_parsing)
@@ -118,20 +84,24 @@ if(NOT glaze_ENABLE_REFLECTION26)
 endif()
 add_subdirectory(key_transformers_test)
 add_subdirectory(lib_test)
+add_subdirectory(meta_skip_test)
 add_subdirectory(mock_json_test)
 add_subdirectory(reflection)
 add_subdirectory(roundtrip)
 add_subdirectory(stencil)
 add_subdirectory(threading_test)
 add_subdirectory(toml_test)
+add_subdirectory(tuple_test)
+add_subdirectory(toml_reader_test)
 add_subdirectory(utility_formats)
-# add_subdirectory(yaml_test) disable for now, until latest changes are pulled
+add_subdirectory(yaml_test)
 
-# add_subdirectory(yaml_conformance)
+add_subdirectory(yaml_conformance)
 add_subdirectory(msgpack_test)
 add_subdirectory(ostream_buffer_test)
 add_subdirectory(istream_buffer_test)
 add_subdirectory(streaming_view_rejection)
+add_subdirectory(wrapper_rejection)
 
 # simple_float_test runs exhaustive tests over all 2^32 float values
 # Disabled by default - run via dedicated CI workflow in Release mode
@@ -149,7 +119,7 @@ endif()
 add_subdirectory(json_reflection_test)
 add_subdirectory(json_test)
 
-option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" OFF)
+option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" ON)
 if(glaze_BUILD_NETWORKING_TESTS)
     add_subdirectory(networking_tests)
 endif()

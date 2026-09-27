@@ -1,14 +1,16 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
-export module glaze.tests.interface;
+// For the license information refer to glaze.hpp
+#pragma once
 
-import std;
+#include <iostream>
+#include <tuple>
 
-import glaze.core.common;
-export import glaze.core.meta;
-import glaze.version;
+#include "glaze/api/impl.hpp"
+#include "glaze/api/std/deque.hpp"
+#include "glaze/api/std/span.hpp"
+#include "glaze/api/std/unordered_set.hpp"
 
-export struct my_api
+struct my_api
 {
    int x = 7;
    double y = 5.5;

@@ -6,8 +6,6 @@
 #include <glaze/msgpack.hpp>
 #include <vector>
 
-using std::size_t;
-
 struct S
 {
    std::string value{};

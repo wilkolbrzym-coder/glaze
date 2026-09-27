@@ -1,6 +1,3 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
-
 // Float serialization integration test.
 //
 // Exercises both glz::to_chars variants (OptSize=false default, OptSize=true)
@@ -12,15 +9,16 @@
 //                tested for the default opts and for opts_size.
 //   - Non-finite inputs (NaN, +/-Inf) emit "null" on both variants.
 
-import std;
+#include <bit>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <limits>
+#include <random>
+#include <string>
 
-import glaze;
-import glaze.util.zmij;
-import glaze.util.glaze_fast_float;
-
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
+#include "glaze/glaze.hpp"
+#include "glaze/util/zmij.hpp"
 
 static int failures = 0;
 constexpr int max_logged_failures = 10;

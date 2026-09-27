@@ -19,10 +19,6 @@
 // ============================================================================
 
 // Pure ASCII lowercase, no escaping needed
-
-using std::uint64_t;
-using std::size_t;
-
 static std::string gen_ascii(size_t len, uint64_t seed = 42)
 {
    std::mt19937 rng(seed);

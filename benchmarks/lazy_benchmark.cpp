@@ -7,9 +7,6 @@
 #include "glaze/json.hpp"
 
 // Struct for deserialization benchmarks
-
-using std::size_t;
-
 struct BenchUser
 {
    int64_t id{};

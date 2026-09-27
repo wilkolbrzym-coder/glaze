@@ -4,8 +4,6 @@
 #include <glaze/glaze.hpp>
 #include <vector>
 
-using std::size_t;
-
 struct my_struct
 {
    std::vector<int> num1{};

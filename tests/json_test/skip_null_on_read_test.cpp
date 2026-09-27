@@ -1,12 +1,8 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
-
 // Tests for skip_null_members_on_read option
 // This option allows reading JSON with null values without requiring std::optional
 
-import std;
-import glaze;
-import ut;
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

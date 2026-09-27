@@ -1,15 +1,12 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
+// For the license information refer to glaze.hpp
 
-import std;
-import glaze.json;
-import glaze.util.parse;
-import ut;
+#include <concepts>
+#include <utility>
+#include <vector>
 
-using std::int32_t;
-using std::uint32_t;
-using std::int64_t;
-using std::size_t;
+#include "glaze/json.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -359,6 +356,29 @@ suite lazy_json_tests = [] {
       auto float_result = doc["value"].get<float>();
       expect(float_result.has_value());
       expect(std::abs(float_result.value() - 2.5f) < 0.001f);
+   };
+
+   // An exponent marker needs at least one digit after it and its optional sign
+   "lazy_json_empty_exponent"_test = [] {
+      for (const std::string_view num : {"1e", "1.0E", "1.0e-", "1e+"}) {
+         std::string scalar{num};
+         auto root = glz::lazy_json(scalar);
+         expect(root.has_value());
+         expect(!root->root().get<double>().has_value()) << num;
+         expect(!root->root().get<float>().has_value()) << num;
+         expect(!root->root().get<int64_t>().has_value()) << num;
+
+         std::string object = R"({"value":)" + scalar + "}";
+         auto doc = glz::lazy_json(object);
+         expect(doc.has_value());
+         expect(!(*doc)["value"].get<double>().has_value()) << num;
+         expect(!(*doc)["value"].get<float>().has_value()) << num;
+      }
+
+      std::string valid = R"({"value":1.5e+2})";
+      auto doc = glz::lazy_json(valid);
+      expect(doc.has_value());
+      expect((*doc)["value"].get<double>().value() == 150.0);
    };
 
    "lazy_json_large_array"_test = [] {

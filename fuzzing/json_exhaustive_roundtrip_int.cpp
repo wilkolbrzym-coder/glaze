@@ -8,13 +8,6 @@
 #include <vector>
 
 // must be outside test(), compilation fails on gcc 13 otherwise
-
-using std::int16_t;
-using std::uint16_t;
-using std::int32_t;
-using std::uint32_t;
-using std::size_t;
-
 template <typename T>
 struct Value
 {
@@ -121,12 +114,12 @@ void testonetype(int bits)
 {
    switch (bits) {
    case 16:
-      test<int16_t>();
-      test<uint16_t>();
+      test<std::int16_t>();
+      test<std::uint16_t>();
       break;
    case 32:
-      test<int32_t>();
-      test<uint32_t>();
+      test<std::int32_t>();
+      test<std::uint32_t>();
       break;
    }
 }

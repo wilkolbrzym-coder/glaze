@@ -1,15 +1,12 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
+#include <deque>
+#include <iostream>
+#include <map>
+#include <random>
+#include <unordered_map>
 
-import std;
-import glaze;
-import ut;
-
-using std::int32_t;
-using std::uint32_t;
-using std::int64_t;
-using std::uint64_t;
-using std::size_t;
+#include "glaze/glaze.hpp"
+#include "scratch_directory.hpp"
+#include "ut/ut.hpp"
 
 static constexpr bool skip = false;
 
@@ -53,6 +50,11 @@ inline std::string generate_basic_string()
    }
    return result;
 }
+
+// Relative scratch paths in this file resolve inside a private directory rather than
+// wherever the binary was launched from. This must precede the first suite: ut runs a
+// suite from its constructor, during static initialization.
+const glz_test::scratch_directory scratch{"json_performance"};
 
 suite string_performance = [] {
    "string_performance"_test = [] {
@@ -151,16 +153,16 @@ struct integers
 /*suite default_numerics = [] {
    "default numerics"_test = [] {
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000000;
+      constexpr size_t n = 10000000;
 #else
-      constexpr std::size_t n = 100000;
+      constexpr size_t n = 100000;
 #endif
 
       integers ints_obj{};
 
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
-      for (std::size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i) {
          std::ignore = glz::write_json(ints_obj, buffer);
       }
       auto t1 = std::chrono::steady_clock::now();
@@ -169,7 +171,7 @@ struct integers
 
       t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
-      for (std::size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i) {
          e = glz::read_json(ints_obj, buffer);
       }
       t1 = std::chrono::steady_clock::now();
@@ -212,7 +214,7 @@ suite integers_test = [] {
 };
 
 suite uint64_t_test = [] {
-   "std::uint64_t"_test = [] {
+   "uint64_t"_test = [] {
       SKIP;
 
 #ifdef NDEBUG

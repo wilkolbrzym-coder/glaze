@@ -8,7 +8,7 @@ All write functions return `glz::error_ctx`:
 
 ```cpp
 struct error_ctx {
-    std::size_t count{};                          // Bytes written to output
+    size_t count{};                          // Bytes written to output
     error_code ec{};                         // Error code (none on success)
     std::string_view custom_error_message{}; // Optional error details
 
@@ -55,7 +55,7 @@ if (ec) {
         // Use a larger buffer or the string-returning overload:
         auto result = glz::write_json(obj);
         if (result) {
-            std::size_t required_size = result->size();
+            size_t required_size = result->size();
         }
     }
     return;
@@ -116,7 +116,7 @@ if (ec.ec == glz::error_code::buffer_overflow) {
     // To get actual required size, use the string-returning overload:
     auto full = glz::write_json(large_object);
     if (full) {
-        std::size_t required = full->size();
+        size_t required = full->size();
     }
 }
 ```
@@ -188,20 +188,20 @@ Glaze uses a traits system that can be specialized for custom buffer types:
 
 ```cpp
 namespace glz {
-    template <std::size_t N>
+    template <size_t N>
     struct buffer_traits<my_lib::ring_buffer<N>> {
         static constexpr bool is_resizable = false;
         static constexpr bool has_bounded_capacity = true;
 
-        static std::size_t capacity(const my_lib::ring_buffer<N>& b) noexcept {
+        static size_t capacity(const my_lib::ring_buffer<N>& b) noexcept {
             return b.available_write_space();
         }
 
-        static bool ensure_capacity(my_lib::ring_buffer<N>& b, std::size_t needed) noexcept {
+        static bool ensure_capacity(my_lib::ring_buffer<N>& b, size_t needed) noexcept {
             return b.available_write_space() >= needed;
         }
 
-        static void finalize(my_lib::ring_buffer<N>& b, std::size_t written) noexcept {
+        static void finalize(my_lib::ring_buffer<N>& b, size_t written) noexcept {
             b.commit(written);
         }
     };
@@ -211,6 +211,29 @@ namespace glz {
 my_lib::ring_buffer<4096> ring;
 auto ec = glz::write_json(obj, ring);
 ```
+
+### Growth policy (`grow`)
+
+A buffer that *can* resize chooses how much it resizes by. Define `grow` to say so:
+
+```cpp
+namespace glz {
+    template <>
+    struct buffer_traits<my_lib::arena_buffer> {
+        static constexpr bool is_resizable = true;
+        // ... capacity / ensure_capacity / finalize as above ...
+
+        // `required` is the logical end position the write needs to be able to address.
+        static void grow(my_lib::arena_buffer& b, size_t required) {
+            b.resize(required + my_lib::arena_buffer::block_size);
+        }
+    };
+}
+```
+
+`grow` is optional. A specialization that omits it gets the default policy, `resize(2 * required)`, which amortizes repeated reallocations to O(n) over a whole write.
+
+The argument is a **logical end position**, not an amount of storage to add. For an ordinary buffer the two are the same thing, because logical position and physical offset coincide. They part ways for a buffer that does not keep the whole document — `basic_ostream_buffer` holds only the span it has not flushed yet, and its logical index keeps climbing after a flush releases the bytes behind it. Doubling that index would size storage to the document instead of to the window, so it defines its own `grow` that reserves the window the write needs plus a fixed slack. Define `grow` whenever your buffer's storage is not simply a prefix of the logical stream.
 
 ## See Also
 

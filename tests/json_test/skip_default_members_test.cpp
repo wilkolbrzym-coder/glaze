@@ -1,12 +1,12 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
-
 // Test for skip_default_members option
 // Related to GitHub issue #855
 
-import std;
-import glaze;
-import ut;
+#include <map>
+#include <string>
+#include <vector>
+
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

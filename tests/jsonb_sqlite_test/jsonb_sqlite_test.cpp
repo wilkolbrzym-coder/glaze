@@ -1,6 +1,5 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
-
+// For the license information refer to glaze.hpp
 //
 // SQLite interop tests for Glaze's JSONB format. These tests verify byte-level compatibility
 // with the SQLite reference implementation by:
@@ -11,15 +10,18 @@
 
 #include <sqlite3.h>
 
-import std;
+#include <array>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <optional>
+#include <string>
+#include <vector>
 
-import glaze.json;
-import glaze.jsonb;
-
-import ut;
-
-using std::size_t;
-using std::uint64_t;
+#include "glaze/json.hpp"
+#include "glaze/jsonb.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -27,7 +29,7 @@ namespace
 {
    [[noreturn]] void die(const char* msg)
    {
-      std::cerr << "sqlite fatal: " << msg << '\n';
+      std::fprintf(stderr, "sqlite fatal: %s\n", msg);
       std::abort();
    }
 
@@ -50,7 +52,10 @@ namespace
          }
          sqlite3_close(db);
          if (!ok) {
-            std::cerr << "jsonb_sqlite_test: linked SQLite (" << sqlite3_libversion() << ") lacks the JSON1 extension — all suites skipped\n (this is expected on macOS, which ships SQLite without JSON support).\n";
+            std::fprintf(stderr,
+                         "jsonb_sqlite_test: linked SQLite (%s) lacks the JSON1 extension — all suites "
+                         "skipped\n(this is expected on macOS, which ships SQLite without JSON support).\n",
+                         sqlite3_libversion());
          }
          return ok;
       }();
@@ -80,7 +85,7 @@ namespace
       {
          char* err = nullptr;
          if (sqlite3_exec(db, sql, nullptr, nullptr, &err) != SQLITE_OK) {
-            std::cerr << "sqlite_exec: " << (err ? err : "unknown") << '\n';
+            std::fprintf(stderr, "sqlite_exec: %s\n", err ? err : "unknown");
             sqlite3_free(err);
             std::abort();
          }

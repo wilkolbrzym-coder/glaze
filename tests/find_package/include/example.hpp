@@ -2,8 +2,6 @@
 
 #include <glaze/glaze.hpp>
 
-using std::uint32_t;
-
 namespace example
 {
    struct person

@@ -1,27 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
+// For the license information refer to glaze.hpp
 
-import std;
+#include "glaze/api/lib.hpp"
 
-import glaze.api.impl;
-import glaze.api.lib;
-import glaze.api.api;
-import glaze.core.meta;
-import glaze.api.std.deque;
-import glaze.api.std.functional;
-import glaze.api.std.span;
-import glaze.api.std.unordered_map;
-import glaze.api.std.vector;
+#include <iostream>
+#include <tuple>
 
-import ut;
+#include "glaze/api/api.hpp"
+#include "glaze/api/std/unordered_map.hpp"
+#include "interface.hpp"
+#include "ut/ut.hpp"
 
-import glaze.tests.interface;
-
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
-
-extern "C" glz::iface_fn glz_iface() noexcept { return glz::make_iface<>(); }
+glz::iface_fn glz_iface() noexcept { return glz::make_iface<>(); }
 
 void tests()
 {
@@ -66,7 +56,7 @@ void tests()
    "unordered type name"_test = [] {
       {
          std::string_view u = glz::name_v<std::unordered_map<uint64_t, std::string_view>>;
-         expect(u == "std::unordered_map<std::uint64_t,std::string_view>");
+         expect(u == "std::unordered_map<uint64_t,std::string_view>");
       }
    };
 

@@ -10,9 +10,6 @@
 #include "glaze/rpc/repe/plugin_helper.hpp"
 #include "ut/ut.hpp"
 
-using std::uint32_t;
-using std::uint64_t;
-
 using namespace ut;
 
 namespace repe = glz::repe;

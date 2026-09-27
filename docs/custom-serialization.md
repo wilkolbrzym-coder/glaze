@@ -12,7 +12,7 @@ Example:
 ```c++
 struct date
 {
-   std::uint64_t data;
+   uint64_t data;
    std::string human_readable;
 };
 

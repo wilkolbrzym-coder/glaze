@@ -7,9 +7,6 @@
 #include <vector>
 
 // must be outside test() to work in gcc<14
-
-using std::size_t;
-
 template <typename T>
 struct Value
 {

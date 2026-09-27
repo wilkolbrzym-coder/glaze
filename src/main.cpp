@@ -1,7 +1,4 @@
-import std;
-import glaze;
-
-using std::uint64_t;
+#include <glaze/glaze.hpp>
 
 struct my_struct
 {
@@ -25,6 +22,8 @@ struct glz::meta<my_struct>
 };
 
 static constexpr auto info = glz::reflect<my_struct>{};
+
+#include <iostream>
 
 int main()
 {

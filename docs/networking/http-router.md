@@ -184,7 +184,7 @@ glz::param_constraint hex_color{
     .description = "Valid hex color code",
     .validation = [](std::string_view value) {
         if (value.size() != 7 || value[0] != '#') return false;
-        for (std::size_t i = 1; i < value.size(); ++i) {
+        for (size_t i = 1; i < value.size(); ++i) {
             if (!std::isxdigit(value[i])) return false;
         }
         return true;
@@ -281,7 +281,7 @@ server.mount("/api", router);
 // Streaming routes are now reachable at /api/items/:id/events, etc.
 ```
 
-Streaming handlers take over the connection (no keep-alive loop) and write chunked responses through `streaming_response`.
+Streaming handlers take over the connection (no keep-alive loop) and write chunked responses through `streaming_response`. The server closes the connection when the stream ends, so the response carries `Connection: close` unless the handler sets its own. An empty `send` writes nothing, since a zero-length chunk would end the body.
 
 > **Behavior change.** Before streaming and WebSocket routes shared the matcher, `streaming_handlers_` was an exact-path lookup, so registering `/items/:id` as a streaming route was effectively dead and a request to `/items/42` fell through to the normal router. After the unification, streaming routes are matched first (see [Route Priority](#route-priority)), so a streaming `/items/:id` will intercept requests that a static normal `/items/42` would otherwise handle. Code that registered both kinds on the same path needs to be aware of the new ordering.
 
@@ -349,13 +349,13 @@ router.use([](const glz::request& req, glz::response& res) {
 // Authentication middleware
 router.use([](const glz::request& req, glz::response& res) {
     if (requires_auth(req.target)) {
-        auto auth_header = req.headers.find("Authorization");
-        if (auth_header == req.headers.end()) {
+        auto auth_header = req.headers.first_value("Authorization");
+        if (!auth_header) {
             res.status(401).json({{"error", "Authentication required"}});
             return;
         }
         
-        if (!validate_token(auth_header->second)) {
+        if (!validate_token(*auth_header)) {
             res.status(403).json({{"error", "Invalid token"}});
             return;
         }

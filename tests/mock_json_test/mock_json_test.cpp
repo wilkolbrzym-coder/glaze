@@ -1,14 +1,9 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
+// For the license information refer to glaze.hpp
 
-import glaze.compare.approx;
-import glaze;
-import ut;
-import std;
-
-using std::uint32_t;
-using std::int64_t;
-using std::uint64_t;
+#include "glaze/compare/approx.hpp"
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

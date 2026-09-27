@@ -1,38 +1,18 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
+#include <array>
+#include <cstdint>
+#include <deque>
+#include <limits>
+#include <map>
+#include <span>
+#include <unordered_map>
 
-// GCC 15's static analysis generates false positive -Warray-bounds warnings for tests that
-// deliberately use undersized buffers to verify buffer_overflow error handling.
-// The actual code calls ensure_space() before dump(), but GCC doesn't track this control flow.
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#endif
-
-import std;
-
-import glaze.base64;
-
-import glaze.core.meta_fwd;
-import glaze.core.opts;
-import glaze.core.context;
-
-import glaze.csv.read;
-import glaze.csv.skip;
-import glaze.csv.write;
-
-import glaze.json;
-
-import glaze.record.recorder;
-
-import ut;
+#include "glaze/base64/base64.hpp"
+#include "glaze/csv/read.hpp"
+#include "glaze/csv/write.hpp"
+#include "glaze/record/recorder.hpp"
+#include "ut/ut.hpp"
 
 // Specification: https://datatracker.ietf.org/doc/html/rfc4180
-
-using std::int8_t;
-using std::uint8_t;
-using std::int32_t;
-using std::uint64_t;
-using std::size_t;
 
 using namespace ut;
 
@@ -47,7 +27,7 @@ struct issue_768_test_struct
 {
    std::vector<int> num1{};
    std::vector<std::string> str1{};
-   void reserve(size_t cap)
+   void reserve(std::size_t cap)
    {
       num1.reserve(cap);
       str1.reserve(cap);
@@ -75,8 +55,8 @@ struct glz::meta<string_elements>
 
 struct signed_min_columns
 {
-   std::vector<int8_t> i8{};
-   std::vector<int32_t> i32{};
+   std::vector<std::int8_t> i8{};
+   std::vector<std::int32_t> i32{};
 };
 
 template <>
@@ -113,7 +93,7 @@ constexpr glz::opts_csv rowwise_char_opts_with_escaping{
    .raw_string = false,
 };
 
-enum struct csv_color : uint8_t {
+enum struct csv_color : std::uint8_t {
    red = 0,
    green = 1,
    blue = 2,
@@ -760,7 +740,7 @@ struct FishRecord
 {
    std::vector<float> Duration;
    std::vector<float> FishSize;
-   std::vector<uint8_t> Amount;
+   std::vector<std::uint8_t> Amount;
 
    std::vector<std::string> FishBaitName;
    std::vector<std::string> SurfaceSlapFishName;
@@ -2614,6 +2594,23 @@ y;4;5;6
       expect(arr[0].size() == 3);
       expect(arr[0][0] == 1);
       expect(arr[0][2] == 3);
+   };
+};
+
+suite csv_context_reuse = [] {
+   "a context reused after a failed read still reads"_test = [] {
+      static constexpr glz::opts_csv options{.use_headers = false};
+      const std::string bad = "1,2,3\n4,x,6";
+      const std::string good = "1,2,3\n4,5,6";
+
+      glz::context ctx{};
+      std::vector<std::vector<int>> first{};
+      expect(bool(glz::read<options>(first, bad, ctx)));
+
+      std::vector<std::vector<int>> second{};
+      const auto ec = glz::read<options>(second, good, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, good);
+      expect(second == std::vector<std::vector<int>>{{1, 2, 3}, {4, 5, 6}});
    };
 };
 

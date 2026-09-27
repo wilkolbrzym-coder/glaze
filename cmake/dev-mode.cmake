@@ -1,9 +1,7 @@
 enable_language(CXX)
 
-# Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
-if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
-  cmake_policy(SET CMP0135 NEW)
-endif()
+# CMP0135 (DOWNLOAD_EXTRACT_TIMESTAMP) arrived in CMake 3.24 and so already
+# defaults to NEW under our 3.31 minimum. No explicit cmake_policy needed.
 
 set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 
@@ -13,7 +11,7 @@ if(BUILD_TESTING)
 endif()
 
 if (glaze_ENABLE_FUZZING)
-  #add_subdirectory(fuzzing) # temporary
+  add_subdirectory(fuzzing)
 endif()
 
 # Done in developer mode only, so users won't be bothered by this :)

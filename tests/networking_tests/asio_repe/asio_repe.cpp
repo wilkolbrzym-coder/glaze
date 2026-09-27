@@ -3,8 +3,6 @@
 
 #include "ut/ut.hpp"
 
-using std::size_t;
-
 using namespace ut;
 
 #include <iostream>

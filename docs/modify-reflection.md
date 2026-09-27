@@ -53,7 +53,7 @@ struct server_status
 {
    std::string name;          // pure reflection keeps this key
    std::string region;        // …and this one
-   std::uint64_t active_sessions;  // and all the others
+   uint64_t active_sessions;  // and all the others
    std::optional<std::string> maintenance;
    double cpu_percent{};
 };

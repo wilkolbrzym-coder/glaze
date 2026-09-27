@@ -1,17 +1,12 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
+// For the license information refer to glaze.hpp
 
-import std;
+#include <charconv> // for std::from_chars
+#include <map>
 
-import glaze.json;
-import glaze.core.seek;
-import glaze.containers.ordered_map;
-
-import ut;
-
-using std::int64_t;
-using std::uint64_t;
-using std::size_t;
+#include "glaze/containers/ordered_map.hpp"
+#include "glaze/json.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

@@ -1,9 +1,8 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
+// Unit tests for std::u8string support (both as buffer and value types)
+#include <string>
 
-import std;
-import glaze;
-import ut;
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -264,6 +263,15 @@ suite u8string_value_tests = [] {
       obj2.text = u8"should be cleared";
       expect(not glz::read_json(obj2, buffer));
       expect(obj2.text.empty());
+   };
+
+   "u8string value that fits the small string buffer stays there"_test = [] {
+      const auto sso = std::u8string{}.capacity();
+      const std::string text(sso, 'a');
+      std::u8string s;
+      expect(not glz::read_json(s, "\"" + text + "\""));
+      expect(s == std::u8string(sso, u8'a'));
+      expect(s.capacity() == sso);
    };
 
    "u8string value with escapes"_test = [] {

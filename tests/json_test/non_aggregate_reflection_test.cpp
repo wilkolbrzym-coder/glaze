@@ -2,9 +2,8 @@
 // C++26 P2996 Reflection Test for Non-Aggregate Types
 // Tests reflection on types that are NOT aggregate initializable
 
-import std;
-import glaze;
-import ut;
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

@@ -11,9 +11,6 @@
 #include "glaze/net/http_server.hpp"
 
 // Thread-safe metrics structure
-
-using std::uint64_t;
-
 struct ServerMetrics
 {
    std::atomic<uint64_t> total_requests{0};

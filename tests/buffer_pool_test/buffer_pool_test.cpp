@@ -1,11 +1,13 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
+// For the license information refer to glaze.hpp
 
-import glaze.util.buffer_pool;
-import std;
-import ut;
+#include "glaze/util/buffer_pool.hpp"
 
-using std::size_t;
+#include <algorithm>
+#include <thread>
+#include <vector>
+
+#include "ut/ut.hpp"
 
 using namespace ut;
 

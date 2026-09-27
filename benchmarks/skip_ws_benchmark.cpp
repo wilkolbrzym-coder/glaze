@@ -26,11 +26,6 @@
 // ============================================================================
 // Scalar skip_ws (lookup table, 1 byte at a time)
 // ============================================================================
-
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
-
 namespace scalar
 {
    inline constexpr std::array<bool, 256> whitespace_table = [] {

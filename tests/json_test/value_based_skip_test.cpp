@@ -1,12 +1,10 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
-
 // Test for value-based skip functionality
 // Related to GitHub issue #1994
 
-import std;
-import glaze;
-import ut;
+#include <string>
+
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

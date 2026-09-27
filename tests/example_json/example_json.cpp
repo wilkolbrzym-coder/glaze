@@ -1,11 +1,8 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
+// For the license information refer to glaze.hpp
 
-import std;
-import glaze;
-import ut;
-
-using std::uint32_t;
+#include "glaze/glaze.hpp" // Glaze main header (most Glaze headers are included)
+#include "ut/ut.hpp"
 
 using namespace ut;
 

@@ -1,18 +1,10 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
+// For the license information refer to glaze.hpp
 
-import std;
-import glaze;
+#include "glaze/json/jmespath.hpp"
 
-import glaze.tuplet;
-
-import glaze.util.tuple;
-import glaze.util.string_literal;
-
-import ut;
-
-using std::uint16_t;
-using std::size_t;
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -621,6 +613,30 @@ suite key_prefixed_array_access = [] {
 
       int n{};
       expect(glz::read_jmespath<"missing[0]">(n, buffer));
+   };
+};
+
+struct jmespath_partial_pair
+{
+   int a{};
+   int b{};
+};
+
+suite jmespath_partial_read = [] {
+   // Reading the selected value with partial_read stops early on success, which is not an error
+   "partial read of the selected value reports success"_test = [] {
+      std::string buffer = R"({"in":{"a":1,"b":2,"junk":3}})";
+      static constexpr glz::opts opts{.error_on_unknown_keys = false, .partial_read = true};
+
+      jmespath_partial_pair compiled{};
+      auto ec = glz::read_jmespath<"in", opts>(compiled, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(compiled.a == 1 && compiled.b == 2);
+
+      jmespath_partial_pair runtime{};
+      ec = glz::read_jmespath<opts>(glz::jmespath_expression{"in"}, runtime, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(runtime.a == 1 && runtime.b == 2);
    };
 };
 

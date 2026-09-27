@@ -1,12 +1,7 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
 // Tests for skip_null_members_on_read option in BEVE format
 
-import std;
-import glaze;
-import ut;
-
-using std::uint32_t;
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

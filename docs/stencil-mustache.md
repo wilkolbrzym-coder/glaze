@@ -9,7 +9,7 @@ struct person
 {
    std::string first_name{};
    std::string last_name{};
-   std::uint32_t age{};
+   uint32_t age{};
    bool hungry{};
    bool employed{};
 };
@@ -69,7 +69,7 @@ struct TodoItem {
    std::string text;
    bool completed;
    std::string priority;
-   std::size_t id;
+   size_t id;
 };
 
 struct TodoList {

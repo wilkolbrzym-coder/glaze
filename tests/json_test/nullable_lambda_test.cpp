@@ -1,12 +1,12 @@
-// Glaze Library
-// For the license information refer to glaze.ixx
-
 // Tests that custom lambdas returning nullable types (unique_ptr, optional, etc.)
 // can be properly skipped when they return null values
 
-import std;
-import glaze;
-import ut;
+#include "glaze/beve/read.hpp"
+#include "glaze/beve/write.hpp"
+#include "glaze/cbor/read.hpp"
+#include "glaze/cbor/write.hpp"
+#include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

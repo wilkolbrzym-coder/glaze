@@ -347,7 +347,7 @@ namespace glz
             std::weak_ptr<impl> weak_self = weak_from_this();
 
             asio::async_write(*socket, asio::buffer(*req_buf),
-                              [weak_self, socket, req_buf, key](std::error_code ec, size_t) {
+                              [weak_self, socket, req_buf, key](std::error_code ec, std::size_t) {
                                  auto self = weak_self.lock();
                                  if (!self) return; // Client was destroyed
 
@@ -367,7 +367,7 @@ namespace glz
             std::weak_ptr<impl> weak_self = weak_from_this();
 
             asio::async_read_until(*socket, *response_buf, "\r\n\r\n",
-                                   [weak_self, socket, response_buf, expected_key](std::error_code ec, size_t) {
+                                   [weak_self, socket, response_buf, expected_key](std::error_code ec, std::size_t) {
                                       auto self = weak_self.lock();
                                       if (!self) return; // Client was destroyed
 

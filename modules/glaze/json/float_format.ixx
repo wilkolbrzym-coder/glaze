@@ -1,13 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/float_format.hpp"
-// glz:header std=<algorithm>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<cstdio>
-// glz:header std=<format>
 // glz:header std=<string_view>
 // glz:header std=<type_traits>
+// glz:header include="glaze/core/format_str.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header include="glaze/util/dump.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.float_format;
 
 import std;
@@ -23,12 +24,21 @@ import glaze.core.context;
 import glaze.concepts.container_concepts;
 import glaze.util.dump;
 
+// GLZ_USE_STD_FORMAT_FLOAT is defined in write_chars.hpp (included via write.hpp)
+#if GLZ_USE_STD_FORMAT_FLOAT
+#include <format>
+#else
+#include <cstdio>
+#endif
+import glaze.core.basic_types;
+
 #include "glaze/util/inline.hpp"
 
-using std::size_t;
 
 export namespace glz
 {
+   // format_str (compile-time format string NTTP) lives in glaze/core/format_str.hpp
+
    // Wrapper for formatting floats with a specific format string
    template <format_str Fmt, class T>
    struct float_format_t
@@ -71,7 +81,7 @@ export namespace glz
             // Caller guarantees buffer has enough space
             const auto start = reinterpret_cast<char*>(&b[ix]);
             auto result = std::format_to(start, fmt, V(wrapper.val));
-            ix += size_t(result - start);
+            ix += glz::size_t(result - start);
          }
          else {
             // format_to_n writes up to 'available' chars and returns total size needed.
@@ -81,7 +91,7 @@ export namespace glz
             const auto available = b.size() - ix;
             auto [out, size] = std::format_to_n(start, available, fmt, V(wrapper.val));
 
-            if (static_cast<size_t>(size) > available) {
+            if (static_cast<glz::size_t>(size) > available) {
                // Output was truncated - size tells us exactly how much space we need
                if constexpr (resizable<B>) {
                   b.resize(2 * (ix + size));
@@ -99,7 +109,7 @@ export namespace glz
          constexpr auto printf_fmt = detail::to_printf_fmt(Fmt.data);
 
          const auto start = reinterpret_cast<char*>(&b[ix]);
-         const auto available = check_write_unchecked(Opts) ? size_t(64) : (b.size() - ix);
+         const auto available = check_write_unchecked(Opts) ? glz::size_t(64) : (b.size() - ix);
 
          const int len = std::snprintf(start, available, printf_fmt.data, static_cast<double>(wrapper.val));
 
@@ -108,10 +118,10 @@ export namespace glz
             return;
          }
 
-         if (static_cast<size_t>(len) >= available) {
+         if (static_cast<glz::size_t>(len) >= available) {
             if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
-               b.resize(2 * (ix + static_cast<size_t>(len) + 1));
-               std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<size_t>(len) + 1, printf_fmt.data,
+               b.resize(2 * (ix + static_cast<glz::size_t>(len) + 1));
+               std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<glz::size_t>(len) + 1, printf_fmt.data,
                              static_cast<double>(wrapper.val));
             }
             else {
@@ -119,7 +129,7 @@ export namespace glz
                return;
             }
          }
-         ix += static_cast<size_t>(len);
+         ix += static_cast<glz::size_t>(len);
 #endif
 
          if constexpr (check_quoted_num(Opts)) {

@@ -1,0 +1,14 @@
+#pragma once
+#include <cstddef>
+namespace std {
+struct string_view {
+   const char* p_;
+   size_t n_;
+   constexpr string_view() noexcept : p_(nullptr), n_(0) {}
+   constexpr string_view(const char* s, size_t n) noexcept : p_(s), n_(n) {}
+   template <size_t N>
+   constexpr string_view(const char (&s)[N]) noexcept : p_(s), n_(N - 1) {}
+   constexpr const char* data() const noexcept { return p_; }
+   constexpr size_t size() const noexcept { return n_; }
+};
+}

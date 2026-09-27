@@ -5,18 +5,22 @@
 // glz:header std=<bit>
 // glz:header std=<charconv>
 // glz:header std=<chrono>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
 // glz:header std=<limits>
-// glz:header std=<string>
 // glz:header std=<string_view>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
-// glz:header std=<variant>
-// glz:header std=<vector>
+// glz:header include="glaze/bson/header.hpp"
+// glz:header include="glaze/bson/skip.hpp"
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/core/to.hpp"
+// glz:header include="glaze/file/file_ops.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/uuid.hpp"
+// glz:header include="glaze/util/variant.hpp"
+// glz:header project_imports=ignore
 export module glaze.bson.read;
 
 import glaze.bson.header;
@@ -50,15 +54,10 @@ import glaze.util.variant;
 import glaze.tuplet;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::int32_t;
-using std::int64_t;
-using std::uint8_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 // BSON reader — https://bsonspec.org/spec.html
 //
@@ -83,7 +82,7 @@ namespace glz
       export template <std::integral T, class It, class End>
       GLZ_ALWAYS_INLINE bool read_le(is_context auto& ctx, It& it, const End& end, T& out) noexcept
       {
-         if (static_cast<size_t>(end - it) < sizeof(T)) [[unlikely]] {
+         if (static_cast<glz::size_t>(end - it) < sizeof(T)) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return false;
          }
@@ -100,8 +99,8 @@ namespace glz
       export template <class It, class End>
       GLZ_ALWAYS_INLINE bool read_le_double(is_context auto& ctx, It& it, const End& end, double& out) noexcept
       {
-         uint64_t bits{};
-         if (!read_le<uint64_t>(ctx, it, end, bits)) return false;
+         glz::uint64_t bits{};
+         if (!read_le<glz::uint64_t>(ctx, it, end, bits)) return false;
          out = std::bit_cast<double>(bits);
          return true;
       }
@@ -115,7 +114,7 @@ namespace glz
          while (it < end) {
             if (*it == 0) {
                out = std::string_view{reinterpret_cast<const char*>(static_cast<const void*>(start)),
-                                      static_cast<size_t>(it - start)};
+                                      static_cast<glz::size_t>(it - start)};
                ++it;
                return true;
             }
@@ -131,15 +130,15 @@ namespace glz
       GLZ_ALWAYS_INLINE bool read_bson_string(is_context auto& ctx, It& it, const End& end,
                                               std::string_view& out) noexcept
       {
-         int32_t len{};
-         if (!read_le<int32_t>(ctx, it, end, len)) return false;
+         glz::int32_t len{};
+         if (!read_le<glz::int32_t>(ctx, it, end, len)) return false;
          if (len < 1) [[unlikely]] {
             // Length must include the trailing null.
             ctx.error = error_code::syntax_error;
             return false;
          }
-         const size_t payload_bytes = static_cast<size_t>(len) - 1; // Drop the trailing null.
-         if (static_cast<size_t>(end - it) < static_cast<size_t>(len)) [[unlikely]] {
+         const glz::size_t payload_bytes = static_cast<glz::size_t>(len) - 1; // Drop the trailing null.
+         if (static_cast<glz::size_t>(end - it) < static_cast<glz::size_t>(len)) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return false;
          }
@@ -159,14 +158,14 @@ namespace glz
       GLZ_ALWAYS_INLINE bool read_document_stop(is_context auto& ctx, It& it, const End& end, It& stop) noexcept
       {
          auto doc_start = it;
-         int32_t len{};
-         if (!read_le<int32_t>(ctx, it, end, len)) return false;
+         glz::int32_t len{};
+         if (!read_le<glz::int32_t>(ctx, it, end, len)) return false;
          if (len < 5) [[unlikely]] {
             // Minimum legal document: 4-byte length + 0x00 terminator.
             ctx.error = error_code::syntax_error;
             return false;
          }
-         if (static_cast<size_t>(end - doc_start) < static_cast<size_t>(len)) [[unlikely]] {
+         if (static_cast<glz::size_t>(end - doc_start) < static_cast<glz::size_t>(len)) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return false;
          }
@@ -220,7 +219,7 @@ namespace glz
          // tag the target type's reader expects so array-shaped top-level
          // targets (std::array, std::vector, std::tuple, glaze_array_t) route
          // to the array reader instead of tripping its tag check.
-         constexpr uint8_t top_tag =
+         constexpr glz::uint8_t top_tag =
             (writable_array_t<V> || glaze_array_t<V>) ? bson::type::array : bson::type::document;
          from<BSON, V>::template op<Opts>(std::forward<T>(value), top_tag, ctx, it, end);
       }
@@ -236,7 +235,7 @@ namespace glz
    struct from<BSON, bool>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(bool& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(bool& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::boolean) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -259,11 +258,11 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(T& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(T& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag == bson::type::int32) {
-            int32_t v{};
-            if (!bson_detail::read_le<int32_t>(ctx, it, end, v)) return;
+            glz::int32_t v{};
+            if (!bson_detail::read_le<glz::int32_t>(ctx, it, end, v)) return;
             // Reject negative wire values into any unsigned target (covers
             // uint32_t, uint64_t, and the smaller widths uniformly).
             if constexpr (!std::is_signed_v<T>) {
@@ -276,8 +275,8 @@ namespace glz
             // int32. For sizeof(T) == 4 && unsigned (uint32_t), the non-negative
             // check above plus the int32 input width guarantee the value fits.
             if constexpr (sizeof(T) < 4) {
-               if (v < static_cast<int32_t>((std::numeric_limits<T>::min)()) ||
-                   v > static_cast<int32_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
+               if (v < static_cast<glz::int32_t>((std::numeric_limits<T>::min)()) ||
+                   v > static_cast<glz::int32_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
@@ -286,28 +285,28 @@ namespace glz
             return;
          }
          if (tag == bson::type::int64) {
-            int64_t v{};
-            if (!bson_detail::read_le<int64_t>(ctx, it, end, v)) return;
+            glz::int64_t v{};
+            if (!bson_detail::read_le<glz::int64_t>(ctx, it, end, v)) return;
             // Narrow to T with range check. uint64_t target: accept only
             // non-negative values.
-            if constexpr (std::is_same_v<T, uint64_t>) {
+            if constexpr (std::is_same_v<T, glz::uint64_t>) {
                if (v < 0) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
-               value = static_cast<uint64_t>(v);
+               value = static_cast<glz::uint64_t>(v);
                return;
             }
             else if constexpr (sizeof(T) <= 8) {
                if constexpr (std::is_signed_v<T>) {
-                  if (v < static_cast<int64_t>((std::numeric_limits<T>::min)()) ||
-                      v > static_cast<int64_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
+                  if (v < static_cast<glz::int64_t>((std::numeric_limits<T>::min)()) ||
+                      v > static_cast<glz::int64_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
                }
                else {
-                  if (v < 0 || static_cast<uint64_t>(v) > static_cast<uint64_t>((std::numeric_limits<T>::max)()))
+                  if (v < 0 || static_cast<glz::uint64_t>(v) > static_cast<glz::uint64_t>((std::numeric_limits<T>::max)()))
                      [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -329,7 +328,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(T& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(T& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag == bson::type::double_) {
             double d{};
@@ -338,14 +337,14 @@ namespace glz
             return;
          }
          if (tag == bson::type::int32) {
-            int32_t v{};
-            if (!bson_detail::read_le<int32_t>(ctx, it, end, v)) return;
+            glz::int32_t v{};
+            if (!bson_detail::read_le<glz::int32_t>(ctx, it, end, v)) return;
             value = static_cast<T>(v);
             return;
          }
          if (tag == bson::type::int64) {
-            int64_t v{};
-            if (!bson_detail::read_le<int64_t>(ctx, it, end, v)) return;
+            glz::int64_t v{};
+            if (!bson_detail::read_le<glz::int64_t>(ctx, it, end, v)) return;
             value = static_cast<T>(v);
             return;
          }
@@ -359,7 +358,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(T& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(T& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          using U = std::underlying_type_t<T>;
          U u{};
@@ -378,7 +377,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(auto& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          using V = std::remove_cvref_t<T>;
          typename V::rep count{};
@@ -397,7 +396,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(auto& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          using V = std::remove_cvref_t<T>;
          using Duration = typename V::duration;
@@ -414,7 +413,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(auto& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::string) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -450,7 +449,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(auto& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag == bson::type::null) {
             if constexpr (requires { value.reset(); }) {
@@ -487,7 +486,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(auto&&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
+      static void op(auto&&, glz::uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
       {
          if (tag != bson::type::null) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -501,14 +500,14 @@ namespace glz
    struct from<BSON, bson::object_id>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(bson::object_id& value, uint8_t tag, is_context auto& ctx, It& it,
+      GLZ_ALWAYS_INLINE static void op(bson::object_id& value, glz::uint8_t tag, is_context auto& ctx, It& it,
                                        const End& end) noexcept
       {
          if (tag != bson::type::object_id) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<size_t>(end - it) < 12) [[unlikely]] {
+         if (static_cast<glz::size_t>(end - it) < 12) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -521,14 +520,14 @@ namespace glz
    struct from<BSON, bson::datetime>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(bson::datetime& value, uint8_t tag, is_context auto& ctx, It& it,
+      GLZ_ALWAYS_INLINE static void op(bson::datetime& value, glz::uint8_t tag, is_context auto& ctx, It& it,
                                        const End& end) noexcept
       {
          if (tag != bson::type::datetime) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         (void)bson_detail::read_le<int64_t>(ctx, it, end, value.ms_since_epoch);
+         (void)bson_detail::read_le<glz::int64_t>(ctx, it, end, value.ms_since_epoch);
       }
    };
 
@@ -536,15 +535,15 @@ namespace glz
    struct from<BSON, bson::timestamp>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(bson::timestamp& value, uint8_t tag, is_context auto& ctx, It& it,
+      GLZ_ALWAYS_INLINE static void op(bson::timestamp& value, glz::uint8_t tag, is_context auto& ctx, It& it,
                                        const End& end) noexcept
       {
          if (tag != bson::type::timestamp) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (!bson_detail::read_le<uint32_t>(ctx, it, end, value.increment)) return;
-         (void)bson_detail::read_le<uint32_t>(ctx, it, end, value.seconds);
+         if (!bson_detail::read_le<glz::uint32_t>(ctx, it, end, value.increment)) return;
+         (void)bson_detail::read_le<glz::uint32_t>(ctx, it, end, value.seconds);
       }
    };
 
@@ -552,7 +551,7 @@ namespace glz
    struct from<BSON, bson::regex>
    {
       template <auto Opts, class It, class End>
-      static void op(bson::regex& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(bson::regex& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::regex) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -571,7 +570,7 @@ namespace glz
    struct from<BSON, bson::javascript>
    {
       template <auto Opts, class It, class End>
-      static void op(bson::javascript& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(bson::javascript& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::javascript) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -587,13 +586,13 @@ namespace glz
    struct from<BSON, bson::decimal128>
    {
       template <auto Opts, class It, class End>
-      static void op(bson::decimal128& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(bson::decimal128& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::decimal128) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<size_t>(end - it) < 16) [[unlikely]] {
+         if (static_cast<glz::size_t>(end - it) < 16) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -606,7 +605,7 @@ namespace glz
    struct from<BSON, bson::min_key>
    {
       template <auto Opts, class It, class End>
-      static void op(bson::min_key&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
+      static void op(bson::min_key&, glz::uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
       {
          if (tag != bson::type::min_key) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -618,7 +617,7 @@ namespace glz
    struct from<BSON, bson::max_key>
    {
       template <auto Opts, class It, class End>
-      static void op(bson::max_key&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
+      static void op(bson::max_key&, glz::uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
       {
          if (tag != bson::type::max_key) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -630,14 +629,14 @@ namespace glz
    struct from<BSON, bson::binary<Bytes>>
    {
       template <auto Opts, class It, class End>
-      static void op(bson::binary<Bytes>& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(bson::binary<Bytes>& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::binary) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         int32_t outer_len{};
-         if (!bson_detail::read_le<int32_t>(ctx, it, end, outer_len)) return;
+         glz::int32_t outer_len{};
+         if (!bson_detail::read_le<glz::int32_t>(ctx, it, end, outer_len)) return;
          if (outer_len < 0) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -646,8 +645,8 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
-         value.subtype = static_cast<uint8_t>(*it++);
-         int32_t payload_len = outer_len;
+         value.subtype = static_cast<glz::uint8_t>(*it++);
+         glz::int32_t payload_len = outer_len;
          if (value.subtype == bson::binary_subtype::binary_old) [[unlikely]] {
             // Spec: 0x02 wraps the payload in a redundant inner int32 length.
             // Outer length must equal 4 + inner.
@@ -655,21 +654,21 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
-            int32_t inner_len{};
-            if (!bson_detail::read_le<int32_t>(ctx, it, end, inner_len)) return;
+            glz::int32_t inner_len{};
+            if (!bson_detail::read_le<glz::int32_t>(ctx, it, end, inner_len)) return;
             if (inner_len < 0 || inner_len != outer_len - 4) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
             payload_len = inner_len;
          }
-         if (static_cast<size_t>(end - it) < static_cast<size_t>(payload_len)) [[unlikely]] {
+         if (static_cast<glz::size_t>(end - it) < static_cast<glz::size_t>(payload_len)) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
-         value.data.resize(static_cast<size_t>(payload_len));
+         value.data.resize(static_cast<glz::size_t>(payload_len));
          if (payload_len) {
-            std::memcpy(value.data.data(), it, static_cast<size_t>(payload_len));
+            std::memcpy(value.data.data(), it, static_cast<glz::size_t>(payload_len));
             it += payload_len;
          }
       }
@@ -680,14 +679,14 @@ namespace glz
    struct from<BSON, uuid>
    {
       template <auto Opts, class It, class End>
-      static void op(uuid& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(uuid& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::binary) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         int32_t len{};
-         if (!bson_detail::read_le<int32_t>(ctx, it, end, len)) return;
+         glz::int32_t len{};
+         if (!bson_detail::read_le<glz::int32_t>(ctx, it, end, len)) return;
          if (len != 16) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -696,7 +695,7 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
-         const uint8_t subtype = static_cast<uint8_t>(*it++);
+         const glz::uint8_t subtype = static_cast<glz::uint8_t>(*it++);
          // Only accept canonical subtype 0x04 (RFC 9562 byte order). Legacy
          // 0x03 (uuid_old) is rejected because its bytes are ambiguous: Java,
          // C#, and Python drivers each laid them out differently, so decoding
@@ -705,7 +704,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<size_t>(end - it) < 16) [[unlikely]] {
+         if (static_cast<glz::size_t>(end - it) < 16) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -719,15 +718,15 @@ namespace glz
    struct from<BSON, std::chrono::system_clock::time_point>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(std::chrono::system_clock::time_point& value, uint8_t tag, is_context auto& ctx,
+      GLZ_ALWAYS_INLINE static void op(std::chrono::system_clock::time_point& value, glz::uint8_t tag, is_context auto& ctx,
                                        It& it, const End& end) noexcept
       {
          if (tag != bson::type::datetime) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         int64_t ms{};
-         if (!bson_detail::read_le<int64_t>(ctx, it, end, ms)) return;
+         glz::int64_t ms{};
+         if (!bson_detail::read_le<glz::int64_t>(ctx, it, end, ms)) return;
          value = std::chrono::system_clock::time_point{std::chrono::milliseconds{ms}};
       }
    };
@@ -852,30 +851,30 @@ namespace glz
       template <template <class> class Trait, class... Ts>
       struct first_matching_index_impl<std::variant<Ts...>, Trait>
       {
-         static constexpr size_t find()
+         static constexpr glz::size_t find()
          {
-            size_t result = std::variant_npos;
-            size_t idx = 0;
+            glz::size_t result = std::variant_npos;
+            glz::size_t idx = 0;
             ((Trait<std::remove_cvref_t<Ts>>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx),
              ...);
             return result;
          }
-         static constexpr size_t value = find();
+         static constexpr glz::size_t value = find();
       };
 
       template <class Variant, template <class> class Trait>
-      constexpr size_t first_matching_index_v = first_matching_index_impl<Variant, Trait>::value;
+      constexpr glz::size_t first_matching_index_v = first_matching_index_impl<Variant, Trait>::value;
 
       // --- auto-deducibility check: at most one alternative per category ----
       template <is_variant T>
       consteval bool variant_bson_auto_deducible()
       {
          constexpr auto N = std::variant_size_v<T>;
-         size_t nulls = 0, bools = 0, ints = 0, floats = 0, strings = 0, documents = 0, arrays = 0, binaries = 0,
+         glz::size_t nulls = 0, bools = 0, ints = 0, floats = 0, strings = 0, documents = 0, arrays = 0, binaries = 0,
                 uuids = 0, object_ids = 0, datetimes = 0, timestamps = 0, regexes = 0, javascripts = 0, decimal128s = 0,
                 min_keys = 0, max_keys = 0;
-         [&]<size_t... I>(std::index_sequence<I...>) {
-            (([&]<size_t Idx>() {
+         [&]<glz::size_t... I>(std::index_sequence<I...>) {
+            (([&]<glz::size_t Idx>() {
                 using V = std::remove_cvref_t<std::variant_alternative_t<Idx, T>>;
                 nulls += is_bson_variant_null<V>::value;
                 bools += is_bson_variant_bool<V>::value;
@@ -915,32 +914,32 @@ namespace glz
                     "uuid, object_id, datetime, timestamp, regex, javascript, decimal128, min_key, max_key).");
 
       template <auto Opts, class It, class End>
-      static void op(T& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(T& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          using V = std::remove_cvref_t<T>;
-         constexpr size_t null_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_null>;
-         constexpr size_t bool_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_bool>;
-         constexpr size_t int_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_int>;
-         constexpr size_t float_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_float>;
-         constexpr size_t string_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_string>;
-         constexpr size_t document_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_document>;
-         constexpr size_t array_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_array>;
-         constexpr size_t binary_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_binary>;
-         constexpr size_t uuid_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_uuid>;
-         constexpr size_t object_id_idx =
+         constexpr glz::size_t null_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_null>;
+         constexpr glz::size_t bool_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_bool>;
+         constexpr glz::size_t int_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_int>;
+         constexpr glz::size_t float_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_float>;
+         constexpr glz::size_t string_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_string>;
+         constexpr glz::size_t document_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_document>;
+         constexpr glz::size_t array_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_array>;
+         constexpr glz::size_t binary_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_binary>;
+         constexpr glz::size_t uuid_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_uuid>;
+         constexpr glz::size_t object_id_idx =
             bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_object_id>;
-         constexpr size_t datetime_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_datetime>;
-         constexpr size_t timestamp_idx =
+         constexpr glz::size_t datetime_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_datetime>;
+         constexpr glz::size_t timestamp_idx =
             bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_timestamp>;
-         constexpr size_t regex_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_regex>;
-         constexpr size_t javascript_idx =
+         constexpr glz::size_t regex_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_regex>;
+         constexpr glz::size_t javascript_idx =
             bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_javascript>;
-         constexpr size_t decimal128_idx =
+         constexpr glz::size_t decimal128_idx =
             bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_decimal128>;
-         constexpr size_t min_key_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_min_key>;
-         constexpr size_t max_key_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_max_key>;
+         constexpr glz::size_t min_key_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_min_key>;
+         constexpr glz::size_t max_key_idx = bson_detail::first_matching_index_v<V, bson_detail::is_bson_variant_max_key>;
 
-         auto dispatch = [&]<size_t Idx>() {
+         auto dispatch = [&]<glz::size_t Idx>() {
             if constexpr (Idx == std::variant_npos) {
                ctx.error = error_code::no_matching_variant_type;
             }
@@ -1053,7 +1052,7 @@ namespace glz
       bool read_document_elements(is_context auto& ctx, It& it, const It& stop, F&& on_element) noexcept
       {
          while (it < stop) {
-            const uint8_t tag = static_cast<uint8_t>(*it++);
+            const glz::uint8_t tag = static_cast<glz::uint8_t>(*it++);
             if (tag == 0) {
                if (it != stop) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -1095,7 +1094,7 @@ namespace glz
             }
          }();
 
-         read_document_elements(ctx, it, stop, [&](uint8_t tag, std::string_view key) {
+         read_document_elements(ctx, it, stop, [&](glz::uint8_t tag, std::string_view key) {
             bool matched = false;
             if constexpr (N > 0) {
                static constexpr auto HashInfo = hash_info<DT>;
@@ -1103,7 +1102,7 @@ namespace glz
                   key.data(), key.data() + key.size(), key.size());
                if (index < N) {
                   visit<N>(
-                     [&]<size_t I>() {
+                     [&]<glz::size_t I>() {
                         using MemberT = std::remove_cvref_t<field_t<DT, I>>;
                         static constexpr auto TargetKey = get<I>(reflect<DT>::keys);
                         static constexpr auto Length = TargetKey.size();
@@ -1146,7 +1145,7 @@ namespace glz
          if constexpr (Opts.error_on_missing_keys) {
             static constexpr auto req_fields = required_fields<DT, Opts>();
             if ((req_fields & fields) != req_fields) {
-               for (size_t i = 0; i < N; ++i) {
+               for (glz::size_t i = 0; i < N; ++i) {
                   if (!fields[i] && req_fields[i]) {
                      ctx.custom_error_message = reflect<DT>::keys[i];
                      break;
@@ -1164,7 +1163,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(auto& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::document) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -1187,7 +1186,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(T& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(T& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::document) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -1204,7 +1203,7 @@ namespace glz
 
          value.clear();
 
-         bson_detail::read_document_elements(ctx, it, stop, [&](uint8_t element_tag, std::string_view key) {
+         bson_detail::read_document_elements(ctx, it, stop, [&](glz::uint8_t element_tag, std::string_view key) {
             using V = typename T::mapped_type;
             auto [iter, inserted] = value.try_emplace(key_t{key});
             (void)inserted;
@@ -1224,7 +1223,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(T& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(T& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -1238,16 +1237,16 @@ namespace glz
          using V = range_value_t<T>;
          if constexpr (emplace_backable<T>) {
             value.clear();
-            bson_detail::read_document_elements(ctx, it, stop, [&](uint8_t element_tag, std::string_view /*key*/) {
+            bson_detail::read_document_elements(ctx, it, stop, [&](glz::uint8_t element_tag, std::string_view /*key*/) {
                value.emplace_back();
                from<BSON, V>::template op<Opts>(value.back(), element_tag, ctx, it, stop);
             });
          }
          else {
             // Fixed-capacity container (e.g., std::array): fill by index.
-            size_t i = 0;
-            const size_t cap = value.size();
-            bson_detail::read_document_elements(ctx, it, stop, [&](uint8_t element_tag, std::string_view /*key*/) {
+            glz::size_t i = 0;
+            const glz::size_t cap = value.size();
+            bson_detail::read_document_elements(ctx, it, stop, [&](glz::uint8_t element_tag, std::string_view /*key*/) {
                if (i >= cap) [[unlikely]] {
                   ctx.error = error_code::exceeded_static_array_size;
                   return;
@@ -1265,7 +1264,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      static void op(auto& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      static void op(auto& value, glz::uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -1277,14 +1276,14 @@ namespace glz
          if (!bson_detail::read_document_stop(ctx, it, end, stop)) return;
 
          static constexpr auto N = reflect<T>::size;
-         size_t i = 0;
-         bson_detail::read_document_elements(ctx, it, stop, [&](uint8_t element_tag, std::string_view /*key*/) {
+         glz::size_t i = 0;
+         bson_detail::read_document_elements(ctx, it, stop, [&](glz::uint8_t element_tag, std::string_view /*key*/) {
             if (i >= N) [[unlikely]] {
                ctx.error = error_code::exceeded_static_array_size;
                return;
             }
             visit<N>(
-               [&]<size_t I>() {
+               [&]<glz::size_t I>() {
                   using MemberT = std::remove_cvref_t<field_t<T, I>>;
                   from<BSON, MemberT>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), element_tag,
                                                          ctx, it, stop);

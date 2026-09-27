@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 // glz:header path="glaze/yaml.hpp"
+// glz:header include="glaze/core/custom.hpp"
 export module glaze.yaml;
 
 export import glaze.core.as_array_wrapper;

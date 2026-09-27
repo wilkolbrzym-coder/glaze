@@ -3,19 +3,17 @@
 // glz:header path="glaze/thread/threadpool.hpp"
 // glz:header std=<atomic>
 // glz:header std=<condition_variable>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
 // glz:header std=<deque>
 // glz:header std=<functional>
 // glz:header std=<future>
 // glz:header std=<mutex>
 // glz:header std=<thread>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
 // glz:header std=<vector>
+// glz:header project_imports=ignore
 export module glaze.thread.threadpool;
 
 import std;
+import glaze.core.basic_types;
 
 namespace glz
 {
@@ -24,18 +22,18 @@ namespace glz
    {
       pool() : pool(concurrency()) {}
 
-      pool(const std::size_t n) { n_threads(n); }
+      pool(const glz::size_t n) { n_threads(n); }
 
-      void n_threads(const std::size_t n)
+      void n_threads(const glz::size_t n)
       {
-         const std::size_t n_workers = (n == 0) ? std::size_t{1} : n;
+         const glz::size_t n_workers = (n == 0) ? glz::size_t{1} : n;
          finish_work(); // finish any active work
          std::lock_guard lock(mtx);
          closed = false;
 
          threads.clear();
          threads.reserve(n_workers);
-         for (std::size_t i = 0; i < n_workers; ++i) {
+         for (glz::size_t i = 0; i < n_workers; ++i) {
             threads.emplace_back([this, thread_number = i] {
                while (true) {
                   std::unique_lock lock(mtx);
@@ -66,16 +64,16 @@ namespace glz
          }
       }
 
-      static std::size_t concurrency()
+      static glz::size_t concurrency()
       {
-         const std::size_t n = std::thread::hardware_concurrency();
-         return (n == 0) ? std::size_t{1} : n;
+         const glz::size_t n = std::thread::hardware_concurrency();
+         return (n == 0) ? glz::size_t{1} : n;
       }
 
-      using callable_t = std::function<void(const std::size_t)>;
+      using callable_t = std::function<void(const glz::size_t)>;
 
       template <class F>
-         requires(not std::invocable<F, std::size_t>)
+         requires(not std::invocable<F, glz::size_t>)
       auto emplace_back(F&& func)
       {
          using result_t = std::invoke_result_t<F>;
@@ -85,7 +83,7 @@ namespace glz
          auto promise = std::make_shared<std::promise<result_t>>();
 
          queue.emplace_back() =
-            std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const std::size_t /*thread_number*/) {
+            std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const glz::size_t /*thread_number*/) {
 #if __cpp_exceptions
                try {
                   if constexpr (std::is_void_v<result_t>) {
@@ -115,19 +113,19 @@ namespace glz
          return promise->get_future();
       }
 
-      // Takes a function whose input is the thread number (std::size_t)
+      // Takes a function whose input is the thread number (size_t)
       template <class F>
-         requires std::invocable<F, std::size_t>
+         requires std::invocable<F, glz::size_t>
       auto emplace_back(F&& func)
       {
-         using result_t = std::invoke_result_t<F, std::size_t>;
+         using result_t = std::invoke_result_t<F, glz::size_t>;
 
          std::lock_guard lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_t>>();
 
          queue.emplace_back() =
-            std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const std::size_t thread_number) {
+            std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const glz::size_t thread_number) {
 #if __cpp_exceptions
                try {
                   if constexpr (std::is_void_v<result_t>) {
@@ -159,7 +157,7 @@ namespace glz
 
       bool computing() const noexcept { return (working != 0); }
 
-      std::uint32_t number_working() const noexcept { return working; }
+      glz::uint32_t number_working() const noexcept { return working; }
 
       void wait()
       {
@@ -167,14 +165,14 @@ namespace glz
          done_cv.wait(lock, [this] { return queue.empty() && (working == 0); });
       }
 
-      std::size_t size() const { return threads.size(); }
+      glz::size_t size() const { return threads.size(); }
 
       ~pool() { finish_work(); }
 
      private:
       std::vector<std::thread> threads{};
       std::deque<std::shared_ptr<callable_t>> queue{};
-      std::atomic<std::uint32_t> working = 0;
+      std::atomic<glz::uint32_t> working = 0;
       std::atomic<bool> closed = false;
       std::mutex mtx{};
       std::condition_variable work_cv{};

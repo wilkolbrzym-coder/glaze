@@ -66,9 +66,16 @@ on:
   push:
     branches:
       - modules
-  # No pull_request trigger while the work is being finished on the fork: the
-  # maintainer asked for no pull request runs yet. Re-add it, with the path
-  # filter, when the umbrella PR goes to the upstream repository.
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'include/**'
+      - 'tests/modules/**'
+      - 'benchmarks/**'
+      - 'cmake/modules-files.cmake'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - '.github/workflows/modules-tests.yml'
   workflow_dispatch:
     inputs:
       full_matrix:

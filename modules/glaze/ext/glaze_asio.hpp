@@ -46,7 +46,6 @@
 #include <boost/asio/ssl.hpp>
 #endif
 #else
-
 using std::uint8_t;
 using std::uint16_t;
 using std::uint32_t;
@@ -143,7 +142,7 @@ namespace glz
                                                 asio::buffer(msg.body)};
 
       // Calculate the total bytes to send
-      size_t total_length = sizeof(msg.header) + msg.header.query_length + msg.header.body_length;
+      std::size_t total_length = sizeof(msg.header) + msg.header.query_length + msg.header.body_length;
 
       // Asynchronously write the buffers to the socket
       co_await asio::async_write(socket, buffers, asio::transfer_exactly(total_length), asio::use_awaitable);

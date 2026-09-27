@@ -2,13 +2,13 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/json_ptr.hpp"
 // glz:header std=<algorithm>
-// glz:header std=<any>
 // glz:header std=<charconv>
-// glz:header std=<cstddef>
-// glz:header std=<span>
-// glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/seek.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/skip.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.json_ptr;
 
 import std;
@@ -28,8 +28,8 @@ import glaze.util.expected;
 import glaze.util.for_each;
 
 import glaze.concepts.container_concepts;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 export namespace glz
 {
@@ -77,7 +77,7 @@ export namespace glz
 
          result_t ret;
 
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -99,7 +99,7 @@ export namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv k = {start, size_t(it - start)};
+                     const sv k = {start, glz::size_t(it - start)};
                      ++it;
 
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
@@ -136,7 +136,7 @@ export namespace glz
                   // Could optimize by counting commas
                   static constexpr auto n = stoui(key);
                   if constexpr (n) {
-                     for_each<n.value()>([&]<size_t>() {
+                     for_each<n.value()>([&]<glz::size_t>() {
                         skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
@@ -181,7 +181,7 @@ export namespace glz
                   skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  const sv k = {start, size_t(it - start)};
+                  const sv k = {start, glz::size_t(it - start)};
                   ++it;
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
@@ -216,7 +216,7 @@ export namespace glz
          });
 
          if (bool(ctx.error)) [[unlikely]] {
-            return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+            return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
          }
 
          return ret;
@@ -255,7 +255,7 @@ export namespace glz
       auto view = glz::get_view_json<Path, Opts>(buffer);
       if (view) {
          // erase the current value
-         const size_t location = size_t(view->data() - buffer.data());
+         const glz::size_t location = glz::size_t(view->data() - buffer.data());
          buffer.erase(location, view->size());
          // insert the new value
          buffer.insert(location, value);
@@ -312,11 +312,11 @@ export namespace glz
          const bool is_last = remaining_ptr.empty();
 
          if (skip_ws<Opts>(ctx, it, end)) {
-            return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+            return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
          }
 
          if (it >= end) {
-            return result_t{unexpected(error_ctx{size_t(it - start), error_code::unexpected_end})};
+            return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::unexpected_end})};
          }
 
          const bool is_numeric = runtime_maybe_numeric(token);
@@ -327,11 +327,11 @@ export namespace glz
 
             while (true) {
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
 
                if (it >= end) {
-                  return result_t{unexpected(error_ctx{size_t(it - start), error_code::unexpected_end})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::unexpected_end})};
                }
 
                if (*it == '}') {
@@ -339,30 +339,30 @@ export namespace glz
                }
 
                if (*it != '"') {
-                  return result_t{unexpected(error_ctx{size_t(it - start), error_code::expected_quote})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::expected_quote})};
                }
                ++it;
 
                auto key_start = it;
                skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
-               const sv key_content{key_start, size_t(it - key_start)};
+               const sv key_content{key_start, glz::size_t(it - key_start)};
                ++it; // skip closing quote
 
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
 
                if (it >= end || *it != ':') {
                   return result_t{unexpected(error_ctx{
-                     size_t(it - start), it >= end ? error_code::unexpected_end : error_code::expected_colon})};
+                     glz::size_t(it - start), it >= end ? error_code::unexpected_end : error_code::expected_colon})};
                }
                ++it;
 
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
 
                if (token.size() == key_content.size() && std::equal(token.begin(), token.end(), key_content.begin())) {
@@ -376,11 +376,11 @@ export namespace glz
                // Skip this value
                skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
 
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
 
                if (it < end && *it == ',') {
@@ -389,35 +389,35 @@ export namespace glz
             }
 
             if (!found) {
-               return result_t{unexpected(error_ctx{size_t(it - start), error_code::key_not_found})};
+               return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::key_not_found})};
             }
          }
          else if (*it == '[') {
             if (!is_numeric) {
-               return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
+               return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::array_element_not_found})};
             }
 
-            size_t index{};
+            glz::size_t index{};
             auto [p, ec] = std::from_chars(token.data(), token.data() + token.size(), index);
             if (ec != std::errc{}) {
-               return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
+               return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::array_element_not_found})};
             }
 
             ++it; // skip '['
 
-            for (size_t i = 0; i < index; ++i) {
+            for (glz::size_t i = 0; i < index; ++i) {
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
                if (it >= end || *it == ']') {
-                  return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::array_element_not_found})};
                }
                skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+                  return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
                }
                if (it < end && *it == ',') {
                   ++it;
@@ -425,10 +425,10 @@ export namespace glz
             }
 
             if (skip_ws<Opts>(ctx, it, end)) {
-               return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
+               return result_t{unexpected(error_ctx{glz::size_t(it - start), ctx.error})};
             }
             if (it >= end || *it == ']') {
-               return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
+               return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::array_element_not_found})};
             }
 
             if (is_last) {
@@ -436,11 +436,11 @@ export namespace glz
             }
          }
          else {
-            return result_t{unexpected(error_ctx{size_t(it - start), error_code::syntax_error})};
+            return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::syntax_error})};
          }
       }
 
-      return result_t{unexpected(error_ctx{size_t(it - start), error_code::syntax_error})};
+      return result_t{unexpected(error_ctx{glz::size_t(it - start), error_code::syntax_error})};
    }
 
    // Runtime version of write_at - write a JSON value at a runtime JSON pointer location
@@ -449,7 +449,7 @@ export namespace glz
    {
       auto view = glz::get_view_json<Opts>(json_ptr, buffer);
       if (view) {
-         const size_t location = size_t(view->data() - buffer.data());
+         const glz::size_t location = glz::size_t(view->data() - buffer.data());
          buffer.erase(location, view->size());
          buffer.insert(location, value);
          return {};

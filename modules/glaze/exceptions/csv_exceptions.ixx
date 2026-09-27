@@ -1,9 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/exceptions/csv_exceptions.hpp"
-// glz:header std=<cstdint>
-// glz:header std=<stdexcept>
-// glz:header std=<utility>
+// glz:header include="glaze/exceptions/core_exceptions.hpp"
+// glz:header include="glaze/glaze.hpp"
+// glz:header project_imports=ignore
 export module glaze.exceptions.csv_exceptions;
 
 #if __cpp_exceptions
@@ -13,12 +13,12 @@ import glaze.util.string_literal;
 import glaze;
 
 import std;
+import glaze.core.basic_types;
 
-using std::uint32_t;
 
 namespace glz::ex
 {
-   export template <uint32_t layout = rowwise, class T, class Buffer>
+   export template <glz::uint32_t layout = rowwise, class T, class Buffer>
    inline void read_csv(T&& value, Buffer&& buffer)
    {
       const auto ec = glz::read_csv<layout>(std::forward<T>(value), std::forward<Buffer>(buffer));
@@ -27,7 +27,7 @@ namespace glz::ex
       }
    }
 
-   export template <uint32_t layout = rowwise, class T, class Buffer>
+   export template <glz::uint32_t layout = rowwise, class T, class Buffer>
    inline auto read_csv(Buffer&& buffer)
    {
       auto ex = glz::read<T, opts_csv{.layout = layout}>(std::forward<Buffer>(buffer));
@@ -37,7 +37,7 @@ namespace glz::ex
       return ex.value();
    }
 
-   export template <uint32_t layout = rowwise, class T>
+   export template <glz::uint32_t layout = rowwise, class T>
    inline void read_file_csv(T& value, const sv file_name, auto&& buffer)
    {
       const auto ec = read_file_csv<layout>(value, file_name, buffer);
@@ -64,7 +64,7 @@ namespace glz::ex
       return write_csv(std::forward<T>(value));
    }
 
-   export template <uint32_t layout = rowwise, class T>
+   export template <glz::uint32_t layout = rowwise, class T>
    inline void write_file_csv(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write_file_csv<layout>(std::forward<T>(value), file_name, buffer);

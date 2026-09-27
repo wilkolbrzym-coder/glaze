@@ -163,3 +163,53 @@ if(glaze_DEFAULT_OPTIMIZATION_SIZE)
   target_compile_definitions(glaze_glaze INTERFACE GLZ_DEFAULT_OPTIMIZATION_SIZE)
 endif(glaze_DEFAULT_OPTIMIZATION_SIZE)
 
+# ---------------------------------------------------------------------------
+# Optional C++20 modules build.
+#
+# Off by default, so the interface target above stays the default and existing
+# consumers see no change at all. When enabled, a second library `glaze::modules`
+# is built from the module interface units in modules/, which are the source of
+# truth that include/ is generated from.
+#
+# `import std;` needs a compiler that ships a std module (clang 22 with libc++,
+# MSVC 19.4x) and CMake's experimental std-module support, which is spelled as a
+# cache variable because the feature is still gated on a UUID -- see the
+# `modules` preset in CMakePresets.json. Neither is required to build the
+# header-only library, which is why this is opt-in.
+# ---------------------------------------------------------------------------
+option(glaze_ENABLE_MODULES "Build glaze as a C++20 module library (glaze::modules) alongside the headers" OFF)
+
+if(glaze_ENABLE_MODULES)
+  set(CMAKE_CXX_MODULE_STD 1)
+
+  set(GLAZE_MODULES_TARGET glaze_modules)
+  add_library(${GLAZE_MODULES_TARGET} STATIC)
+  add_library(glaze::modules ALIAS ${GLAZE_MODULES_TARGET})
+  set_property(TARGET ${GLAZE_MODULES_TARGET} PROPERTY EXPORT_NAME modules)
+
+  if(PROJECT_IS_TOP_LEVEL)
+    set_target_properties(${GLAZE_MODULES_TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  endif()
+
+  target_compile_features(${GLAZE_MODULES_TARGET} PUBLIC cxx_std_23)
+
+  # The module tree is the include root for the module build: the units that are
+  # still plain headers are included from there, not from include/.
+  target_include_directories(${GLAZE_MODULES_TARGET} PUBLIC
+    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/modules>")
+
+  if(glaze_DISABLE_SIMD_WHEN_SUPPORTED)
+    target_compile_definitions(${GLAZE_MODULES_TARGET} PUBLIC GLZ_DISABLE_SIMD)
+  endif()
+
+  if(glaze_DISABLE_ALWAYS_INLINE)
+    target_compile_definitions(${GLAZE_MODULES_TARGET} PUBLIC GLZ_DISABLE_ALWAYS_INLINE)
+  endif()
+
+  if(glaze_DEFAULT_OPTIMIZATION_SIZE)
+    target_compile_definitions(${GLAZE_MODULES_TARGET} PUBLIC GLZ_DEFAULT_OPTIMIZATION_SIZE)
+  endif()
+
+  include(cmake/modules-files.cmake)
+endif(glaze_ENABLE_MODULES)
+

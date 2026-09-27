@@ -1,7 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
-
-#pragma once
+// glz:header path="glaze/util/attributes.hpp"
+module;
 
 #ifndef __has_cpp_attribute
 #define GLZ_LIFETIMEBOUND
@@ -12,3 +12,5 @@
 #else
 #define GLZ_LIFETIMEBOUND
 #endif
+// glz:emit std
+export module glaze.util.attributes;

@@ -1,6 +1,12 @@
-#pragma once
+// glz:header path="glaze/eetf/cmp.hpp"
+// glz:header project_imports=ignore
+export module glaze.eetf.cmp;
 
-namespace glz::eetf
+import std;
+import glaze.concepts.container_concepts;
+import glaze.core.basic_types;
+
+export namespace glz::eetf
 {
 
    namespace detail

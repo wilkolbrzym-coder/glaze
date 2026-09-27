@@ -1,15 +1,15 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
-// glz:header path="glaze/api/tuplet.hpp"
+// glz:header path="glaze/api/tuple.hpp"
 // glz:header include="glaze/core/meta.hpp"
-// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/core/tuple.hpp"
 // glz:header project_imports=ignore
-export module glaze.api.tuplet;
+export module glaze.api.tuple;
 
 import std;
 
 import glaze.core.meta;
-import glaze.tuplet;
+import glaze.core.tuple;
 import glaze.util.string_literal;
 import glaze.core.basic_types;
 

@@ -572,7 +572,8 @@ export namespace glz
             throw std::runtime_error(error_message);
          }
 
-         auto ec = read<Opts>(output, response.body);
+         // is_padded is the caller's promise about their own buffer, not a received one.
+         auto ec = read<is_padded_off<Opts>()>(output, response.body);
          if (bool(ec)) {
             throw std::runtime_error(glz::format_error(ec, response.body));
          }
@@ -633,7 +634,8 @@ export namespace glz
             throw std::runtime_error(error_message);
          }
 
-         auto ec = read<Opts>(output, response.body);
+         // is_padded is the caller's promise about their own buffer, not a received one.
+         auto ec = read<is_padded_off<Opts>()>(output, response.body);
          if (bool(ec)) {
             throw std::runtime_error(glz::format_error(ec, response.body));
          }

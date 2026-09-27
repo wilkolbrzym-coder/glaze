@@ -11,7 +11,7 @@
 // glz:header include="glaze/reflection/get_name.hpp"
 // glz:header include="glaze/reflection/requires_key.hpp"
 // glz:header include="glaze/reflection/to_tuple.hpp"
-// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/core/tuple.hpp"
 // glz:header include="glaze/util/for_each.hpp"
 // glz:header include="glaze/util/string_literal.hpp"
 // glz:header include="glaze/util/type_traits.hpp"
@@ -28,7 +28,7 @@ import glaze.reflection.get_name;
 import glaze.reflection.requires_key;
 import glaze.reflection.to_tuple;
 
-import glaze.tuplet;
+import glaze.core.tuple;
 
 import glaze.util.for_each;
 import glaze.util.string_literal;

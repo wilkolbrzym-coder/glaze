@@ -3,7 +3,7 @@
 // glz:header path="glaze/core/cast.hpp"
 // glz:header include="glaze/core/context.hpp"
 // glz:header include="glaze/core/opts.hpp"
-// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/core/tuple.hpp"
 // glz:header project_imports=ignore
 export module glaze.core.cast;
 
@@ -14,7 +14,7 @@ import glaze.core.opts;
 
 import glaze.util.type_traits;
 
-import glaze.tuplet;
+import glaze.core.tuple;
 import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
@@ -77,13 +77,8 @@ export namespace glz
 
          Cast temp{};
          parse<Format>::template op<Opts>(temp, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            if constexpr (check_null_terminated(Opts)) {
-               return;
-            }
-            else if (ctx.error != error_code::end_reached) {
-               return;
-            }
+         if (parse_failed(ctx.error)) [[unlikely]] {
+            return;
          }
 
          assign(value, temp);
@@ -98,13 +93,8 @@ export namespace glz
 
          Cast temp{};
          parse<Format>::template op<Opts>(temp, tag, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            if constexpr (check_null_terminated(Opts)) {
-               return;
-            }
-            else if (ctx.error != error_code::end_reached) {
-               return;
-            }
+         if (parse_failed(ctx.error)) [[unlikely]] {
+            return;
          }
 
          assign(value, temp);

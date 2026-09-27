@@ -4,7 +4,10 @@
 // glz:header std=<algorithm>
 // glz:header std=<array>
 // glz:header std=<cstddef>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 // glz:header std=<variant>
+// glz:header include="glaze/util/inline.hpp"
 // glz:header include="glaze/util/type_traits.hpp"
 // glz:header project_imports=ignore
 export module glaze.util.variant;

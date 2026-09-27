@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/version.hpp"
+// glz:header std=<compare>
 // glz:header std=<cstdint>
 // glz:header project_imports=ignore
 export module glaze.version;
@@ -19,9 +20,9 @@ namespace glz
     */
    export struct version_t
    {
-      glz::uint8_t major = 7;
-      glz::uint8_t minor = 9;
-      glz::uint8_t patch = 1;
+      glz::uint8_t major = 9;
+      glz::uint8_t minor = 0;
+      glz::uint8_t patch = 0;
 
       constexpr auto operator<=>(const version_t& other) const noexcept = default;
 

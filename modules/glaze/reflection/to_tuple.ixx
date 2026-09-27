@@ -7,7 +7,7 @@
 // glz:header std=<type_traits>
 // glz:header std=<utility>
 // glz:header include="glaze/core/feature_test.hpp"
-// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/core/tuple.hpp"
 // glz:header include="glaze/util/inline.hpp"
 // glz:header include="glaze/util/type_traits.hpp"
 // glz:header project_imports=ignore
@@ -15,7 +15,7 @@ export module glaze.reflection.to_tuple;
 
 import std;
 
-import glaze.tuplet;
+import glaze.core.tuple;
 
 import glaze.util.type_traits;
 import glaze.core.basic_types;

@@ -3,7 +3,9 @@
 // glz:header path="glaze/hardware/volatile_array.hpp"
 // glz:header std=<cstddef>
 // glz:header std=<initializer_list>
+// glz:header std=<iterator>
 // glz:header std=<type_traits>
+// glz:header std=<utility>
 // glz:header project_imports=ignore
 export module glaze.hardware.volatile_array;
 

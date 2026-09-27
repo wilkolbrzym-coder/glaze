@@ -1,6 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/for_each.hpp"
+// glz:header std=<array>
+// glz:header std=<cassert>
+// glz:header std=<cstddef>
 // glz:header std=<tuple>
 // glz:header std=<utility>
 // glz:header include="glaze/util/inline.hpp"
@@ -80,11 +83,14 @@ export namespace glz
       return +[](Lambda& l) { l.template operator()<I>(); };
    }
 
-   // Important: index must be less than N
+   // Important: index must be less than N. No check is made in release builds: the dispatch assumes an
+   // in-range index, so an out-of-range one is undefined behavior. Callers passing an index derived from
+   // input must validate it first. Debug builds assert it.
    template <glz::size_t N>
    inline constexpr void visit(auto&& lambda, const glz::size_t index)
    {
       if constexpr (N > 0) {
+         assert(index < N && "glz::visit index out of range");
          // Explicit sizes for small N to help the compiler and make debugging easier
          if constexpr (N == 1) {
             (void)index;

@@ -4,9 +4,14 @@
 // glz:header project_imports=ignore
 module;
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <future>
+#include <memory>
+#include <stdexcept>
+#include <thread>
+#include <utility>
 // glz:emit std
 export module glaze.file.file_watch;
 

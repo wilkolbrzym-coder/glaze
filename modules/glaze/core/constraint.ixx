@@ -5,7 +5,7 @@
 // glz:header include="glaze/core/common.hpp"
 // glz:header include="glaze/core/context.hpp"
 // glz:header include="glaze/core/opts.hpp"
-// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/core/tuple.hpp"
 // glz:header include="glaze/util/string_literal.hpp"
 // glz:header project_imports=ignore
 export module glaze.core.constraint;
@@ -16,7 +16,7 @@ import glaze.core.common;
 import glaze.core.context;
 import glaze.core.opts;
 
-import glaze.tuplet;
+import glaze.core.tuple;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
 import glaze.core.basic_types;
@@ -81,7 +81,7 @@ namespace glz
                   if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (parse_failed(ctx.error)) [[unlikely]]
                         return;
                      if constexpr (!check_skip_read_constraint(Opts)) {
                         auto success = (value.val.*(value.constraint))(input);
@@ -112,7 +112,7 @@ namespace glz
                      if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                         parse<Format>::template op<Opts>(input, ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
+                        if (parse_failed(ctx.error)) [[unlikely]]
                            return;
                         if constexpr (!check_skip_read_constraint(Opts)) {
                            auto success = constraint(input);
@@ -154,7 +154,7 @@ namespace glz
                   else if constexpr (N == 2) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (parse_failed(ctx.error)) [[unlikely]]
                         return;
                      if constexpr (!check_skip_read_constraint(Opts)) {
                         auto success = value.constraint(value.val, input);

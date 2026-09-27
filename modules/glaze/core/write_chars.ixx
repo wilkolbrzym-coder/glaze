@@ -237,7 +237,7 @@ export namespace glz
          // maximum length for a double should be 24 chars, we use 64 to be sufficient for float128_t
          if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
             if (const auto k = ix + 64; k > b.size()) {
-               b.resize(2 * k);
+               grow_buffer(b, k);
             }
          }
 
@@ -271,7 +271,7 @@ export namespace glz
                   if (static_cast<glz::size_t>(size) > available) {
                      // Output was truncated - size tells us exactly how much space we need
                      if constexpr (resizable<B>) {
-                        b.resize(2 * (ix + size));
+                        grow_buffer(b, ix + size);
                         std::format_to(reinterpret_cast<char*>(&b[ix]), fmt, V(value));
                      }
                      else {
@@ -300,7 +300,7 @@ export namespace glz
                if (static_cast<glz::size_t>(len) >= available) {
                   // Output was truncated, need to resize and retry
                   if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
-                     b.resize(2 * (ix + static_cast<glz::size_t>(len) + 1));
+                     grow_buffer(b, ix + static_cast<glz::size_t>(len) + 1);
                      std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<glz::size_t>(len) + 1, printf_fmt.data,
                                    static_cast<double>(value));
                   }

@@ -13,7 +13,7 @@
 // glz:header include="glaze/api/std/unique_ptr.hpp"
 // glz:header include="glaze/api/std/variant.hpp"
 // glz:header include="glaze/api/std/vector.hpp"
-// glz:header include="glaze/api/tuplet.hpp"
+// glz:header include="glaze/api/tuple.hpp"
 // glz:header include="glaze/api/type_support.hpp"
 // glz:header include="glaze/core/custom_meta.hpp"
 // glz:header include="glaze/json/wrappers.hpp"
@@ -54,7 +54,7 @@ import glaze.api.std.unique_ptr;
 import glaze.api.std.unordered_map;
 import glaze.api.std.vector;
 
-import glaze.api.tuplet;
+import glaze.api.tuple;
 import glaze.api.type_support;
 
 import glaze.tuplet;

@@ -1,4 +1,6 @@
 // glz:header path="glaze/eetf/cmp.hpp"
+// glz:header std=<utility>
+// glz:header include="glaze/concepts/container_concepts.hpp"
 // glz:header project_imports=ignore
 export module glaze.eetf.cmp;
 

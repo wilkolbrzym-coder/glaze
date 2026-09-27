@@ -7,6 +7,7 @@
 // glz:header include="glaze/file/read_directory.hpp"
 // glz:header include="glaze/file/write_directory.hpp"
 // glz:header include="glaze/json.hpp"
+// glz:header include="glaze/simd/backends.hpp"
 // glz:header include="glaze/stencil/stencil.hpp"
 // glz:header include="glaze/util/key_transformers.hpp"
 // glz:header project_imports=ignore
@@ -66,6 +67,8 @@ export import glaze.file.read_directory;
 export import glaze.file.write_directory;
 
 export import glaze.json;
+
+export import glaze.simd.backends;
 
 export import glaze.msgpack;
 

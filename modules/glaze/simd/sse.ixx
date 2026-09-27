@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/simd/sse.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
 // glz:header include="glaze/simd/simd.hpp"
 // glz:header include="glaze/util/bit.hpp"
 // glz:header include="glaze/util/inline.hpp"

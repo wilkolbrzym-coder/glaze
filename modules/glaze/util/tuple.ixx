@@ -3,7 +3,7 @@
 // glz:header path="glaze/util/tuple.hpp"
 // glz:header std=<tuple>
 // glz:header include="glaze/reflection/get_name.hpp"
-// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/core/tuple.hpp"
 // glz:header include="glaze/util/for_each.hpp"
 // glz:header include="glaze/util/string_literal.hpp"
 // glz:header project_imports=ignore
@@ -15,7 +15,7 @@ import glaze.util.for_each;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
 
-import glaze.tuplet;
+import glaze.core.tuple;
 
 export namespace glz
 {

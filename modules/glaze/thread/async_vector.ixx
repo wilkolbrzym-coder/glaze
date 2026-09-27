@@ -6,7 +6,7 @@
 // glz:header std=<shared_mutex>
 // glz:header std=<utility>
 // glz:header std=<vector>
-// glz:header include="glaze/thread/value_proxy.hpp"
+// glz:header include="glaze/core/common.hpp"
 // glz:header project_imports=ignore
 // glz:header license=none
 module;

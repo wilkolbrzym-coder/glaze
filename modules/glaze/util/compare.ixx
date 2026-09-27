@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/compare.hpp"
+// glz:header std=<array>
 // glz:header std=<bit>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>

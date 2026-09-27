@@ -14,7 +14,7 @@
 // glz:header include="glaze/api/std/unique_ptr.hpp"
 // glz:header include="glaze/api/std/variant.hpp"
 // glz:header include="glaze/api/std/vector.hpp"
-// glz:header include="glaze/api/tuplet.hpp"
+// glz:header include="glaze/api/tuple.hpp"
 // glz:header include="glaze/api/type_support.hpp"
 // glz:header include="glaze/beve/read.hpp"
 // glz:header include="glaze/beve/write.hpp"
@@ -27,7 +27,7 @@ export module glaze.api.impl;
 import std;
 
 export import glaze.api.api;
-import glaze.api.tuplet;
+import glaze.api.tuple;
 import glaze.api.type_support;
 import glaze.api.trait;
 

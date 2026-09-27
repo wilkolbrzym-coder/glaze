@@ -1,7 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/array_apply.hpp"
-// glz:header std=<cstdint>
+// glz:header std=<cstddef>
 // glz:header project_imports=ignore
 export module glaze.core.array_apply;
 

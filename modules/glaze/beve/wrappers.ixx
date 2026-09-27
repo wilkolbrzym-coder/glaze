@@ -1,7 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/beve/wrappers.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
 // glz:header std=<type_traits>
+// glz:header include="glaze/beve/header.hpp"
+// glz:header include="glaze/beve/read.hpp"
+// glz:header include="glaze/beve/write.hpp"
 // glz:header include="glaze/core/custom.hpp"
 // glz:header include="glaze/core/opts.hpp"
 // glz:header include="glaze/core/wrappers.hpp"

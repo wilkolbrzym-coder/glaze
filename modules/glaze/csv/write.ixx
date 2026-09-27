@@ -5,6 +5,7 @@
 // glz:header include="glaze/core/chrono.hpp"
 // glz:header include="glaze/core/opts.hpp"
 // glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/core/reflect.hpp"
 // glz:header include="glaze/core/write_chars.hpp"
 // glz:header include="glaze/util/dump.hpp"
 // glz:header include="glaze/util/for_each.hpp"
@@ -30,6 +31,7 @@ import glaze.util.expected;
 import glaze.util.for_each;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
+import glaze.util.zmij;
 import glaze.core.basic_types;
 
 
@@ -73,7 +75,9 @@ namespace glz
                      return glz::size_t{64};
                   }
                   else if constexpr (sizeof(T) > 4) {
-                     return glz::size_t{32};
+                     // glz::to_chars may use up to zmij::double_buffer_size bytes of the
+                     // buffer as scratch; 32 was two short. Matches required_padding<double>().
+                     return glz::size_t{zmij::double_buffer_size + 4};
                   }
                   else {
                      return glz::size_t{24};

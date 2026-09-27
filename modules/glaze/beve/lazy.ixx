@@ -262,7 +262,7 @@ namespace glz
          auto it = data_;
          auto end = beve_end();
          parse<BEVE>::op<Opts>(value, ctx, it, end);
-         finalize_read_context<Opts>(ctx);
+         finalize_read_context(ctx);
          if (bool(ctx.error)) {
             return error_ctx{static_cast<glz::size_t>(it - data_), ctx.error};
          }
@@ -1304,7 +1304,7 @@ namespace glz
          const glz::size_t n = static_cast<glz::size_t>(it - view.data());
          if constexpr (resizable<B>) {
             if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+               grow_buffer(b, ix + n);
             }
          }
          else {
@@ -1336,12 +1336,12 @@ namespace glz
       doc.beve_ = reinterpret_cast<const char*>(buffer.data());
       doc.len_ = buffer.size();
 
-      if (buffer.empty()) {
+      if (buffer.size() == 0) {
          return unexpected(error_ctx{0, error_code::unexpected_end});
       }
 
       // Validate first byte is a valid BEVE tag
-      const glz::uint8_t first_byte = static_cast<glz::uint8_t>(buffer[0]);
+      const glz::uint8_t first_byte = static_cast<glz::uint8_t>(doc.beve_[0]);
       const glz::uint8_t type_bits = first_byte & 0b00000'111;
 
       // Valid types: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5), extensions(6)

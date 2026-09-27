@@ -1,24 +1,20 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/compare.hpp"
-// glz:header std=<array>
 // glz:header std=<bit>
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
 // glz:header std=<string_view>
 // glz:header std=<type_traits>
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.compare;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 export namespace glz
 {
@@ -27,23 +23,23 @@ export namespace glz
       // Lowercases 8 packed bytes at once. Only 'A'..'Z' are changed.
       // The high-bit mask keeps per-byte additions from carrying into neighbors
       // and excludes non-ASCII bytes from classification.
-      inline constexpr uint64_t ascii_tolower_u64(const uint64_t v) noexcept
+      inline constexpr glz::uint64_t ascii_tolower_u64(const glz::uint64_t v) noexcept
       {
-         constexpr uint64_t ones = 0x0101010101010101ull;
-         constexpr uint64_t high = 0x8080808080808080ull;
-         const uint64_t seven = v & ~high;
-         const uint64_t ge_A = seven + (0x80 - 'A') * ones;
-         const uint64_t gt_Z = seven + (0x80 - ('Z' + 1)) * ones;
-         const uint64_t is_upper = ge_A & ~gt_Z & ~v & high;
+         constexpr glz::uint64_t ones = 0x0101010101010101ull;
+         constexpr glz::uint64_t high = 0x8080808080808080ull;
+         const glz::uint64_t seven = v & ~high;
+         const glz::uint64_t ge_A = seven + (0x80 - 'A') * ones;
+         const glz::uint64_t gt_Z = seven + (0x80 - ('Z' + 1)) * ones;
+         const glz::uint64_t is_upper = ge_A & ~gt_Z & ~v & high;
          return v | (is_upper >> 2);
       }
    }
 
    template <class Char>
-   inline bool compare(const Char* lhs, const Char* rhs, uint64_t count) noexcept
+   inline bool compare(const Char* lhs, const Char* rhs, glz::uint64_t count) noexcept
    {
       if (count > 7) {
-         uint64_t v[2];
+         glz::uint64_t v[2];
          while (count > 8) {
             std::memcpy(v, lhs, 8);
             std::memcpy(v + 1, rhs, 8);
@@ -65,9 +61,9 @@ export namespace glz
       }
 
       {
-         constexpr uint64_t n{sizeof(uint32_t)};
+         constexpr glz::uint64_t n{sizeof(glz::uint32_t)};
          if (count >= n) {
-            uint32_t v[2];
+            glz::uint32_t v[2];
             std::memcpy(v, lhs, n);
             std::memcpy(v + 1, rhs, n);
             if (v[0] != v[1]) {
@@ -79,9 +75,9 @@ export namespace glz
          }
       }
       {
-         constexpr uint64_t n{sizeof(uint16_t)};
+         constexpr glz::uint64_t n{sizeof(glz::uint16_t)};
          if (count >= n) {
-            uint16_t v[2];
+            glz::uint16_t v[2];
             std::memcpy(v, lhs, n);
             std::memcpy(v + 1, rhs, n);
             if (v[0] != v[1]) {
@@ -102,9 +98,9 @@ export namespace glz
    // This comparison function produces less binary than `compare` above and is very fast.
    // However, if our count is less than 8, we must be able to access the previous [8 - count] bytes.
    template <class Char>
-   inline bool internal_compare(const Char* lhs, const Char* rhs, uint64_t count) noexcept
+   inline bool internal_compare(const Char* lhs, const Char* rhs, glz::uint64_t count) noexcept
    {
-      uint64_t v[2];
+      glz::uint64_t v[2];
       while (count > 8) {
          std::memcpy(v, lhs, 8);
          std::memcpy(v + 1, rhs, 8);
@@ -125,7 +121,7 @@ export namespace glz
       return v[0] == v[1];
    }
 
-   template <uint64_t Count, class Char>
+   template <glz::uint64_t Count, class Char>
    GLZ_ALWAYS_INLINE bool compare(const Char* lhs, const Char* rhs) noexcept
    {
       if constexpr (Count > 8) {
@@ -133,49 +129,49 @@ export namespace glz
          // return internal_compare(lhs, rhs, Count);
       }
       else if constexpr (Count == 8) {
-         uint64_t l, r;
+         glz::uint64_t l, r;
          std::memcpy(&l, lhs, 8);
          std::memcpy(&r, rhs, 8);
          return l == r;
       }
       else if constexpr (Count == 7) {
-         uint32_t l, r;
+         glz::uint32_t l, r;
          std::memcpy(&l, lhs, 4);
          std::memcpy(&r, rhs, 4);
-         uint32_t l2, r2;
+         glz::uint32_t l2, r2;
          std::memcpy(&l2, lhs + 3, 4);
          std::memcpy(&r2, rhs + 3, 4);
          return (l == r) & (l2 == r2);
       }
       else if constexpr (Count == 6) {
-         uint32_t l, r;
+         glz::uint32_t l, r;
          std::memcpy(&l, lhs, 4);
          std::memcpy(&r, rhs, 4);
-         uint16_t l2, r2;
+         glz::uint16_t l2, r2;
          std::memcpy(&l2, lhs + 4, 2);
          std::memcpy(&r2, rhs + 4, 2);
          return (l == r) & (l2 == r2);
       }
       else if constexpr (Count == 5) {
-         uint32_t l, r;
+         glz::uint32_t l, r;
          std::memcpy(&l, lhs, 4);
          std::memcpy(&r, rhs, 4);
          return (l == r) & (lhs[4] == rhs[4]);
       }
       else if constexpr (Count == 4) {
-         uint32_t l, r;
+         glz::uint32_t l, r;
          std::memcpy(&l, lhs, 4);
          std::memcpy(&r, rhs, 4);
          return l == r;
       }
       else if constexpr (Count == 3) {
-         uint16_t l, r;
+         glz::uint16_t l, r;
          std::memcpy(&l, lhs, 2);
          std::memcpy(&r, rhs, 2);
          return (l == r) & (lhs[2] == rhs[2]);
       }
       else if constexpr (Count == 2) {
-         uint16_t l, r;
+         glz::uint16_t l, r;
          std::memcpy(&l, lhs, 2);
          std::memcpy(&r, rhs, 2);
          return l == r;
@@ -188,67 +184,67 @@ export namespace glz
       }
    }
 
-   template <size_t N>
+   template <glz::size_t N>
    consteval auto bytes_to_unsigned_type() noexcept
    {
       if constexpr (N == 1) {
-         return uint8_t{};
+         return glz::uint8_t{};
       }
       else if constexpr (N == 2) {
-         return uint16_t{};
+         return glz::uint16_t{};
       }
       else if constexpr (N == 4) {
-         return uint32_t{};
+         return glz::uint32_t{};
       }
       else if constexpr (N == 8) {
-         return uint64_t{};
+         return glz::uint64_t{};
       }
       else {
          return;
       }
    }
 
-   template <size_t N>
+   template <glz::size_t N>
    using unsigned_bytes_t = std::decay_t<decltype(bytes_to_unsigned_type<N>())>;
 
-   template <const std::string_view& Str, size_t N>
+   template <const std::string_view& Str, glz::size_t N>
       requires(N <= 8)
    consteval auto pack()
    {
       using T = unsigned_bytes_t<N>;
       T v{};
-      for (size_t i = 0; i < N; ++i) {
-         v |= (static_cast<T>(uint8_t(Str[i])) << ((i % 8) * 8));
+      for (glz::size_t i = 0; i < N; ++i) {
+         v |= (static_cast<T>(glz::uint8_t(Str[i])) << ((i % 8) * 8));
       }
       return v;
    }
 
-   template <const std::string_view& Str, size_t N>
+   template <const std::string_view& Str, glz::size_t N>
       requires(N > 8)
    consteval auto pack()
    {
       constexpr auto chunks = N / 8;
-      std::array<uint64_t, ((chunks > 0) ? chunks + 1 : 1)> v{};
-      for (size_t i = 0; i < N; ++i) {
+      std::array<glz::uint64_t, ((chunks > 0) ? chunks + 1 : 1)> v{};
+      for (glz::size_t i = 0; i < N; ++i) {
          const auto chunk = i / 8;
-         v[chunk] |= (static_cast<uint64_t>(uint8_t(Str[i])) << ((i % 8) * 8));
+         v[chunk] |= (static_cast<glz::uint64_t>(glz::uint8_t(Str[i])) << ((i % 8) * 8));
       }
       return v;
    }
 
-   template <const std::string_view& Str, size_t N>
+   template <const std::string_view& Str, glz::size_t N>
       requires(N <= 8)
    consteval auto pack_buffered()
    {
       using T = unsigned_bytes_t<N>;
       T v{};
-      for (size_t i = 0; i < Str.size(); ++i) {
-         v |= (static_cast<T>(uint8_t(Str[i])) << ((i % 8) * 8));
+      for (glz::size_t i = 0; i < Str.size(); ++i) {
+         v |= (static_cast<T>(glz::uint8_t(Str[i])) << ((i % 8) * 8));
       }
       return v;
    }
 
-   template <const std::string_view& Str, size_t N = Str.size()>
+   template <const std::string_view& Str, glz::size_t N = Str.size()>
    GLZ_ALWAYS_INLINE bool comparitor(const auto* other) noexcept
    {
       // pack() builds values in little-endian order (byte 0 in LSB position).
@@ -256,7 +252,7 @@ export namespace glz
       // so we need to byteswap to match the packed representation.
       if constexpr (N == 8) {
          static constexpr auto packed = pack<Str, 8>();
-         uint64_t in;
+         glz::uint64_t in;
          std::memcpy(&in, other, 8);
          if constexpr (std::endian::native == std::endian::big) {
             in = std::byteswap(in);
@@ -265,7 +261,7 @@ export namespace glz
       }
       else if constexpr (N == 7) {
          static constexpr auto packed = pack_buffered<Str, 8>();
-         uint64_t in{};
+         glz::uint64_t in{};
          std::memcpy(&in, other, 7);
          if constexpr (std::endian::native == std::endian::big) {
             in = std::byteswap(in);
@@ -274,7 +270,7 @@ export namespace glz
       }
       else if constexpr (N == 6) {
          static constexpr auto packed = pack_buffered<Str, 8>();
-         uint64_t in{};
+         glz::uint64_t in{};
          std::memcpy(&in, other, 6);
          if constexpr (std::endian::native == std::endian::big) {
             in = std::byteswap(in);
@@ -283,7 +279,7 @@ export namespace glz
       }
       else if constexpr (N == 5) {
          static constexpr auto packed = pack<Str, 4>();
-         uint32_t in;
+         glz::uint32_t in;
          std::memcpy(&in, other, 4);
          if constexpr (std::endian::native == std::endian::big) {
             in = std::byteswap(in);
@@ -292,7 +288,7 @@ export namespace glz
       }
       else if constexpr (N == 4) {
          static constexpr auto packed = pack<Str, 4>();
-         uint32_t in;
+         glz::uint32_t in;
          std::memcpy(&in, other, 4);
          if constexpr (std::endian::native == std::endian::big) {
             in = std::byteswap(in);
@@ -301,7 +297,7 @@ export namespace glz
       }
       else if constexpr (N == 3) {
          static constexpr auto packed = pack<Str, 2>();
-         uint16_t in;
+         glz::uint16_t in;
          std::memcpy(&in, other, 2);
          if constexpr (std::endian::native == std::endian::big) {
             in = std::byteswap(in);
@@ -310,7 +306,7 @@ export namespace glz
       }
       else if constexpr (N == 2) {
          static constexpr auto packed = pack<Str, 2>();
-         uint16_t in;
+         glz::uint16_t in;
          std::memcpy(&in, other, 2);
          if constexpr (std::endian::native == std::endian::big) {
             in = std::byteswap(in);
@@ -339,7 +335,7 @@ export namespace glz
       }
 
       if consteval {
-         for (size_t i = 0; i < lhs.size(); ++i) {
+         for (glz::size_t i = 0; i < lhs.size(); ++i) {
             const auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? char(c + 32) : c; };
             if (lower(lhs[i]) != lower(rhs[i])) {
                return false;
@@ -350,10 +346,10 @@ export namespace glz
       else {
          const char* l = lhs.data();
          const char* r = rhs.data();
-         uint64_t count = lhs.size();
+         glz::uint64_t count = lhs.size();
 
          for (; count >= 8; l += 8, r += 8, count -= 8) {
-            uint64_t a, b;
+            glz::uint64_t a, b;
             std::memcpy(&a, l, 8);
             std::memcpy(&b, r, 8);
             if (glz::detail::ascii_tolower_u64(a) != glz::detail::ascii_tolower_u64(b)) {
@@ -363,7 +359,7 @@ export namespace glz
 
          if (count) {
             // Zero padding is safe, both sides pad identically and 0 is not 'A'..'Z'
-            uint64_t a{}, b{};
+            glz::uint64_t a{}, b{};
             std::memcpy(&a, l, count);
             std::memcpy(&b, r, count);
             return glz::detail::ascii_tolower_u64(a) == glz::detail::ascii_tolower_u64(b);

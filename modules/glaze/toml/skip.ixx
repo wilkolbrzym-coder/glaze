@@ -14,6 +14,7 @@ import std;
 
 import glaze.toml.common;
 
+import glaze.core.basic_types;
 import glaze.core.context;
 import glaze.core.opts;
 

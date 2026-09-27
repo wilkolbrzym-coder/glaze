@@ -33,6 +33,7 @@ import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.cast;
 
+import glaze.util.bit;
 import glaze.util.primes_64;
 import glaze.util.for_each;
 import glaze.util.string_literal;

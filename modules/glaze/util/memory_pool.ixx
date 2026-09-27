@@ -1,14 +1,19 @@
-#pragma once
+// glz:header path="glaze/util/memory_pool.hpp"
+// glz:header project_imports=ignore
+module;
 
 #include <cstdint>
 #include <deque>
 #include <memory>
 #include <mutex>
 #include <vector>
+// glz:emit std
+export module glaze.util.memory_pool;
 
-using std::size_t;
+import std;
+import glaze.core.basic_types;
 
-namespace glz
+export namespace glz
 {
    template <class T>
       requires(std::is_default_constructible_v<T>)
@@ -26,9 +31,9 @@ namespace glz
       struct handle final
       {
          memory_pool<T>* pool;
-         size_t index;
+         glz::size_t index;
 
-         handle(memory_pool<T>* p, size_t i) : pool(p), index(i) {}
+         handle(memory_pool<T>* p, glz::size_t i) : pool(p), index(i) {}
          ~handle() { pool->release(index); }
       };
 
@@ -39,7 +44,7 @@ namespace glz
             const auto current_size = values.size();
             const auto new_size = values.size() * 2;
             values.resize(new_size);
-            for (size_t i = current_size; i < new_size; ++i) {
+            for (glz::size_t i = current_size; i < new_size; ++i) {
                available.emplace_back(i);
             }
          }
@@ -52,20 +57,20 @@ namespace glz
          return std::shared_ptr<T>{std::make_shared<handle>(this, index), &values[index]};
       }
 
-      size_t size() const
+      glz::size_t size() const
       {
          std::lock_guard lock{mtx};
          return values.size();
       }
 
-      size_t available_size() const
+      glz::size_t available_size() const
       {
          std::lock_guard lock{mtx};
          return available.size();
       }
 
      private:
-      void release(size_t index)
+      void release(glz::size_t index)
       {
          std::lock_guard lock{mtx};
          available.emplace_back(index);
@@ -73,6 +78,6 @@ namespace glz
 
       mutable std::mutex mtx{};
       std::deque<T> values{2};
-      std::vector<size_t> available{0, 1}; // indices of available values
+      std::vector<glz::size_t> available{0, 1}; // indices of available values
    };
 }

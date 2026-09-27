@@ -2,23 +2,20 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/jsonb/header.hpp"
 // glz:header std=<bit>
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 export module glaze.jsonb.header;
 
 import std;
 
 import glaze.core.context;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 // SQLite JSONB binary format - https://sqlite.org/jsonb.html
 //
@@ -36,46 +33,46 @@ export namespace glz::jsonb
 {
    namespace type
    {
-      inline constexpr uint8_t null_ = 0;
-      inline constexpr uint8_t true_ = 1;
-      inline constexpr uint8_t false_ = 2;
-      inline constexpr uint8_t int_ = 3; // ASCII decimal, RFC 8259 integer
-      inline constexpr uint8_t int5 = 4; // ASCII JSON5 integer (hex, leading +, etc.)
-      inline constexpr uint8_t float_ = 5; // ASCII decimal float, RFC 8259
-      inline constexpr uint8_t float5 = 6; // ASCII JSON5 float (NaN, Infinity, .5, etc.)
-      inline constexpr uint8_t text = 7; // UTF-8, no escapes needed
-      inline constexpr uint8_t textj = 8; // UTF-8, contains RFC 8259 escapes (\n, \uXXXX, ...)
-      inline constexpr uint8_t text5 = 9; // UTF-8, contains JSON5 escapes (\xNN, \', ...)
-      inline constexpr uint8_t textraw = 10; // Raw UTF-8 bytes, may need escaping to emit JSON
-      inline constexpr uint8_t array = 11;
-      inline constexpr uint8_t object = 12;
+      inline constexpr glz::uint8_t null_ = 0;
+      inline constexpr glz::uint8_t true_ = 1;
+      inline constexpr glz::uint8_t false_ = 2;
+      inline constexpr glz::uint8_t int_ = 3; // ASCII decimal, RFC 8259 integer
+      inline constexpr glz::uint8_t int5 = 4; // ASCII JSON5 integer (hex, leading +, etc.)
+      inline constexpr glz::uint8_t float_ = 5; // ASCII decimal float, RFC 8259
+      inline constexpr glz::uint8_t float5 = 6; // ASCII JSON5 float (NaN, Infinity, .5, etc.)
+      inline constexpr glz::uint8_t text = 7; // UTF-8, no escapes needed
+      inline constexpr glz::uint8_t textj = 8; // UTF-8, contains RFC 8259 escapes (\n, \uXXXX, ...)
+      inline constexpr glz::uint8_t text5 = 9; // UTF-8, contains JSON5 escapes (\xNN, \', ...)
+      inline constexpr glz::uint8_t textraw = 10; // Raw UTF-8 bytes, may need escaping to emit JSON
+      inline constexpr glz::uint8_t array = 11;
+      inline constexpr glz::uint8_t object = 12;
       // 13, 14, 15 reserved
    }
 
    namespace size_code
    {
-      inline constexpr uint8_t u8_follows = 12;
-      inline constexpr uint8_t u16_follows = 13;
-      inline constexpr uint8_t u32_follows = 14;
-      inline constexpr uint8_t u64_follows = 15;
+      inline constexpr glz::uint8_t u8_follows = 12;
+      inline constexpr glz::uint8_t u16_follows = 13;
+      inline constexpr glz::uint8_t u32_follows = 14;
+      inline constexpr glz::uint8_t u64_follows = 15;
    }
 
    // Maximum header length in bytes (9 = 1 header byte + 8 for uint64 size)
-   inline constexpr size_t max_header_bytes = 9;
+   inline constexpr glz::size_t max_header_bytes = 9;
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint8_t get_type(uint8_t initial) noexcept { return initial & 0x0f; }
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint8_t get_size_nibble(uint8_t initial) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr glz::uint8_t get_type(glz::uint8_t initial) noexcept { return initial & 0x0f; }
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr glz::uint8_t get_size_nibble(glz::uint8_t initial) noexcept
    {
       return (initial >> 4) & 0x0f;
    }
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint8_t make_initial(uint8_t type_code, uint8_t size_nibble) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr glz::uint8_t make_initial(glz::uint8_t type_code, glz::uint8_t size_nibble) noexcept
    {
-      return static_cast<uint8_t>((size_nibble << 4) | (type_code & 0x0f));
+      return static_cast<glz::uint8_t>((size_nibble << 4) | (type_code & 0x0f));
    }
 
    // Compute the number of header bytes required to encode a payload of the given size.
    // Returns 1, 2, 3, 5, or 9.
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t header_bytes_for_payload(uint64_t payload_size) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr glz::size_t header_bytes_for_payload(glz::uint64_t payload_size) noexcept
    {
       if (payload_size <= 11) return 1;
       if (payload_size <= 0xFF) return 2;
@@ -87,9 +84,9 @@ export namespace glz::jsonb
    // Write a header for a scalar (non-container) element whose payload size is known.
    // Always writes in minimal form. Returns the number of bytes written (1..9).
    template <class B, class IX>
-   GLZ_ALWAYS_INLINE size_t write_header(uint8_t type_code, uint64_t payload_size, B& b, IX& ix) noexcept
+   GLZ_ALWAYS_INLINE glz::size_t write_header(glz::uint8_t type_code, glz::uint64_t payload_size, B& b, IX& ix) noexcept
    {
-      auto put_byte = [&](uint8_t byte) {
+      auto put_byte = [&](glz::uint8_t byte) {
          using V = typename std::decay_t<B>::value_type;
          b[ix] = static_cast<V>(byte);
          ++ix;
@@ -103,22 +100,22 @@ export namespace glz::jsonb
       };
 
       if (payload_size <= 11) {
-         put_byte(make_initial(type_code, static_cast<uint8_t>(payload_size)));
+         put_byte(make_initial(type_code, static_cast<glz::uint8_t>(payload_size)));
          return 1;
       }
       if (payload_size <= 0xFF) {
          put_byte(make_initial(type_code, size_code::u8_follows));
-         put_byte(static_cast<uint8_t>(payload_size));
+         put_byte(static_cast<glz::uint8_t>(payload_size));
          return 2;
       }
       if (payload_size <= 0xFFFF) {
          put_byte(make_initial(type_code, size_code::u16_follows));
-         put_be(static_cast<uint16_t>(payload_size));
+         put_be(static_cast<glz::uint16_t>(payload_size));
          return 3;
       }
       if (payload_size <= 0xFFFFFFFFull) {
          put_byte(make_initial(type_code, size_code::u32_follows));
-         put_be(static_cast<uint32_t>(payload_size));
+         put_be(static_cast<glz::uint32_t>(payload_size));
          return 5;
       }
       put_byte(make_initial(type_code, size_code::u64_follows));
@@ -130,11 +127,11 @@ export namespace glz::jsonb
    // payload size. Uses size_code::u64_follows so the reserved slot is always exactly 9 bytes.
    // Callers that want a minimal header must shift the payload themselves.
    template <class B>
-   GLZ_ALWAYS_INLINE void patch_header_9(B& b, size_t header_pos, uint8_t type_code, uint64_t payload_size) noexcept
+   GLZ_ALWAYS_INLINE void patch_header_9(B& b, glz::size_t header_pos, glz::uint8_t type_code, glz::uint64_t payload_size) noexcept
    {
       using V = typename std::decay_t<B>::value_type;
       b[header_pos] = static_cast<V>(make_initial(type_code, size_code::u64_follows));
-      uint64_t v = payload_size;
+      glz::uint64_t v = payload_size;
       if constexpr (std::endian::native == std::endian::little) {
          v = std::byteswap(v);
       }
@@ -144,20 +141,20 @@ export namespace glz::jsonb
    // Read a header starting at `it`, returning the decoded type code and payload size.
    // Advances `it` past the header on success.
    template <class It>
-   GLZ_ALWAYS_INLINE bool read_header(is_context auto& ctx, It& it, It end, uint8_t& type_code,
-                                      uint64_t& payload_size) noexcept
+   GLZ_ALWAYS_INLINE bool read_header(is_context auto& ctx, It& it, It end, glz::uint8_t& type_code,
+                                      glz::uint64_t& payload_size) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return false;
       }
 
-      uint8_t initial;
+      glz::uint8_t initial;
       std::memcpy(&initial, it, 1);
       ++it;
 
       type_code = get_type(initial);
-      const uint8_t sz = get_size_nibble(initial);
+      const glz::uint8_t sz = get_size_nibble(initial);
 
       if (sz <= 11) {
          payload_size = sz;
@@ -170,7 +167,7 @@ export namespace glz::jsonb
             ctx.error = error_code::unexpected_end;
             return false;
          }
-         uint8_t v;
+         glz::uint8_t v;
          std::memcpy(&v, it, 1);
          it += 1;
          payload_size = v;
@@ -181,7 +178,7 @@ export namespace glz::jsonb
             ctx.error = error_code::unexpected_end;
             return false;
          }
-         uint16_t v;
+         glz::uint16_t v;
          std::memcpy(&v, it, 2);
          if constexpr (std::endian::native == std::endian::little) {
             v = std::byteswap(v);
@@ -195,7 +192,7 @@ export namespace glz::jsonb
             ctx.error = error_code::unexpected_end;
             return false;
          }
-         uint32_t v;
+         glz::uint32_t v;
          std::memcpy(&v, it, 4);
          if constexpr (std::endian::native == std::endian::little) {
             v = std::byteswap(v);
@@ -209,7 +206,7 @@ export namespace glz::jsonb
             ctx.error = error_code::unexpected_end;
             return false;
          }
-         uint64_t v;
+         glz::uint64_t v;
          std::memcpy(&v, it, 8);
          if constexpr (std::endian::native == std::endian::little) {
             v = std::byteswap(v);

@@ -683,7 +683,7 @@ namespace glz
          // Use shared_ptr to keep response string alive during async operation
          auto response_buffer = std::make_shared<std::string>(std::move(response_str));
          asio::async_write(*socket, asio::buffer(*response_buffer),
-                           [self, req, response_buffer, socket](std::error_code ec, size_t) {
+                           [self, req, response_buffer, socket](std::error_code ec, std::size_t) {
                               if (ec) {
                                  self->is_closing_ = true;
                                  if (auto srv = self->server_.lock()) {
@@ -706,7 +706,7 @@ namespace glz
                            });
       }
 
-      inline void on_read(std::error_code ec, size_t bytes_transferred)
+      inline void on_read(std::error_code ec, std::size_t bytes_transferred)
       {
          if (ec) {
             is_closing_ = true;
@@ -839,7 +839,7 @@ namespace glz
 
       inline size_t process_frames(uint8_t* data, std::size_t length)
       {
-         size_t offset = 0;
+         std::size_t offset = 0;
 
          while (offset < length) {
             // Need at least 2 bytes for basic header
@@ -1174,7 +1174,7 @@ namespace glz
             return;
          }
 
-         size_t header_size = get_frame_header_size(payload.size(), client_mode_);
+         std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
          auto frame_buffer = std::make_unique<std::vector<uint8_t>>(header_size + payload.size());
 
          write_frame_header(opcode, payload.size(), fin, frame_buffer->data(), client_mode_);
@@ -1183,10 +1183,10 @@ namespace glz
          // Apply masking if in client mode
          if (client_mode_ && payload.size() > 0) {
             // Get the masking key from the header
-            size_t mask_key_offset = header_size - 4;
+            std::size_t mask_key_offset = header_size - 4;
             const uint8_t* mask_key = frame_buffer->data() + mask_key_offset;
             // Mask the payload
-            for (size_t i = 0; i < payload.size(); ++i) {
+            for (std::size_t i = 0; i < payload.size(); ++i) {
                (*frame_buffer)[header_size + i] ^= mask_key[i % 4];
             }
          }
@@ -1264,7 +1264,7 @@ namespace glz
          // Create buffer view before moving frame_buffer into lambda (C++14 evaluation order safety)
          auto buffer_view = asio::buffer(*frame_buffer);
          asio::async_write(*socket, buffer_view,
-                           [self, socket, frame_buffer = std::move(frame_buffer)](std::error_code ec, size_t) {
+                           [self, socket, frame_buffer = std::move(frame_buffer)](std::error_code ec, std::size_t) {
                               if (ec) {
                                  // Mark connection as closing before notifying handlers to avoid re-entrant close
                                  // attempts
@@ -1336,9 +1336,9 @@ namespace glz
          send_frame(opcode, payload, true, true);
       }
 
-      inline size_t get_frame_header_size(size_t payload_length, bool use_masking)
+      inline std::size_t get_frame_header_size(std::size_t payload_length, bool use_masking)
       {
-         size_t base_size;
+         std::size_t base_size;
          if (payload_length < 126) {
             base_size = 2;
          }
@@ -1351,7 +1351,7 @@ namespace glz
          return base_size + (use_masking ? 4 : 0); // Add 4 bytes for masking key if needed
       }
 
-      inline void write_frame_header(ws_opcode opcode, size_t payload_length, bool fin, uint8_t* header,
+      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, uint8_t* header,
                                      bool use_masking)
       {
          ws_frame_header frame_header;
@@ -1361,7 +1361,7 @@ namespace glz
 
          header[0] = frame_header.data[0];
 
-         size_t header_offset = 2;
+         std::size_t header_offset = 2;
 
          if (payload_length < 126) {
             frame_header.payload_len(static_cast<uint8_t>(payload_length));
@@ -1557,7 +1557,7 @@ namespace glz
 
          auto self = this->shared_from_this();
          socket->async_read_some(asio::buffer(read_buffer_),
-                                 [self, socket](std::error_code ec, size_t bytes_transferred) {
+                                 [self, socket](std::error_code ec, std::size_t bytes_transferred) {
                                     self->on_read(ec, bytes_transferred);
                                  });
       }

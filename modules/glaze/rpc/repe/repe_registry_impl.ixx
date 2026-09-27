@@ -1,17 +1,27 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/rpc/repe/repe_registry_impl.hpp"
+// glz:header include="glaze/glaze.hpp"
+// glz:header include="glaze/rpc/repe/repe.hpp"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit project
+
+export module glaze.rpc.repe.repe_registry_impl;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.rpc.repe.repe;
 
 #include "glaze/glaze.hpp"
-#include "glaze/rpc/repe/repe.hpp"
 
-using std::uint32_t;
 
-namespace glz
+export namespace glz
 {
    // Forward declaration of the registry template
-   template <auto Opts, uint32_t Proto>
+   template <auto Opts, glz::uint32_t Proto>
    struct registry;
 
    template <>

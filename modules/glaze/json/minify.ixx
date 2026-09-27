@@ -1,10 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/minify.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<string>
+// glz:header include="glaze/json/json_format.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.minify;
+
+// Minified JSONC only works with /**/ style comments, so we only supports this
 
 import std;
 
@@ -16,12 +17,7 @@ import glaze.core.common;
 import glaze.concepts.container_concepts;
 import glaze.util.dump;
 import glaze.util.parse;
-
-// Minified JSONC only works with /**/ style comments, so we only supports this
-
-using std::uint8_t;
-using std::uint64_t;
-using std::size_t;
+import glaze.core.basic_types;
 
 namespace glz
 {
@@ -34,36 +30,36 @@ namespace glz
          using enum json_type;
 
          auto ws_start = it;
-         uint64_t ws_size{};
+         glz::uint64_t ws_size{};
 
          auto skip_expected_whitespace = [&] {
             auto new_ws_start = it;
-            if (ws_size && ws_size < size_t(end - it)) [[likely]] {
+            if (ws_size && ws_size < glz::size_t(end - it)) [[likely]] {
                skip_matching_ws(ws_start, it, ws_size);
             }
 
             if constexpr (Opts.null_terminated) {
-               while (whitespace_table[uint8_t(*it)]) {
+               while (whitespace_table[glz::uint8_t(*it)]) {
                   ++it;
                }
             }
             else {
-               while ((it < end) && whitespace_table[uint8_t(*it)]) {
+               while ((it < end) && whitespace_table[glz::uint8_t(*it)]) {
                   ++it;
                }
             }
             ws_start = new_ws_start;
-            ws_size = size_t(it - new_ws_start);
+            ws_size = glz::size_t(it - new_ws_start);
          };
 
          auto skip_whitespace = [&] {
             if constexpr (Opts.null_terminated) {
-               while (whitespace_table[uint8_t(*it)]) {
+               while (whitespace_table[glz::uint8_t(*it)]) {
                   ++it;
                }
             }
             else {
-               while ((it < end) && whitespace_table[uint8_t(*it)]) {
+               while ((it < end) && whitespace_table[glz::uint8_t(*it)]) {
                   ++it;
                }
             }
@@ -79,7 +75,7 @@ namespace glz
                return it < end;
             }
          }()) {
-             switch (json_types[uint8_t(*it)]) {
+            switch (json_types[glz::uint8_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
                dump_maybe_empty<false>(value, b, ix);
@@ -181,7 +177,7 @@ namespace glz
          if constexpr (resizable<Out>) {
             out.resize(in.size() + padding_bytes);
          }
-         size_t ix = 0;
+         glz::size_t ix = 0;
          auto [it, end] = read_iterators<Opts, true>(in);
          if (bool(ctx.error)) [[unlikely]] {
             return;

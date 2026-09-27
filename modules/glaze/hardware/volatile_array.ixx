@@ -3,30 +3,29 @@
 // glz:header path="glaze/hardware/volatile_array.hpp"
 // glz:header std=<cstddef>
 // glz:header std=<initializer_list>
-// glz:header std=<iterator>
 // glz:header std=<type_traits>
-// glz:header std=<utility>
+// glz:header project_imports=ignore
 export module glaze.hardware.volatile_array;
 
-import std;
+// A matching std::array API for volatile data
 
-using std::ptrdiff_t;
-using std::size_t;
+import std;
+import glaze.core.basic_types;
 
 namespace glz
 {
    export template <class T>
    concept is_volatile_array = requires { std::decay_t<T>::glaze_volatile_array; };
 
-   export template <typename T, size_t N>
+   export template <typename T, std::size_t N>
    class volatile_array
    {
      public:
       static constexpr auto glaze_volatile_array = true;
       static constexpr auto length = N;
       using value_type = T;
-      using size_type = size_t;
-      using difference_type = ptrdiff_t;
+      using size_type = std::size_t;
+      using difference_type = std::ptrdiff_t;
       using reference = volatile T&;
       using const_reference = const volatile T&;
       using pointer = volatile T*;
@@ -127,7 +126,7 @@ namespace glz
       requires(L::length == R::length)
    constexpr bool operator==(const L& lhs, const R& rhs) noexcept
    {
-      for (size_t i = 0; i < L::length; ++i) {
+      for (std::size_t i = 0; i < L::length; ++i) {
          if (lhs[i] != rhs[i]) return false;
       }
       return true;
@@ -144,7 +143,7 @@ namespace glz
       requires(L::length == R::length)
    constexpr bool operator<(const L& lhs, const R& rhs) noexcept
    {
-      for (size_t i = 0; i < L::length; ++i) {
+      for (std::size_t i = 0; i < L::length; ++i) {
          if (lhs[i] < rhs[i]) return true;
          if (rhs[i] < lhs[i]) return false;
       }

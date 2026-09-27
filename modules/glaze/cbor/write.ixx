@@ -1,25 +1,17 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/cbor/write.hpp"
-// glz:header std=<array>
-// glz:header std=<bit>
-// glz:header std=<chrono>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<cstring>
-// glz:header std=<deque>
-// glz:header std=<map>
-// glz:header std=<optional>
-// glz:header std=<ratio>
-// glz:header std=<span>
-// glz:header std=<string>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<unordered_map>
-// glz:header std=<utility>
-// glz:header std=<variant>
-// glz:header std=<vector>
+// glz:header include="glaze/cbor/header.hpp"
+// glz:header include="glaze/core/buffer_traits.hpp"
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/core/to.hpp"
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/util/dump.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/variant.hpp"
+// glz:header project_imports=ignore
 export module glaze.cbor.write;
 
 import glaze.cbor.header;
@@ -47,15 +39,10 @@ import glaze.tuplet;
 import glaze.file.file_ops;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::int64_t;
-using std::size_t;
 
 namespace glz
 {
@@ -74,7 +61,7 @@ namespace glz
    {
       // Dump a single byte to the buffer (context-aware version with overflow checking)
       template <class B, class IX>
-      GLZ_ALWAYS_INLINE bool dump_byte(is_context auto& ctx, uint8_t byte, B& b, IX& ix)
+      GLZ_ALWAYS_INLINE bool dump_byte(is_context auto& ctx, glz::uint8_t byte, B& b, IX& ix)
       {
          if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
             return false;
@@ -86,7 +73,7 @@ namespace glz
 
       // Legacy dump_byte for internal use (no context)
       template <class B, class IX>
-      GLZ_ALWAYS_INLINE void dump_byte(uint8_t byte, B& b, IX& ix)
+      GLZ_ALWAYS_INLINE void dump_byte(glz::uint8_t byte, B& b, IX& ix)
       {
          if (ix >= b.size()) [[unlikely]] {
             b.resize(b.size() == 0 ? 128 : b.size() * 2);
@@ -130,24 +117,24 @@ namespace glz
 
       // Encode CBOR argument with minimal bytes (context-aware version)
       export template <class B, class IX>
-      GLZ_ALWAYS_INLINE bool encode_arg(is_context auto& ctx, uint8_t major_type, uint64_t value, B& b, IX& ix)
+      GLZ_ALWAYS_INLINE bool encode_arg(is_context auto& ctx, glz::uint8_t major_type, glz::uint64_t value, B& b, IX& ix)
       {
          using namespace cbor;
 
          if (value < 24) {
-            return dump_byte(ctx, initial_byte(major_type, static_cast<uint8_t>(value)), b, ix);
+            return dump_byte(ctx, initial_byte(major_type, static_cast<glz::uint8_t>(value)), b, ix);
          }
          else if (value <= 0xFF) {
             if (!dump_byte(ctx, initial_byte(major_type, info::uint8_follows), b, ix)) return false;
-            return dump_byte(ctx, static_cast<uint8_t>(value), b, ix);
+            return dump_byte(ctx, static_cast<glz::uint8_t>(value), b, ix);
          }
          else if (value <= 0xFFFF) {
             if (!dump_byte(ctx, initial_byte(major_type, info::uint16_follows), b, ix)) return false;
-            return dump_be(ctx, static_cast<uint16_t>(value), b, ix);
+            return dump_be(ctx, static_cast<glz::uint16_t>(value), b, ix);
          }
          else if (value <= 0xFFFFFFFF) {
             if (!dump_byte(ctx, initial_byte(major_type, info::uint32_follows), b, ix)) return false;
-            return dump_be(ctx, static_cast<uint32_t>(value), b, ix);
+            return dump_be(ctx, static_cast<glz::uint32_t>(value), b, ix);
          }
          else {
             if (!dump_byte(ctx, initial_byte(major_type, info::uint64_follows), b, ix)) return false;
@@ -157,24 +144,24 @@ namespace glz
 
       // Legacy encode_arg for internal use (no context)
       export template <class B, class IX>
-      GLZ_ALWAYS_INLINE void encode_arg(uint8_t major_type, uint64_t value, B& b, IX& ix)
+      GLZ_ALWAYS_INLINE void encode_arg(glz::uint8_t major_type, glz::uint64_t value, B& b, IX& ix)
       {
          using namespace cbor;
 
          if (value < 24) {
-            dump_byte(initial_byte(major_type, static_cast<uint8_t>(value)), b, ix);
+            dump_byte(initial_byte(major_type, static_cast<glz::uint8_t>(value)), b, ix);
          }
          else if (value <= 0xFF) {
             dump_byte(initial_byte(major_type, info::uint8_follows), b, ix);
-            dump_byte(static_cast<uint8_t>(value), b, ix);
+            dump_byte(static_cast<glz::uint8_t>(value), b, ix);
          }
          else if (value <= 0xFFFF) {
             dump_byte(initial_byte(major_type, info::uint16_follows), b, ix);
-            dump_be(static_cast<uint16_t>(value), b, ix);
+            dump_be(static_cast<glz::uint16_t>(value), b, ix);
          }
          else if (value <= 0xFFFFFFFF) {
             dump_byte(initial_byte(major_type, info::uint32_follows), b, ix);
-            dump_be(static_cast<uint32_t>(value), b, ix);
+            dump_be(static_cast<glz::uint32_t>(value), b, ix);
          }
          else {
             dump_byte(initial_byte(major_type, info::uint64_follows), b, ix);
@@ -183,25 +170,25 @@ namespace glz
       }
 
       // Compile-time version for known sizes (context-aware)
-      template <uint64_t value, class B, class IX>
-      GLZ_ALWAYS_INLINE bool encode_arg_cx(is_context auto& ctx, uint8_t major_type, B& b, IX& ix)
+      template <glz::uint64_t value, class B, class IX>
+      GLZ_ALWAYS_INLINE bool encode_arg_cx(is_context auto& ctx, glz::uint8_t major_type, B& b, IX& ix)
       {
          using namespace cbor;
 
          if constexpr (value < 24) {
-            return dump_byte(ctx, initial_byte(major_type, static_cast<uint8_t>(value)), b, ix);
+            return dump_byte(ctx, initial_byte(major_type, static_cast<glz::uint8_t>(value)), b, ix);
          }
          else if constexpr (value <= 0xFF) {
             if (!dump_byte(ctx, initial_byte(major_type, info::uint8_follows), b, ix)) return false;
-            return dump_byte(ctx, static_cast<uint8_t>(value), b, ix);
+            return dump_byte(ctx, static_cast<glz::uint8_t>(value), b, ix);
          }
          else if constexpr (value <= 0xFFFF) {
             if (!dump_byte(ctx, initial_byte(major_type, info::uint16_follows), b, ix)) return false;
-            return dump_be(ctx, static_cast<uint16_t>(value), b, ix);
+            return dump_be(ctx, static_cast<glz::uint16_t>(value), b, ix);
          }
          else if constexpr (value <= 0xFFFFFFFF) {
             if (!dump_byte(ctx, initial_byte(major_type, info::uint32_follows), b, ix)) return false;
-            return dump_be(ctx, static_cast<uint32_t>(value), b, ix);
+            return dump_be(ctx, static_cast<glz::uint32_t>(value), b, ix);
          }
          else {
             if (!dump_byte(ctx, initial_byte(major_type, info::uint64_follows), b, ix)) return false;
@@ -210,25 +197,25 @@ namespace glz
       }
 
       // Legacy compile-time version for internal use (no context)
-      template <uint64_t value, class B, class IX>
-      GLZ_ALWAYS_INLINE void encode_arg_cx(uint8_t major_type, B& b, IX& ix)
+      template <glz::uint64_t value, class B, class IX>
+      GLZ_ALWAYS_INLINE void encode_arg_cx(glz::uint8_t major_type, B& b, IX& ix)
       {
          using namespace cbor;
 
          if constexpr (value < 24) {
-            dump_byte(initial_byte(major_type, static_cast<uint8_t>(value)), b, ix);
+            dump_byte(initial_byte(major_type, static_cast<glz::uint8_t>(value)), b, ix);
          }
          else if constexpr (value <= 0xFF) {
             dump_byte(initial_byte(major_type, info::uint8_follows), b, ix);
-            dump_byte(static_cast<uint8_t>(value), b, ix);
+            dump_byte(static_cast<glz::uint8_t>(value), b, ix);
          }
          else if constexpr (value <= 0xFFFF) {
             dump_byte(initial_byte(major_type, info::uint16_follows), b, ix);
-            dump_be(static_cast<uint16_t>(value), b, ix);
+            dump_be(static_cast<glz::uint16_t>(value), b, ix);
          }
          else if constexpr (value <= 0xFFFFFFFF) {
             dump_byte(initial_byte(major_type, info::uint32_follows), b, ix);
-            dump_be(static_cast<uint32_t>(value), b, ix);
+            dump_be(static_cast<glz::uint32_t>(value), b, ix);
          }
          else {
             dump_byte(initial_byte(major_type, info::uint64_follows), b, ix);
@@ -263,10 +250,10 @@ namespace glz
          }
 
          // Pack bits into bytes (LSB first within each byte)
-         for (size_t byte_i = 0, bit_idx = 0; byte_i < num_bytes; ++byte_i) {
-            uint8_t byte_val = 0;
-            for (size_t bit_i = 0; bit_i < 8 && bit_idx < value.size(); ++bit_i, ++bit_idx) {
-               byte_val |= uint8_t(value[bit_idx]) << uint8_t(bit_i);
+         for (glz::size_t byte_i = 0, bit_idx = 0; byte_i < num_bytes; ++byte_i) {
+            glz::uint8_t byte_val = 0;
+            for (glz::size_t bit_i = 0; bit_i < 8 && bit_idx < value.size(); ++bit_i, ++bit_idx) {
+               byte_val |= glz::uint8_t(value[bit_idx]) << glz::uint8_t(bit_i);
             }
             if (!cbor_detail::dump_byte(ctx, byte_val, b, ix)) [[unlikely]] {
                return;
@@ -309,7 +296,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using namespace cbor;
-         const uint8_t byte =
+         const glz::uint8_t byte =
             value ? initial_byte(major::simple, simple::true_value) : initial_byte(major::simple, simple::false_value);
          cbor_detail::dump_byte(ctx, byte, b, ix);
       }
@@ -323,7 +310,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
+         cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<glz::uint64_t>(value), b, ix);
       }
    };
 
@@ -336,13 +323,13 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if (value >= 0) {
-            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
+            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<glz::uint64_t>(value), b, ix);
          }
          else {
             // CBOR negative: encode n where value = -1 - n, so n = ~value
             // Using two's complement identity: ~value = -value - 1 = -1 - value
             // This safely handles INT64_MIN without overflow
-            const uint64_t n = static_cast<uint64_t>(~value);
+            const glz::uint64_t n = static_cast<glz::uint64_t>(~value);
             cbor_detail::encode_arg(ctx, cbor::major::nint, n, b, ix);
          }
       }
@@ -364,7 +351,7 @@ namespace glz
             if (!cbor_detail::dump_byte(ctx, initial_byte(major::simple, simple::float16), b, ix)) [[unlikely]] {
                return;
             }
-            uint16_t half = encode_half(d);
+            glz::uint16_t half = encode_half(d);
             cbor_detail::dump_be(ctx, half, b, ix);
             return;
          }
@@ -375,7 +362,7 @@ namespace glz
                return;
             }
             const float f = static_cast<float>(d);
-            uint32_t bits;
+            glz::uint32_t bits;
             std::memcpy(&bits, &f, sizeof(float));
             cbor_detail::dump_be(ctx, bits, b, ix);
             return;
@@ -385,7 +372,7 @@ namespace glz
          if (!cbor_detail::dump_byte(ctx, initial_byte(major::simple, simple::float64), b, ix)) [[unlikely]] {
             return;
          }
-         uint64_t bits;
+         glz::uint64_t bits;
          std::memcpy(&bits, &d, sizeof(double));
          cbor_detail::dump_be(ctx, bits, b, ix);
       }
@@ -464,13 +451,13 @@ namespace glz
          // Use RFC 8746 typed arrays for numeric types (bulk memcpy)
          if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T>) {
             // Write the tag for this type using native endianness
-            constexpr uint64_t tag = cbor::typed_array::native_tag<V>();
+            constexpr glz::uint64_t tag = cbor::typed_array::native_tag<V>();
             if (!cbor_detail::encode_arg(ctx, cbor::major::tag, tag, b, ix)) [[unlikely]] {
                return;
             }
 
             // Write byte string header
-            const size_t byte_len = value.size() * sizeof(V);
+            const glz::size_t byte_len = value.size() * sizeof(V);
             if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, byte_len, b, ix)) [[unlikely]] {
                return;
             }
@@ -498,13 +485,13 @@ namespace glz
             }
 
             // Write typed array tag for the underlying scalar type
-            constexpr uint64_t scalar_tag = cbor::typed_array::native_tag<Scalar>();
+            constexpr glz::uint64_t scalar_tag = cbor::typed_array::native_tag<Scalar>();
             if (!cbor_detail::encode_arg(ctx, cbor::major::tag, scalar_tag, b, ix)) [[unlikely]] {
                return;
             }
 
             // Write byte string header (2 scalars per complex: real and imag)
-            const size_t byte_len = value.size() * sizeof(V); // sizeof(complex<T>) = 2 * sizeof(T)
+            const glz::size_t byte_len = value.size() * sizeof(V); // sizeof(complex<T>) = 2 * sizeof(T)
             if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, byte_len, b, ix)) [[unlikely]] {
                return;
             }
@@ -549,7 +536,7 @@ namespace glz
          using val_t = std::remove_cvref_t<detail::iterator_second_type<map_t>>;
          constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
 
-         size_t count = value.size();
+         glz::size_t count = value.size();
          if constexpr (may_skip) {
             count = 0;
             for (auto&& [k, v] : value) {
@@ -604,7 +591,7 @@ namespace glz
    {
       static constexpr auto N = reflect<T>::size;
 
-      template <auto Opts, size_t I>
+      template <auto Opts, glz::size_t I>
       static consteval bool should_skip_field()
       {
          using V = field_t<T, I>;
@@ -621,10 +608,10 @@ namespace glz
       }
 
       template <auto Opts>
-      static consteval size_t count_to_write()
+      static consteval glz::size_t count_to_write()
       {
-         return []<size_t... I>(std::index_sequence<I...>) {
-            return (size_t{} + ... + (should_skip_field<Opts, I>() ? size_t{} : size_t{1}));
+         return []<glz::size_t... I>(std::index_sequence<I...>) {
+            return (glz::size_t{} + ... + (should_skip_field<Opts, I>() ? glz::size_t{} : glz::size_t{1}));
          }(std::make_index_sequence<N>{});
       }
 
@@ -642,10 +629,10 @@ namespace glz
 
          if constexpr (maybe_skipped<Opts, T>) {
             // Dynamic path: count members at runtime to handle skip_null_members
-            size_t member_count = 0;
+            glz::size_t member_count = 0;
 
             // First pass: count members that will be written
-            for_each<N>([&]<size_t I>() {
+            for_each<N>([&]<glz::size_t I>() {
                if constexpr (should_skip_field<Opts, I>()) {
                   return;
                }
@@ -718,7 +705,7 @@ namespace glz
             }
 
             // Second pass: write members
-            for_each<N>([&]<size_t I>() {
+            for_each<N>([&]<glz::size_t I>() {
                if (bool(ctx.error)) [[unlikely]]
                   return;
                if constexpr (should_skip_field<Opts, I>()) {
@@ -818,7 +805,7 @@ namespace glz
                return;
             }
 
-            for_each<N>([&]<size_t I>() {
+            for_each<N>([&]<glz::size_t I>() {
                if (bool(ctx.error)) [[unlikely]]
                   return;
                if constexpr (should_skip_field<Opts, I>()) {
@@ -871,12 +858,12 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            [&]<size_t... I>(std::index_sequence<I...>) {
+            [&]<glz::size_t... I>(std::index_sequence<I...>) {
                (serialize<CBOR>::op<Opts>(std::get<I>(value), ctx, b, ix), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
-            [&]<size_t... I>(std::index_sequence<I...>) {
+            [&]<glz::size_t... I>(std::index_sequence<I...>) {
                (serialize<CBOR>::op<Opts>(glz::get<I>(value), ctx, b, ix), ...);
             }(std::make_index_sequence<N>{});
          }
@@ -896,7 +883,7 @@ namespace glz
             return;
          }
 
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
             serialize<CBOR>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
@@ -947,7 +934,7 @@ namespace glz
       requires(std::is_array_v<T>)
    struct to<CBOR, T>
    {
-      template <auto Opts, class V, size_t N>
+      template <auto Opts, class V, glz::size_t N>
       GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, auto&& b, auto& ix)
       {
          serialize<CBOR>::op<Opts>(std::span{value, N}, ctx, b, ix);
@@ -968,7 +955,7 @@ namespace glz
             [&](auto&& v) {
                using V = std::decay_t<decltype(v)>;
 
-               static constexpr uint64_t index = []<size_t... I>(std::index_sequence<I...>) {
+               static constexpr glz::uint64_t index = []<glz::size_t... I>(std::index_sequence<I...>) {
                   return ((std::is_same_v<V, std::variant_alternative_t<I, Variant>> * I) + ...);
                }(std::make_index_sequence<std::variant_size_v<Variant>>{});
 
@@ -1010,14 +997,14 @@ namespace glz
          if constexpr (std::is_signed_v<V>) {
             const auto v = static_cast<V>(value);
             if (v >= 0) {
-               cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(v), b, ix);
+               cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<glz::uint64_t>(v), b, ix);
             }
             else {
-               cbor_detail::encode_arg(ctx, cbor::major::nint, static_cast<uint64_t>(~v), b, ix);
+               cbor_detail::encode_arg(ctx, cbor::major::nint, static_cast<glz::uint64_t>(~v), b, ix);
             }
          }
          else {
-            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
+            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<glz::uint64_t>(value), b, ix);
          }
       }
    };
@@ -1034,14 +1021,14 @@ namespace glz
          if constexpr (std::is_signed_v<V>) {
             const auto v = static_cast<V>(value);
             if (v >= 0) {
-               cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(v), b, ix);
+               cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<glz::uint64_t>(v), b, ix);
             }
             else {
-               cbor_detail::encode_arg(ctx, cbor::major::nint, static_cast<uint64_t>(~v), b, ix);
+               cbor_detail::encode_arg(ctx, cbor::major::nint, static_cast<glz::uint64_t>(~v), b, ix);
             }
          }
          else {
-            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
+            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<glz::uint64_t>(value), b, ix);
          }
       }
    };
@@ -1135,7 +1122,7 @@ namespace glz
             return;
          }
 
-         constexpr size_t frac_digits = []() constexpr {
+         constexpr glz::size_t frac_digits = []() constexpr {
             using Period = typename Duration::period;
             if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
                return 0;
@@ -1152,7 +1139,7 @@ namespace glz
          }();
 
          // "YYYY-MM-DDTHH:MM:SS[.fffffffff]Z"
-         constexpr size_t str_len = 20 + (frac_digits > 0 ? 1 + frac_digits : 0);
+         constexpr glz::size_t str_len = 20 + (frac_digits > 0 ? 1 + frac_digits : 0);
 
          const auto dp = floor<days>(value);
          const year_month_day ymd{dp};
@@ -1179,15 +1166,15 @@ namespace glz
          const auto mi = static_cast<unsigned>(tod.minutes().count());
          const auto sc = static_cast<unsigned>(tod.seconds().count());
 
-         auto write_digits = [&]<size_t N>(uint64_t val) {
-            for (size_t i = N; i > 0; --i) {
+         auto write_digits = [&]<glz::size_t N>(glz::uint64_t val) {
+            for (glz::size_t i = N; i > 0; --i) {
                b[ix + i - 1] = static_cast<typename std::decay_t<decltype(b)>::value_type>('0' + val % 10);
                val /= 10;
             }
             ix += N;
          };
 
-         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
+         write_digits.template operator()<4>(static_cast<glz::uint64_t>(yr));
          b[ix++] = '-';
          write_digits.template operator()<2>(mo);
          b[ix++] = '-';
@@ -1203,13 +1190,13 @@ namespace glz
             b[ix++] = '.';
             const auto subsec = tod.subseconds();
             if constexpr (frac_digits == 3) {
-               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+               write_digits.template operator()<3>(static_cast<glz::uint64_t>(duration_cast<milliseconds>(subsec).count()));
             }
             else if constexpr (frac_digits == 6) {
-               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+               write_digits.template operator()<6>(static_cast<glz::uint64_t>(duration_cast<microseconds>(subsec).count()));
             }
             else {
-               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+               write_digits.template operator()<9>(static_cast<glz::uint64_t>(duration_cast<nanoseconds>(subsec).count()));
             }
          }
 
@@ -1245,7 +1232,7 @@ namespace glz
 
          if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
             const auto secs = duration_cast<seconds>(wrapper.value.time_since_epoch()).count();
-            to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(secs), ctx, b, ix);
+            to<CBOR, glz::int64_t>::template op<Opts>(static_cast<glz::int64_t>(secs), ctx, b, ix);
          }
          else {
             // To keep the double conversion lossless we need the source integer count

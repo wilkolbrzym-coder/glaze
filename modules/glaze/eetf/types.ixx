@@ -1,4 +1,11 @@
-#pragma once
+// glz:header path="glaze/eetf/types.hpp"
+// glz:header include="cmp.hpp" group=g_rel0
+// glz:header project_imports=ignore
+module;
+// glz:module-only
+#include "glaze/concepts/container_concepts.hpp"
+#include "glaze/eetf/cmp.hpp"
+// glz:end-module-only
 
 #include <ei.h>
 
@@ -6,11 +13,13 @@
 #include <cstdint>
 #include <string>
 
-#include "cmp.hpp"
+// glz:emit g_rel0
+export module glaze.eetf.types;
 
-using std::size_t;
+import std;
+import glaze.core.basic_types;
 
-namespace glz::eetf
+export namespace glz::eetf
 {
    struct tag_atom
    {};

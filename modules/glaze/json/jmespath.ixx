@@ -2,19 +2,14 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/jmespath.hpp"
 // glz:header std=<algorithm>
-// glz:header std=<array>
 // glz:header std=<charconv>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<cstdlib>
-// glz:header std=<cstring>
-// glz:header std=<limits>
 // glz:header std=<optional>
-// glz:header std=<string_view>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
-// glz:header std=<vector>
+// glz:header include="glaze/core/seek.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/skip.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.jmespath;
 
 import std;
@@ -36,9 +31,8 @@ import glaze.util.tuple;
 
 import glaze.concepts.container_concepts;
 import glaze.tuplet;
+import glaze.core.basic_types;
 
-using std::int32_t;
-using std::size_t;
 
 namespace glz
 {
@@ -68,7 +62,7 @@ namespace glz
        */
       inline constexpr std::string_view trim_left(std::string_view s)
       {
-         size_t start = 0;
+         glz::size_t start = 0;
          while (start < s.size() && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r')) {
             start++;
          }
@@ -90,8 +84,8 @@ namespace glz
             return {"", "", tokenization_error::none};
          }
 
-         size_t pos = 0;
-         size_t len = s.size();
+         glz::size_t pos = 0;
+         glz::size_t len = s.size();
          int bracket_level = 0;
          int parenthesis_level = 0;
          bool in_string = false;
@@ -103,8 +97,8 @@ namespace glz
             if (in_string) {
                if (current == string_delim) {
                   // Check for escaped delimiter
-                  size_t backslashes = 0;
-                  size_t temp = pos;
+                  glz::size_t backslashes = 0;
+                  glz::size_t temp = pos;
                   while (temp > 0 && s[--temp] == '\\') {
                      backslashes++;
                   }
@@ -198,7 +192,7 @@ namespace glz
          final_tokens.reserve(tokens.size()); // at least
 
          for (auto token : tokens) {
-            size_t start = 0;
+            glz::size_t start = 0;
             while (start < token.size()) {
                // Find the next '['
                auto open = token.find('[', start);
@@ -304,7 +298,7 @@ namespace glz
          }
 
          std::array<std::string_view, N> arr{};
-         for (size_t i = 0; i < N; ++i) {
+         for (std::size_t i = 0; i < N; ++i) {
             arr[i] = tokens[i];
          }
          return arr; // Vector destroyed here, leaving only the array.
@@ -315,10 +309,10 @@ namespace glz
          bool is_array_access = false; // True if "key[...]"
          bool error = false; // True if parsing encountered an error
          std::string_view key; // The part before the first '['
-         std::optional<int32_t> start; // For a single index or slice start
-         std::optional<int32_t> end; // For slice end
-         std::optional<int32_t> step; // For slice step
-         size_t colon_count = 0; // Number of ':' characters found inside the brackets
+         std::optional<glz::int32_t> start; // For a single index or slice start
+         std::optional<glz::int32_t> end; // For slice end
+         std::optional<glz::int32_t> step; // For slice step
+         glz::size_t colon_count = 0; // Number of ':' characters found inside the brackets
       };
 
       inline constexpr std::optional<int> parse_int(std::string_view s)
@@ -366,7 +360,7 @@ namespace glz
          }
 
          // Count colons to determine if it's a slice
-         size_t colon_count = 0;
+         glz::size_t colon_count = 0;
          for (char c : inside) {
             if (c == ':') {
                colon_count++;
@@ -378,9 +372,9 @@ namespace glz
          auto parse_slice = [&](std::string_view inside) {
             std::string_view parts[3];
             {
-               size_t start_idx = 0;
+               glz::size_t start_idx = 0;
                int idx = 0;
-               for (size_t i = 0; i <= inside.size(); ++i) {
+               for (glz::size_t i = 0; i <= inside.size(); ++i) {
                   if (i == inside.size() || inside[i] == ':') {
                      if (idx < 3) {
                         parts[idx] = inside.substr(start_idx, i - start_idx);
@@ -480,7 +474,7 @@ namespace glz
          }
 
          // Determine slice parameters
-         int32_t step_idx = decomposed_key.step.value_or(1);
+         glz::int32_t step_idx = decomposed_key.step.value_or(1);
          bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
 
          // Only support step == 1 and positive indices for now for tuples
@@ -501,8 +495,8 @@ namespace glz
             return false;
          };
 
-         const int32_t start_idx = decomposed_key.start.value_or(0);
-         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
+         const glz::int32_t start_idx = decomposed_key.start.value_or(0);
+         const glz::int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<glz::int32_t>::max)());
 
          if (at_end()) return;
          if (*it == ']') {
@@ -510,16 +504,16 @@ namespace glz
             return;
          }
 
-         int32_t current_index = 0;
+         glz::int32_t current_index = 0;
 
          // Iterate tuple elements
          using TupleType = std::decay_t<T>;
-         constexpr size_t N = glz::tuple_size_v<TupleType>;
+         constexpr glz::size_t N = glz::tuple_size_v<TupleType>;
 
-         glz::for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) return;
 
-            int32_t target_idx = start_idx + I;
+            glz::int32_t target_idx = start_idx + I;
 
             // If target is beyond the slice request
             if (target_idx >= end_idx) {
@@ -592,7 +586,7 @@ namespace glz
       // must point at the first element (just past '['), or at ']' for an empty array. On
       // success `it` is positioned at element `n`; otherwise ctx.error is set.
       template <auto Opts>
-      inline void seek_array_index(int32_t n, context& ctx, auto&& it, auto end)
+      inline void seek_array_index(glz::int32_t n, context& ctx, auto&& it, auto end)
       {
          const auto at_end = [&]() -> bool {
             if constexpr (not Opts.null_terminated) {
@@ -609,7 +603,7 @@ namespace glz
             // array to count elements, then rewind and fall through to the forward skip below.
             if (skip_ws<Opts>(ctx, it, end)) return;
             auto* const array_start = it;
-            int32_t count = 0;
+            glz::int32_t count = 0;
             if (at_end()) return;
             if (*it != ']') {
                while (true) {
@@ -636,7 +630,7 @@ namespace glz
             }
          }
 
-         for (int32_t i = 0; i < n; ++i) {
+         for (glz::int32_t i = 0; i < n; ++i) {
             skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -673,7 +667,7 @@ namespace glz
          };
 
          // Determine slice parameters
-         int32_t step_idx = decomposed_key.step.value_or(1);
+         glz::int32_t step_idx = decomposed_key.step.value_or(1);
          bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
 
          // A step of 0 is not a valid slice; without this guard the loops below would never
@@ -719,25 +713,25 @@ namespace glz
             }
 
             // Now do the slicing
-            const int32_t size = static_cast<int32_t>(value.size());
+            const glz::int32_t size = static_cast<glz::int32_t>(value.size());
             const bool negative_step = step_idx < 0;
 
             // Resolve a (possibly negative) bound to a concrete index following Python/JMESPath
             // slice semantics. The valid range depends on direction: a forward step walks
             // [0, size]; a negative step walks the range [size-1, -1], where the -1 sentinel
             // means "past the front, include index 0".
-            const int32_t lower = negative_step ? -1 : 0;
-            const int32_t upper = negative_step ? size - 1 : size;
-            auto wrap_index = [&](int32_t idx) {
+            const glz::int32_t lower = negative_step ? -1 : 0;
+            const glz::int32_t upper = negative_step ? size - 1 : size;
+            auto wrap_index = [&](glz::int32_t idx) {
                if (idx < 0) idx += size;
                return std::clamp(idx, lower, upper);
             };
 
             // An omitted bound defaults to the start/end of the iteration range for the
             // chosen direction (e.g. "[::-1]" reverses the whole array).
-            const int32_t start_idx =
+            const glz::int32_t start_idx =
                decomposed_key.start.has_value() ? wrap_index(*decomposed_key.start) : (negative_step ? upper : lower);
-            const int32_t end_idx =
+            const glz::int32_t end_idx =
                decomposed_key.end.has_value() ? wrap_index(*decomposed_key.end) : (negative_step ? lower : upper);
 
             if (step_idx == 1) {
@@ -745,7 +739,7 @@ namespace glz
                   if (start_idx > 0) {
                      value.erase(value.begin(), value.begin() + start_idx);
                   }
-                  if (static_cast<size_t>(end_idx - start_idx) < value.size()) {
+                  if (static_cast<glz::size_t>(end_idx - start_idx) < value.size()) {
                      value.erase(value.begin() + (end_idx - start_idx), value.end());
                   }
                }
@@ -757,7 +751,7 @@ namespace glz
                // Positive step compacts in place: the write index never overtakes the
                // read index, so every read stays within the live range.
                std::size_t dest = 0;
-               for (int32_t i = start_idx; i < end_idx; i += step_idx) {
+               for (glz::int32_t i = start_idx; i < end_idx; i += step_idx) {
                   value[dest++] = std::move(value[i]);
                }
                value.resize(dest);
@@ -768,7 +762,7 @@ namespace glz
                // wrap_index already clamps start_idx to at most size-1 and end_idx to at
                // least -1, so every read below stays within [0, size).
                std::decay_t<T> result;
-               for (int32_t i = start_idx; i > end_idx; i += step_idx) {
+               for (glz::int32_t i = start_idx; i > end_idx; i += step_idx) {
                   result.emplace_back(std::move(value[i]));
                }
                value = std::move(result);
@@ -779,8 +773,8 @@ namespace glz
 
          // If we reach here, step == 1 and no negative indices, so we can do partial reading.
          value.clear();
-         const int32_t start_idx = decomposed_key.start.value_or(0);
-         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
+         const glz::int32_t start_idx = decomposed_key.start.value_or(0);
+         const glz::int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<glz::int32_t>::max)());
 
          // If empty array
          if (at_end()) return;
@@ -790,7 +784,7 @@ namespace glz
          }
 
          // We'll read elements and track their index
-         int32_t current_index = 0;
+         glz::int32_t current_index = 0;
          while (true) {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
@@ -871,7 +865,7 @@ namespace glz
 
          skip_ws<Opts>(ctx, it, end);
 
-         glz::for_each<N>([&]<auto I>() {
+         for_each<N>([&]<auto I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -911,7 +905,7 @@ namespace glz
                      constexpr auto n = decomposed_key.start.value();
 
                      // Position `it` at element n (negative indices count from the back).
-                     detail::seek_array_index<Opts>(int32_t(n), ctx, it, end);
+                     detail::seek_array_index<Opts>(glz::int32_t(n), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
@@ -948,7 +942,7 @@ namespace glz
                   skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  const sv k = {start, size_t(it - start)};
+                  const sv k = {start, glz::size_t(it - start)};
                   ++it;
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
@@ -991,7 +985,7 @@ namespace glz
          buffer.resize(buffer.size() - padding_bytes);
       }
 
-      return {size_t(it - start), ctx.error, ctx.custom_error_message};
+      return {glz::size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
    // A "compiled" jmespath expression, which can be pre-computed for efficient traversal
@@ -1006,7 +1000,7 @@ namespace glz
          error = jmespath::tokenize_full_jmespath(path, tokens);
       }
 
-      template <size_t N>
+      template <glz::size_t N>
       jmespath_expression(const char (&input_path)[N]) noexcept : path(input_path)
       {
          error = jmespath::tokenize_full_jmespath(path, tokens);
@@ -1052,7 +1046,7 @@ namespace glz
 
          skip_ws<Opts>(ctx, it, end);
 
-         for (size_t I = 0; I < N; ++I) {
+         for (glz::size_t I = 0; I < N; ++I) {
             if (bool(ctx.error)) [[unlikely]] {
                break;
             }
@@ -1093,7 +1087,7 @@ namespace glz
                   else {
                      // Single index scenario
                      if (decomposed_key.start.has_value()) {
-                        const int32_t n = decomposed_key.start.value();
+                        const glz::int32_t n = decomposed_key.start.value();
 
                         // Position `it` at element n (negative indices count from the back).
                         detail::seek_array_index<Opts>(n, ctx, it, end);
@@ -1131,10 +1125,10 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv k = {start_pos, size_t(it - start_pos)};
+                     const sv k = {start_pos, glz::size_t(it - start_pos)};
                      ++it;
 
-                     if (key.size() == k.size() && std::memcmp(key.data(), k.data(), key.size()) == 0) {
+                     if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
                         if (skip_ws<Opts>(ctx, it, end)) {
                            return;
                         }
@@ -1184,7 +1178,7 @@ namespace glz
          buffer.resize(buffer.size() - padding_bytes);
       }
 
-      return {size_t(it - start), ctx.error, ctx.custom_error_message};
+      return {glz::size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
 }

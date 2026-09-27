@@ -276,22 +276,6 @@ def module_import_to_include(
     raise HeaderGenerationError(f"{source_path}: unsupported import {imported_name!r}; add an import_overrides entry")
 
 
-def hoist_include(line: str, std_includes: list[str], project_includes: list[str]) -> bool:
-    """Move an unconditional `#include` line into the header's include block.
-
-    Returns True when the line was recognised and consumed.
-    """
-    match = RAW_INCLUDE_RE.match(line)
-    if match is None:
-        return False
-    target = f"{match.group('target')}{match.group('inner')}{'>' if match.group('target') == '<' else '\"'}"
-    if match.group("target") == "<":
-        std_includes.append(target)
-    else:
-        project_includes.append(target)
-    return True
-
-
 def dedupe(items: list[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -357,10 +341,10 @@ def transform_source(
             conditional_depth = max(0, conditional_depth - 1)
 
         if in_global_fragment:
-            if conditional_depth == 0:
-                hoisted = hoist_include(line, std_includes, project_includes)
-                if hoisted:
-                    continue
+            # Unconditional raw includes are module-internal (see hoist_include).
+            # Conditional ones belong to the surrounding block and stay in place.
+            if conditional_depth == 0 and RAW_INCLUDE_RE.match(line):
+                continue
             prelude_lines.append(line)
             continue
 
@@ -385,7 +369,9 @@ def transform_source(
         # and the reference headers contain no such declaration.
         if GLOBAL_STD_USING_RE.match(line):
             continue
-        if conditional_depth == 0 and hoist_include(line, std_includes, project_includes):
+        # Unconditional raw includes are module-internal and never reach the
+        # public header; the header's include set comes from metadata/imports.
+        if conditional_depth == 0 and RAW_INCLUDE_RE.match(line):
             continue
         transformed_lines.append(line)
 

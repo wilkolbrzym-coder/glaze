@@ -1,10 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/thread/atomic.hpp"
-// glz:header std=<atomic>
-// glz:header std=<concepts>
-// glz:header std=<cstdint>
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/common.hpp"
+// glz:header project_imports=ignore
 export module glaze.thread.atomic;
 
 import std;
@@ -13,10 +11,10 @@ import glaze.core.common;
 import glaze.core.context;
 import glaze.core.meta;
 import glaze.core.opts;
+import glaze.core.basic_types;
 
 // Supports serialization/deserialization of std::atomic
 
-using std::uint32_t;
 
 export namespace glz
 {
@@ -31,7 +29,7 @@ export namespace glz
       { a.compare_exchange_strong(expected, desired) } -> std::convertible_to<bool>;
    };
 
-   template <uint32_t Format, is_atomic T>
+   template <glz::uint32_t Format, is_atomic T>
       requires(not custom_read<T>)
    struct from<Format, T>
    {
@@ -45,7 +43,7 @@ export namespace glz
       }
    };
 
-   template <uint32_t Format, is_atomic T>
+   template <glz::uint32_t Format, is_atomic T>
       requires(not custom_write<T>)
    struct to<Format, T>
    {

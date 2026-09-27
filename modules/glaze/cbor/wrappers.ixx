@@ -1,8 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/cbor/wrappers.hpp"
-// glz:header std=<cstddef>
 // glz:header std=<type_traits>
+// glz:header include="glaze/cbor/read.hpp"
+// glz:header include="glaze/cbor/write.hpp"
+// glz:header include="glaze/core/custom.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/wrappers.hpp"
+// glz:header project_imports=ignore
 export module glaze.cbor.wrappers;
 
 import glaze.cbor.read;
@@ -15,10 +20,10 @@ import glaze.core.context;
 import glaze.core.common;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::size_t;
 
 namespace glz
 {
@@ -43,7 +48,7 @@ namespace glz
    };
 
    // max_length wrapper for limiting string/array sizes when reading
-   template <class T, size_t MaxLen>
+   template <class T, glz::size_t MaxLen>
    struct from<CBOR, max_length_t<T, MaxLen>>
    {
      private:
@@ -59,7 +64,7 @@ namespace glz
             else {
                struct extended : std::decay_t<decltype(Opts)>
                {
-                  size_t max_string_length = MaxLen;
+                  glz::size_t max_string_length = MaxLen;
                };
                return extended{Opts};
             }
@@ -73,7 +78,7 @@ namespace glz
             else {
                struct extended : std::decay_t<decltype(Opts)>
                {
-                  size_t max_array_size = MaxLen;
+                  glz::size_t max_array_size = MaxLen;
                };
                return extended{Opts};
             }
@@ -93,7 +98,7 @@ namespace glz
    };
 
    // max_length wrapper for writing (just passes through without modification)
-   template <class T, size_t MaxLen>
+   template <class T, glz::size_t MaxLen>
    struct to<CBOR, max_length_t<T, MaxLen>>
    {
       template <auto Opts>

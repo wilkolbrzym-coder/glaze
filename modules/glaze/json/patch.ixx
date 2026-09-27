@@ -22,6 +22,7 @@ import glaze.forward;
 import glaze.util.expected;
 import glaze.util.string_literal;
 import glaze.core.basic_types;
+import glaze.core.wrappers;
 
 namespace glz
 {

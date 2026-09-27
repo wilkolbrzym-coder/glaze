@@ -1,27 +1,36 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/net/http.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<charconv>
+// glz:header std=<expected>
+// glz:header std=<optional>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<system_error>
+// glz:header project_imports=ignore
+// glz:header include="glaze/net/url.hpp" group=b1
+module;
 
-#pragma once
-
-#include <algorithm>
-#include <charconv>
-#include <expected>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <system_error>
+// glz:emit std
 
 // To deconflict Windows.h
 #ifdef DELETE
 #undef DELETE
 #endif
 
-using std::size_t;
+export module glaze.net.http;
 
-namespace glz
+import std;
+
+import glaze.core.basic_types;
+import glaze.net.url;
+
+
+export namespace glz
 {
    // Default maximum body size for HTTP client and server (100 MB)
-   inline constexpr size_t http_default_max_body_size = 100 * 1024 * 1024;
+   inline constexpr glz::size_t http_default_max_body_size = 100 * 1024 * 1024;
 
    enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
 
@@ -304,12 +313,12 @@ namespace glz
       }
 
       // Find the positions of the spaces that separate the components
-      const size_t first_space = status_line.find(' ', http_prefix.length());
+      const glz::size_t first_space = status_line.find(' ', http_prefix.length());
       if (first_space == std::string_view::npos || first_space >= status_line.size() - 1) {
          return std::unexpected(std::make_error_code(std::errc::protocol_error));
       }
 
-      const size_t second_space = status_line.find(' ', first_space + 1);
+      const glz::size_t second_space = status_line.find(' ', first_space + 1);
       const bool has_status_message = second_space != std::string_view::npos;
 
       // Extract the components as views instead of creating new strings
@@ -339,7 +348,7 @@ namespace glz
       }
 
       // Validate HTTP version (must be digits.digits)
-      const size_t dot_pos = version.find('.');
+      const glz::size_t dot_pos = version.find('.');
       if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version.length() - 1) {
          return std::unexpected(std::make_error_code(std::errc::protocol_error));
       }
@@ -354,7 +363,7 @@ namespace glz
       }
 
       // Validate status code (must be all digits and not too long)
-      constexpr size_t max_status_code_length = 3; // HTTP status codes are 3 digits
+      constexpr glz::size_t max_status_code_length = 3; // HTTP status codes are 3 digits
       if (status_code_str.empty() || status_code_str.length() > max_status_code_length ||
           !std::all_of(status_code_str.begin(), status_code_str.end(),
                        [](unsigned char ch) { return std::isdigit(ch); })) {
@@ -377,4 +386,4 @@ namespace glz
 }
 
 // Include URL utilities for convenience (can also be included directly via glaze/net/url.hpp)
-#include "glaze/net/url.hpp"
+// glz:emit b1

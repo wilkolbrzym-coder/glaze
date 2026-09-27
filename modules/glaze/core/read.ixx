@@ -1,12 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/read.hpp"
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
 // glz:header std=<span>
-// glz:header std=<string_view>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
+// glz:header include="glaze/api/std/span.hpp"
+// glz:header include="glaze/core/buffer_traits.hpp"
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/streaming_state.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.read;
 
 import std;
@@ -21,10 +22,10 @@ import glaze.api.std.span;
 
 import glaze.util.parse;
 import glaze.concepts.container_concepts;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::size_t;
 
 namespace glz
 {
@@ -139,7 +140,7 @@ namespace glz
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Opts);
 
-      [[maybe_unused]] size_t original_size{};
+      [[maybe_unused]] glz::size_t original_size{};
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
          original_size = buffer.size();
@@ -155,7 +156,7 @@ namespace glz
       // Bound the speculative re-parsing a variant resolution may do, in bytes, relative to this
       // input. Seeded per read so a reused context starts fresh. See charge_speculation.
       if constexpr (requires { ctx.speculation_budget; }) {
-         const size_t proportional = max_speculative_parse_factor * size_t(end - it);
+         const glz::size_t proportional = max_speculative_parse_factor * glz::size_t(end - it);
          ctx.speculation_budget =
             (proportional > min_speculative_parse_bytes ? proportional : min_speculative_parse_bytes) + 2;
       }
@@ -194,7 +195,7 @@ namespace glz
          buffer.resize(original_size);
       }
 
-      return {size_t(it - start), ctx.error, ctx.custom_error_message};
+      return {glz::size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
    export template <auto Opts, class T, contiguous Buf>
@@ -270,7 +271,7 @@ namespace glz
       // Note: During streaming, the buffer may have been refilled multiple times,
       // so we use bytes_consumed() which tracks total consumption
       const char* const window = ctx.stream.data();
-      const size_t final_consumed = static_cast<size_t>(it - window);
+      const glz::size_t final_consumed = static_cast<glz::size_t>(it - window);
       consume_buffer(buffer, final_consumed);
 
       // Settle end_reached the same way a buffered read does. StreamingOpts forces null_terminated

@@ -3,7 +3,6 @@
 // glz:header path="glaze/containers/ordered_map.hpp"
 // glz:header std=<algorithm>
 // glz:header std=<concepts>
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstdlib>
 // glz:header std=<cstring>
@@ -11,19 +10,16 @@
 // glz:header std=<initializer_list>
 // glz:header std=<iterator>
 // glz:header std=<limits>
-// glz:header std=<memory>
-// glz:header std=<new>
 // glz:header std=<stdexcept>
-// glz:header std=<tuple>
 // glz:header std=<type_traits>
 // glz:header std=<utility>
 // glz:header std=<vector>
+// glz:header project_imports=ignore
 export module glaze.containers.ordered_map;
 
 import std;
+import glaze.core.basic_types;
 
-using std::uint32_t;
-using std::size_t;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -79,19 +75,19 @@ namespace glz
      private:
       struct bucket_entry
       {
-         uint32_t index;
-         uint32_t stored_hash;
+         glz::uint32_t index;
+         glz::uint32_t stored_hash;
       };
 
-      static constexpr uint32_t empty_marker = (std::numeric_limits<uint32_t>::max)();
-      static constexpr uint32_t min_bucket_count = 8;
+      static constexpr glz::uint32_t empty_marker = (std::numeric_limits<glz::uint32_t>::max)();
+      static constexpr glz::uint32_t min_bucket_count = 8;
       static constexpr float default_max_load_factor = 0.75f;
 
       values_container_type values_;
       bucket_entry* buckets_ = nullptr;
-      uint32_t bucket_count_ = 0;
-      uint32_t bucket_mask_ = 0;
-      uint32_t load_threshold_ = 0;
+      glz::uint32_t bucket_count_ = 0;
+      glz::uint32_t bucket_mask_ = 0;
+      glz::uint32_t load_threshold_ = 0;
       float max_load_factor_ = default_max_load_factor;
 
       [[no_unique_address]] Hash hash_;
@@ -120,16 +116,16 @@ namespace glz
 
       // --- Hash helpers ---
 
-      static uint32_t to_stored_hash(size_t h) noexcept { return static_cast<uint32_t>(h); }
+      static glz::uint32_t to_stored_hash(glz::size_t h) noexcept { return static_cast<glz::uint32_t>(h); }
 
-      uint32_t bucket_for_hash(uint32_t stored) const noexcept { return stored & bucket_mask_; }
+      glz::uint32_t bucket_for_hash(glz::uint32_t stored) const noexcept { return stored & bucket_mask_; }
 
-      uint32_t distance_from_ideal(uint32_t actual, uint32_t stored) const noexcept
+      glz::uint32_t distance_from_ideal(glz::uint32_t actual, glz::uint32_t stored) const noexcept
       {
          return (actual - bucket_for_hash(stored)) & bucket_mask_;
       }
 
-      static uint32_t round_up_pow2(uint32_t v) noexcept
+      static glz::uint32_t round_up_pow2(glz::uint32_t v) noexcept
       {
          if (v == 0) return 0;
          --v;
@@ -165,8 +161,8 @@ namespace glz
       // Insert a bucket entry without checking for duplicates (used during rehash)
       void insert_into_buckets(bucket_entry entry) noexcept
       {
-         uint32_t idx = bucket_for_hash(entry.stored_hash);
-         uint32_t dist = 0;
+         glz::uint32_t idx = bucket_for_hash(entry.stored_hash);
+         glz::uint32_t dist = 0;
 
          while (true) {
             auto& b = buckets_[idx];
@@ -174,7 +170,7 @@ namespace glz
                b = entry;
                return;
             }
-            uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
+            glz::uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
             if (existing_dist < dist) {
                std::swap(b, entry);
                dist = existing_dist;
@@ -186,19 +182,19 @@ namespace glz
 
       // Find the bucket index for a given key. Returns bucket_count_ if not found.
       template <class K>
-      uint32_t find_bucket(const K& key) const noexcept
+      glz::uint32_t find_bucket(const K& key) const noexcept
       {
          if (bucket_count_ == 0) return bucket_count_;
 
-         const size_t h = hash_(key);
-         const uint32_t stored = to_stored_hash(h);
-         uint32_t idx = bucket_for_hash(stored);
-         uint32_t dist = 0;
+         const glz::size_t h = hash_(key);
+         const glz::uint32_t stored = to_stored_hash(h);
+         glz::uint32_t idx = bucket_for_hash(stored);
+         glz::uint32_t dist = 0;
 
          while (true) {
             const auto& b = buckets_[idx];
             if (b.index == empty_marker) return bucket_count_;
-            uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
+            glz::uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
             if (existing_dist < dist) return bucket_count_;
             if (b.stored_hash == stored && equal_(values_[b.index].first, key)) {
                return idx;
@@ -209,12 +205,12 @@ namespace glz
       }
 
       // Find the bucket that stores a particular value index
-      uint32_t find_bucket_by_value_index(uint32_t value_index) const noexcept
+      glz::uint32_t find_bucket_by_value_index(glz::uint32_t value_index) const noexcept
       {
          const auto& key = values_[value_index].first;
-         const size_t h = hash_(key);
-         const uint32_t stored = to_stored_hash(h);
-         uint32_t idx = bucket_for_hash(stored);
+         const glz::size_t h = hash_(key);
+         const glz::uint32_t stored = to_stored_hash(h);
+         glz::uint32_t idx = bucket_for_hash(stored);
 
          while (true) {
             if (buckets_[idx].index == value_index) return idx;
@@ -223,10 +219,10 @@ namespace glz
       }
 
       // Backward shift deletion: remove the bucket at bucket_idx and shift subsequent entries back
-      void erase_from_buckets(uint32_t bucket_idx) noexcept
+      void erase_from_buckets(glz::uint32_t bucket_idx) noexcept
       {
-         uint32_t prev = bucket_idx;
-         uint32_t curr = (bucket_idx + 1) & bucket_mask_;
+         glz::uint32_t prev = bucket_idx;
+         glz::uint32_t curr = (bucket_idx + 1) & bucket_mask_;
 
          while (true) {
             auto& cb = buckets_[curr];
@@ -242,20 +238,20 @@ namespace glz
 
       void grow_and_rehash()
       {
-         uint32_t new_count = bucket_count_ == 0 ? min_bucket_count : bucket_count_ * 2;
+         glz::uint32_t new_count = bucket_count_ == 0 ? min_bucket_count : bucket_count_ * 2;
          rehash_impl(new_count);
       }
 
-      void rehash_impl(uint32_t new_count)
+      void rehash_impl(glz::uint32_t new_count)
       {
          deallocate_buckets();
          bucket_count_ = new_count;
          bucket_mask_ = bucket_count_ - 1;
-         load_threshold_ = static_cast<uint32_t>(static_cast<float>(bucket_count_) * max_load_factor_);
+         load_threshold_ = static_cast<glz::uint32_t>(static_cast<float>(bucket_count_) * max_load_factor_);
          allocate_buckets();
 
-         for (uint32_t i = 0; i < static_cast<uint32_t>(values_.size()); ++i) {
-            const size_t h = hash_(values_[i].first);
+         for (glz::uint32_t i = 0; i < static_cast<glz::uint32_t>(values_.size()); ++i) {
+            const glz::size_t h = hash_(values_[i].first);
             insert_into_buckets({i, to_stored_hash(h)});
          }
       }
@@ -264,8 +260,8 @@ namespace glz
       // Returns {bucket_idx, stored_hash, found} where found=true means duplicate was found.
       struct insert_result
       {
-         uint32_t bucket_idx;
-         uint32_t stored_hash;
+         glz::uint32_t bucket_idx;
+         glz::uint32_t stored_hash;
          bool found;
       };
 
@@ -276,11 +272,11 @@ namespace glz
             grow_and_rehash();
          }
 
-         const size_t h = hash_(key);
-         const uint32_t stored = to_stored_hash(h);
-         const uint32_t new_index = static_cast<uint32_t>(values_.size());
-         uint32_t idx = bucket_for_hash(stored);
-         uint32_t dist = 0;
+         const glz::size_t h = hash_(key);
+         const glz::uint32_t stored = to_stored_hash(h);
+         const glz::uint32_t new_index = static_cast<glz::uint32_t>(values_.size());
+         glz::uint32_t idx = bucket_for_hash(stored);
+         glz::uint32_t dist = 0;
 
          bucket_entry entry_to_place = {new_index, stored};
          bool checking_dup = true;
@@ -296,7 +292,7 @@ namespace glz
                return {idx, stored, true}; // duplicate
             }
 
-            uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
+            glz::uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
             if (existing_dist < dist) {
                std::swap(b, entry_to_place);
                dist = existing_dist;
@@ -318,10 +314,10 @@ namespace glz
          : values_(alloc), max_load_factor_(default_max_load_factor), hash_(hash), equal_(equal)
       {
          if (bucket_count > 0) {
-            auto bc = round_up_pow2(static_cast<uint32_t>((std::max)(bucket_count, size_type(min_bucket_count))));
+            auto bc = round_up_pow2(static_cast<glz::uint32_t>((std::max)(bucket_count, size_type(min_bucket_count))));
             bucket_count_ = bc;
             bucket_mask_ = bc - 1;
-            load_threshold_ = static_cast<uint32_t>(static_cast<float>(bc) * max_load_factor_);
+            load_threshold_ = static_cast<glz::uint32_t>(static_cast<float>(bc) * max_load_factor_);
             allocate_buckets();
          }
       }
@@ -344,14 +340,14 @@ namespace glz
       ordered_map(const ordered_map& other) : values_(other.values_), hash_(other.hash_), equal_(other.equal_)
       {
          if (!values_.empty()) {
-            auto bc = round_up_pow2(static_cast<uint32_t>(
+            auto bc = round_up_pow2(static_cast<glz::uint32_t>(
                (std::max)(size_type(min_bucket_count),
                           static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
             bucket_count_ = bc;
             bucket_mask_ = bc - 1;
-            load_threshold_ = static_cast<uint32_t>(static_cast<float>(bc) * max_load_factor_);
+            load_threshold_ = static_cast<glz::uint32_t>(static_cast<float>(bc) * max_load_factor_);
             allocate_buckets();
-            for (uint32_t i = 0; i < static_cast<uint32_t>(values_.size()); ++i) {
+            for (glz::uint32_t i = 0; i < static_cast<glz::uint32_t>(values_.size()); ++i) {
                insert_into_buckets({i, to_stored_hash(hash_(values_[i].first))});
             }
          }
@@ -441,7 +437,7 @@ namespace glz
          values_.shrink_to_fit();
          // Optionally rehash to minimal bucket count
          if (bucket_count_ > 0) {
-            auto needed = round_up_pow2(static_cast<uint32_t>(
+            auto needed = round_up_pow2(static_cast<glz::uint32_t>(
                (std::max)(size_type(min_bucket_count),
                           static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
             if (needed < bucket_count_) {
@@ -579,17 +575,17 @@ namespace glz
             return values_.end();
          }
 
-         const auto erased_idx = static_cast<uint32_t>(pos - values_.cbegin());
+         const auto erased_idx = static_cast<glz::uint32_t>(pos - values_.cbegin());
 
          // Remove from bucket array
-         uint32_t bi = find_bucket_by_value_index(erased_idx);
+         glz::uint32_t bi = find_bucket_by_value_index(erased_idx);
          erase_from_buckets(bi);
 
          // Erase from values vector
          values_.erase(values_.begin() + erased_idx);
 
          // Update all bucket indices > erased_idx (they shifted down by 1)
-         for (uint32_t i = 0; i < bucket_count_; ++i) {
+         for (glz::uint32_t i = 0; i < bucket_count_; ++i) {
             if (buckets_[i].index != empty_marker && buckets_[i].index > erased_idx) {
                --buckets_[i].index;
             }
@@ -603,13 +599,13 @@ namespace glz
          if (first == last) return values_.begin() + (first - values_.cbegin());
 
          // Erase from back to front to avoid invalidation issues
-         auto start_idx = static_cast<size_t>(first - values_.cbegin());
-         auto end_idx = static_cast<size_t>(last - values_.cbegin());
+         auto start_idx = static_cast<glz::size_t>(first - values_.cbegin());
+         auto end_idx = static_cast<glz::size_t>(last - values_.cbegin());
          auto count = end_idx - start_idx;
 
          // Remove all affected entries from buckets
          for (auto i = start_idx; i < end_idx; ++i) {
-            uint32_t bi = find_bucket_by_value_index(static_cast<uint32_t>(i));
+            glz::uint32_t bi = find_bucket_by_value_index(static_cast<glz::uint32_t>(i));
             erase_from_buckets(bi);
          }
 
@@ -617,9 +613,9 @@ namespace glz
          values_.erase(values_.begin() + start_idx, values_.begin() + end_idx);
 
          // Update all bucket indices that pointed past the erased range
-         for (uint32_t i = 0; i < bucket_count_; ++i) {
+         for (glz::uint32_t i = 0; i < bucket_count_; ++i) {
             if (buckets_[i].index != empty_marker && buckets_[i].index >= end_idx) {
-               buckets_[i].index -= static_cast<uint32_t>(count);
+               buckets_[i].index -= static_cast<glz::uint32_t>(count);
             }
          }
 
@@ -628,7 +624,7 @@ namespace glz
 
       size_type erase(const key_type& key)
       {
-         const uint32_t bi = find_bucket(key);
+         const glz::uint32_t bi = find_bucket(key);
          if (bi == bucket_count_) {
             return 0;
          }
@@ -641,7 +637,7 @@ namespace glz
                   !std::convertible_to<K, const_iterator>)
       size_type erase(const K& key)
       {
-         const uint32_t bi = find_bucket(key);
+         const glz::uint32_t bi = find_bucket(key);
          if (bi == bucket_count_) {
             return 0;
          }
@@ -652,16 +648,16 @@ namespace glz
       // Unordered erase: O(1) amortized. Swaps erased element with last, does NOT preserve insertion order.
       iterator unordered_erase(const_iterator pos)
       {
-         const auto erased_idx = static_cast<uint32_t>(pos - values_.cbegin());
-         const auto last_idx = static_cast<uint32_t>(values_.size() - 1);
+         const auto erased_idx = static_cast<glz::uint32_t>(pos - values_.cbegin());
+         const auto last_idx = static_cast<glz::uint32_t>(values_.size() - 1);
 
          // Remove erased entry from buckets
-         uint32_t bi = find_bucket_by_value_index(erased_idx);
+         glz::uint32_t bi = find_bucket_by_value_index(erased_idx);
          erase_from_buckets(bi);
 
          if (erased_idx != last_idx) {
             // Update bucket for the last element to point to erased_idx
-            uint32_t last_bi = find_bucket_by_value_index(last_idx);
+            glz::uint32_t last_bi = find_bucket_by_value_index(last_idx);
             buckets_[last_bi].index = erased_idx;
 
             // Move last element into erased position
@@ -711,14 +707,14 @@ namespace glz
 
       iterator find(const key_type& key)
       {
-         uint32_t bi = find_bucket(key);
+         glz::uint32_t bi = find_bucket(key);
          if (bi == bucket_count_) return values_.end();
          return values_.begin() + buckets_[bi].index;
       }
 
       const_iterator find(const key_type& key) const
       {
-         uint32_t bi = find_bucket(key);
+         glz::uint32_t bi = find_bucket(key);
          if (bi == bucket_count_) return values_.end();
          return values_.begin() + buckets_[bi].index;
       }
@@ -727,7 +723,7 @@ namespace glz
          requires detail::transparent_lookup<Hash, KeyEqual>
       iterator find(const K& key)
       {
-         uint32_t bi = find_bucket(key);
+         glz::uint32_t bi = find_bucket(key);
          if (bi == bucket_count_) return values_.end();
          return values_.begin() + buckets_[bi].index;
       }
@@ -736,7 +732,7 @@ namespace glz
          requires detail::transparent_lookup<Hash, KeyEqual>
       const_iterator find(const K& key) const
       {
-         uint32_t bi = find_bucket(key);
+         glz::uint32_t bi = find_bucket(key);
          if (bi == bucket_count_) return values_.end();
          return values_.begin() + buckets_[bi].index;
       }
@@ -880,14 +876,14 @@ namespace glz
       void max_load_factor(float ml)
       {
          max_load_factor_ = std::clamp(ml, 0.1f, 0.95f);
-         load_threshold_ = static_cast<uint32_t>(static_cast<float>(bucket_count_) * max_load_factor_);
+         load_threshold_ = static_cast<glz::uint32_t>(static_cast<float>(bucket_count_) * max_load_factor_);
       }
 
       void rehash(size_type count)
       {
          auto needed = static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1;
          count = (std::max)(count, needed);
-         auto bc = round_up_pow2(static_cast<uint32_t>((std::max)(count, size_type(min_bucket_count))));
+         auto bc = round_up_pow2(static_cast<glz::uint32_t>((std::max)(count, size_type(min_bucket_count))));
          if (bc != bucket_count_) {
             rehash_impl(bc);
          }
@@ -897,7 +893,7 @@ namespace glz
       {
          values_.reserve(count);
          auto needed = static_cast<size_type>(static_cast<float>(count) / max_load_factor_) + 1;
-         auto bc = round_up_pow2(static_cast<uint32_t>((std::max)(needed, size_type(min_bucket_count))));
+         auto bc = round_up_pow2(static_cast<glz::uint32_t>((std::max)(needed, size_type(min_bucket_count))));
          if (bc > bucket_count_) {
             rehash_impl(bc);
          }

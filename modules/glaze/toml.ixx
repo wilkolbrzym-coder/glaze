@@ -2,6 +2,7 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/toml.hpp"
 // glz:header include="glaze/core/as_array_wrapper.hpp"
+// glz:header include="glaze/core/custom.hpp"
 // glz:header include="glaze/core/wrapper_traits.hpp"
 // glz:header include="glaze/toml/read.hpp"
 // glz:header include="glaze/toml/write.hpp"

@@ -10,6 +10,7 @@
 // glz:header include="glaze/core/context.hpp"
 // glz:header include="glaze/core/meta.hpp"
 // glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/simd/structural.hpp"
 // glz:header include="glaze/simd/utf8_validation.hpp"
 // glz:header include="glaze/util/atoi.hpp"
 // glz:header include="glaze/util/bit.hpp"
@@ -29,6 +30,7 @@ import glaze.core.opts;
 
 import glaze.util.atoi;
 import glaze.util.bit;
+import glaze.simd.structural;
 import glaze.util.compare;
 import glaze.util.convert;
 import glaze.util.expected;
@@ -37,10 +39,33 @@ import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-
-export namespace glz
+namespace glz
 {
-   inline constexpr std::array<bool, 256> numeric_table = [] {
+   // How many bytes must remain before `end` for a `Width` byte load at the cursor to stay inside
+   // the buffer.
+   //
+   // The readers scan in fixed width chunks, and bounding every chunk against `end` exactly would
+   // mean a compare per byte rather than per chunk. Instead each loop runs while
+   // `end - it >= chunk_min<Width>(padded)` and finishes whatever is left a byte at a time. An
+   // input carrying `padding_bytes` of readable slack past `end` can let the last chunk straddle
+   // the end of the document, so its answer is 1 -- the loop condition collapses to `it < end` and
+   // the byte tail is unreachable. An input without that slack answers `Width`, which costs the
+   // final chunk of the buffer its fast path and nothing else.
+   //
+   // Stated as a count rather than a limit pointer on purpose: `end - Width` is undefined when the
+   // buffer is shorter than a chunk, which is exactly the case a caller reaching for this has.
+   //
+   // Signed, and compared against a signed `end - it`, because a scanner that lands on an escaped
+   // quote can step past `end` before the next test. An unsigned difference wraps there and reads
+   // the whole address space as "room left".
+   export template <glz::size_t Width>
+   export GLZ_ALWAYS_INLINE constexpr std::ptrdiff_t chunk_min(const bool padded) noexcept
+   {
+      static_assert(Width <= padding_bytes);
+      return padded ? 1 : std::ptrdiff_t(Width);
+   }
+
+   export inline constexpr std::array<bool, 256> numeric_table = [] {
       std::array<bool, 256> t{};
       t['0'] = true;
       t['1'] = true;
@@ -60,7 +85,7 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<char, 256> char_unescape_table = [] {
+   export inline constexpr std::array<char, 256> char_unescape_table = [] {
       std::array<char, 256> t{};
       t['"'] = '"';
       t['/'] = '/';
@@ -73,7 +98,7 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<bool, 256> valid_escape_table = [] {
+   export inline constexpr std::array<bool, 256> valid_escape_table = [] {
       std::array<bool, 256> t{};
       t['"'] = true;
       t['/'] = true;
@@ -87,7 +112,7 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<bool, 256> whitespace_table = [] {
+   export inline constexpr std::array<bool, 256> whitespace_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
@@ -97,7 +122,7 @@ export namespace glz
    }();
 
    // Whitespace plus JSON separators (comma, colon)
-   inline constexpr std::array<bool, 256> whitespace_separator_table = [] {
+   export inline constexpr std::array<bool, 256> whitespace_separator_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
@@ -109,7 +134,7 @@ export namespace glz
    }();
 
    // Character classification for lazy JSON value skipping
-   enum class lazy_char_type : glz::uint8_t {
+   export enum class lazy_char_type : glz::uint8_t {
       other = 0, // whitespace, separators, literals - just advance
       quote = 1, // " - skip string
       open = 2, // { or [ - increase depth
@@ -117,7 +142,7 @@ export namespace glz
       number = 4 // - or 0-9 - skip number
    };
 
-   inline constexpr std::array<lazy_char_type, 256> lazy_char_class = [] {
+   export inline constexpr std::array<lazy_char_type, 256> lazy_char_class = [] {
       using enum lazy_char_type;
       std::array<lazy_char_type, 256> t{};
       t['"'] = quote;
@@ -139,7 +164,7 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<bool, 256> whitespace_comment_table = [] {
+   export inline constexpr std::array<bool, 256> whitespace_comment_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
@@ -149,7 +174,7 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<glz::uint8_t, 256> digit_hex_table = [] {
+   export inline constexpr std::array<glz::uint8_t, 256> digit_hex_table = [] {
       std::array<glz::uint8_t, 256> t;
       std::fill(t.begin(), t.end(), glz::uint8_t(255));
       t['0'] = 0;
@@ -177,7 +202,7 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<glz::uint16_t, 256> char_escape_table = [] {
+   export inline constexpr std::array<glz::uint16_t, 256> char_escape_table = [] {
       // Build uint16_t so that memcpy produces chars in correct order.
       // On LE: chars[0] in low byte, chars[1] in high byte -> memcpy writes [chars[0]][chars[1]]
       // On BE: chars[0] in high byte, chars[1] in low byte -> memcpy writes [chars[0]][chars[1]]
@@ -202,16 +227,16 @@ export namespace glz
    }();
 
 #if defined(__SIZEOF_INT128__)
-   consteval __uint128_t repeat_byte16(const glz::uint8_t repeat)
+   export consteval __uint128_t repeat_byte16(const glz::uint8_t repeat)
    {
       __uint128_t multiplier = (__uint128_t(0x0101010101010101ull) << 64) | 0x0101010101010101ull;
       return multiplier * repeat;
    }
 #endif
 
-   consteval glz::uint64_t not_repeat_byte8(const glz::uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
+   export consteval glz::uint64_t not_repeat_byte8(const glz::uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t hex_to_u32(const char* c) noexcept
+   export [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t hex_to_u32(const char* c) noexcept
    {
       constexpr auto& t = digit_hex_table;
       const glz::uint8_t arr[4]{t[glz::uint8_t(c[3])], t[glz::uint8_t(c[2])], t[glz::uint8_t(c[1])], t[glz::uint8_t(c[0])]};
@@ -235,8 +260,8 @@ export namespace glz
       return packed;
    }
 
-   template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t code_point_to_utf8(const glz::uint32_t code_point, Char* c) noexcept
+   export template <class Char>
+   export [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t code_point_to_utf8(const glz::uint32_t code_point, Char* c) noexcept
    {
       if (code_point <= 0x7F) {
          c[0] = Char(code_point);
@@ -263,7 +288,7 @@ export namespace glz
       return 0;
    }
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t skip_code_point(const glz::uint32_t code_point) noexcept
+   export [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t skip_code_point(const glz::uint32_t code_point) noexcept
    {
       if (code_point <= 0x7F) {
          return 1;
@@ -294,18 +319,56 @@ export namespace glz
       inline constexpr glz::uint32_t surrogate_codepoint_bits = 10;
    }
 
-   template <class SrcChar, class DstChar = SrcChar>
-   [[nodiscard]] GLZ_ALWAYS_INLINE glz::uint32_t handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
-                                                                      const SrcChar* end) noexcept
+   // What a \uXXXX escape produced, or why it produced nothing.
+   //
+   // `truncated` separates "the characters this escape needs are past the end of the buffer" from
+   // "this escape is malformed", which the caller reports differently: the first says the document
+   // was cut and more input would settle it, which is what an incremental reader has to hear, while
+   // the second is a document that will never parse. Deliberately not convertible to bool, so that
+   // a caller cannot test it without deciding which of the two it is looking at.
+   export struct unicode_result
+   {
+      glz::uint32_t written{}; // UTF-8 bytes written to dst, zero unless the escape was valid
+      bool truncated{};
+   };
+
+   // Whether what is left of the buffer could still grow into the escape being read.
+   //
+   // Reached only when too few bytes remain to finish one, which on its own does not say the
+   // document was cut: `"\uD83D"` is a whole document holding a lone surrogate, and what follows
+   // the escape is the closing quote rather than the second half of a pair. A caller told the
+   // input ran out goes looking for more, and no more of it settles that document. So the bytes
+   // that are there decide -- a clean prefix is a truncation, anything already contradicting the
+   // escape is malformed.
+   export template <bool ExpectOpener>
+   export [[nodiscard]] GLZ_ALWAYS_INLINE bool escape_prefix_intact(const auto* it, const auto* end) noexcept
+   {
+      auto n = glz::size_t(end - it);
+      if constexpr (ExpectOpener) {
+         if (n > 0 && it[0] != '\\') return false;
+         if (n > 1 && it[1] != 'u') return false;
+         if (n < 2) return true;
+         it += 2;
+         n -= 2;
+      }
+      for (glz::size_t i = 0; i < n; ++i) {
+         if (digit_hex_table[glz::uint8_t(it[i])] == 255) return false;
+      }
+      return true;
+   }
+
+   export template <class SrcChar, class DstChar = SrcChar>
+   export [[nodiscard]] GLZ_ALWAYS_INLINE unicode_result handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
+                                                                            const SrcChar* end) noexcept
    {
       using namespace unicode;
 
-      if (it + 4 >= end) [[unlikely]] {
-         return false;
+      if (end - it <= 4) [[unlikely]] {
+         return {0, escape_prefix_intact<false>(it, end)};
       }
       const glz::uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
-         return false;
+         return {};
       }
       it += 4; // skip the code point characters
 
@@ -314,28 +377,28 @@ export namespace glz
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
          if ((high & surrogate_mask) != high_surrogate_value) {
-            return false;
+            return {};
          }
 
-         if (it + 6 >= end) [[unlikely]] {
-            return false;
+         if (end - it <= 6) [[unlikely]] {
+            return {0, escape_prefix_intact<true>(it, end)};
          }
          // The next two characters must be `\u`
          glz::uint16_t u;
          std::memcpy(&u, it, 2);
          if (u != to_uint16_t(R"(\u)")) [[unlikely]] {
-            return false;
+            return {};
          }
          it += 2;
          // verify that second unicode escape sequence is present
          const glz::uint32_t low = hex_to_u32(it);
          if (low == 0xFFFFFFFFu) [[unlikely]] {
-            return false;
+            return {};
          }
          it += 4;
 
          if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
-            return false;
+            return {};
          }
 
          code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
@@ -347,11 +410,11 @@ export namespace glz
       }
       const glz::uint32_t offset = code_point_to_utf8(code_point, dst);
       dst += offset;
-      return offset;
+      return {offset, false};
    }
 
-   template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end) noexcept
+   export template <class Char>
+   export [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end) noexcept
    {
       using namespace unicode;
       if (it + 4 >= end) [[unlikely]] {
@@ -404,7 +467,7 @@ export namespace glz
    }
 
    // Options struct for match_invalid_end - reduces template instantiations
-   struct match_invalid_end_opts
+   export struct match_invalid_end_opts
    {
       bool null_terminated;
 
@@ -418,8 +481,8 @@ export namespace glz
    };
 
    // Checks for a character and validates that we are not at the end (considered an error)
-   template <char C, match_invalid_end_opts Opts>
-   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
+   export template <char C, match_invalid_end_opts Opts>
+   export GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (*it != C) [[unlikely]] {
          if constexpr (C == '"') {
@@ -454,8 +517,8 @@ export namespace glz
       return false;
    }
 
-   template <char C>
-   GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
+   export template <char C>
+   export GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
    {
       if (*it != C) [[unlikely]] {
          if constexpr (C == '"') {
@@ -484,12 +547,14 @@ export namespace glz
       }
    }
 
-   template <string_literal str, auto Opts>
-      requires(check_is_padded(Opts) && str.size() <= padding_bytes)
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto) noexcept
+   // Always bounded. A padded input could skip the length test, but it is one predicted compare
+   // against a value already in a register, next to a literal compare that has to happen anyway --
+   // far too little to be worth a second instantiation of every reader that matches a keyword.
+   export template <string_literal str, auto Opts>
+   export GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr auto S = str.sv();
-      if (not comparitor<S>(it)) [[unlikely]] {
+      if ((end - it < std::ptrdiff_t(str.size())) || not comparitor<S>(it)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
       else [[likely]] {
@@ -497,40 +562,46 @@ export namespace glz
       }
    }
 
-   template <string_literal str, auto Opts>
-      requires(!check_is_padded(Opts))
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto end) noexcept
-   {
-      const auto n = glz::size_t(end - it);
-      static constexpr auto S = str.sv();
-      if ((n < str.size()) || not comparitor<S>(it)) [[unlikely]] {
-         ctx.error = error_code::syntax_error;
-      }
-      else [[likely]] {
-         it += str.size();
-      }
-   }
-
-   GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto end) noexcept
+   // Skips a JSONC comment, `it` pointing at its opening '/'.
+   //
+   //    // line comment      ends at a line terminator, which is left behind for the whitespace
+   //                         skip, or at the end of the buffer, which ends it just as well
+   //    /* block comment */  ends at the closing delimiter, and is malformed without one
+   export GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       ++it;
       if (it == end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
       }
       else if (*it == '/') {
-         while (++it != end && *it != '\n');
+         // A carriage return ends the comment on its own, so a file written with CR line endings
+         // does not have the rest of the document swallowed by its first comment.
+         while (++it != end && *it != '\n' && *it != '\r');
       }
       else if (*it == '*') {
-         while (++it != end) {
+         ++it; // past the '*' of the opener, which cannot also close the comment
+         while (it != end) {
             if (*it == '*') [[unlikely]] {
-               if (++it == end) [[unlikely]]
-                  break;
-               else if (*it == '/') [[likely]] {
+               // Advance past the '*' only, and let the loop look at the byte after it on the next
+               // turn. Stepping over that byte here as well is what used to hide a closing
+               // delimiter behind a run of an even number of stars: a '*' was examined as a
+               // candidate only at an even offset within its run, so a comment opened with "/*" and
+               // closed with "**" plus "/" scanned to the end of the buffer with its delimiter
+               // sitting in plain sight.
+               ++it;
+               if (it != end && *it == '/') [[likely]] {
                   ++it;
-                  break;
+                  return;
                }
             }
+            else {
+               ++it;
+            }
          }
+         // The scan reached the end of the buffer without the closing delimiter. Left unreported,
+         // this arrives at the value parser as an input that held no value, which reads as an empty
+         // document rather than as the malformed comment it is.
+         ctx.error = error_code::expected_end_comment;
       }
       else [[unlikely]] {
          ctx.error = error_code::expected_end_comment;
@@ -543,9 +614,9 @@ export namespace glz
    // skip_until_closed loops use inline; this is the bounded, reusable form for callers that
    // have an explicit end rather than a padded buffer. Never reads past end, so it is safe on
    // buffers that are neither padded nor null terminated.
-   template <char... Chars>
+   export template <char... Chars>
       requires(sizeof...(Chars) > 0)
-   GLZ_ALWAYS_INLINE const char* find_first_of(const char* p, const char* const end) noexcept
+   export GLZ_ALWAYS_INLINE const char* find_first_of(const char* p, const char* const end) noexcept
    {
       // end - p rather than p + 8 <= end: the latter forms a pointer past one-past-the-end for
       // short ranges, and is diagnosable UB on a null range. Pointer difference is well defined
@@ -570,21 +641,21 @@ export namespace glz
       return p;
    }
 
-   GLZ_ALWAYS_INLINE constexpr glz::uint64_t is_less_32(const glz::uint64_t chunk) noexcept
+   export GLZ_ALWAYS_INLINE constexpr glz::uint64_t is_less_32(const glz::uint64_t chunk) noexcept
    {
       return has_zero(chunk & repeat_byte8(0b11100000u));
    }
 
-   GLZ_ALWAYS_INLINE constexpr glz::uint64_t is_greater_15(const glz::uint64_t chunk) noexcept
+   export GLZ_ALWAYS_INLINE constexpr glz::uint64_t is_greater_15(const glz::uint64_t chunk) noexcept
    {
       return (chunk & repeat_byte8(0b11110000u));
    }
 }
 
-export namespace glz
+namespace glz
 {
    // Options struct for skip_ws - reduces template instantiations
-   struct ws_opts
+   export struct ws_opts
    {
       bool minified;
       bool null_terminated;
@@ -603,8 +674,8 @@ export namespace glz
    };
 
    // skip whitespace
-   template <ws_opts Opts>
-   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export template <ws_opts Opts>
+   export GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 
@@ -671,7 +742,7 @@ export namespace glz
       return false;
    }
 
-   GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, glz::uint64_t length) noexcept
+   export GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, glz::uint64_t length) noexcept
    {
       if (length > 7) {
          glz::uint64_t v[2];
@@ -734,7 +805,7 @@ export namespace glz
       }*/
    }
 
-   inline bool validate_utf8_scalar(const glz::uint8_t* it, const glz::uint8_t* end) noexcept
+   export inline bool validate_utf8_scalar(const glz::uint8_t* it, const glz::uint8_t* end) noexcept
    {
       while (it < end) {
          // Optimistic SWAR check for ASCII
@@ -783,7 +854,7 @@ export namespace glz
       return true;
    }
 
-   inline bool validate_utf8(const auto* str, const glz::size_t size) noexcept
+   export inline bool validate_utf8(const auto* str, const glz::size_t size) noexcept
    {
       const glz::uint8_t* it = reinterpret_cast<const glz::uint8_t*>(str);
       const glz::uint8_t* const end = it + size;
@@ -801,9 +872,10 @@ export namespace glz
    }
 
    // Validates the raw bytes of a JSON string. RFC 8259 section 8.1 requires JSON text to be UTF-8,
-   // and read input is by definition someone else's, so this is unconditional rather than opt-in.
-   // Only the raw span needs checking: escape sequences are ASCII, and handle_unicode_code_point
-   // independently rejects unpaired surrogates in \uXXXX escapes.
+   // and read input is by definition someone else's, so this is on by default; the inheritable
+   // `validate_utf8` option turns it off. Only the raw span needs checking: escape sequences are
+   // ASCII, and handle_unicode_code_point independently rejects unpaired surrogates in \uXXXX
+   // escapes.
    //
    // ascii_acc lets a caller skip the pass entirely for pure ASCII strings, which is the common
    // case. Scan loops already load the string in 8 byte chunks to find the closing quote, so they
@@ -811,20 +883,29 @@ export namespace glz
    // bytes than the string itself (a chunk can overrun the closing quote); that only costs a
    // needless validation pass, it never skips one. Callers with no accumulator take the default
    // and always validate.
-   GLZ_ALWAYS_INLINE bool validate_utf8_span(is_context auto&& ctx, const auto* start, const auto* fin,
+   export template <auto Opts>
+   export GLZ_ALWAYS_INLINE bool validate_utf8_span(is_context auto&& ctx, const auto* start, const auto* fin,
                                              const glz::uint64_t ascii_acc = repeat_byte8(0b10000000)) noexcept
    {
-      if ((ascii_acc & repeat_byte8(0b10000000)) == 0) {
-         return false; // pure ASCII is trivially well formed UTF-8
+      if constexpr (not check_validate_utf8(Opts)) {
+         // Everything the caller computed for us is dead, which lets its scan loop drop the
+         // accumulator entirely.
+         (void)ctx, (void)start, (void)fin, (void)ascii_acc;
+         return false;
       }
-      if (!validate_utf8(start, glz::size_t(fin - start))) [[unlikely]] {
-         ctx.error = error_code::invalid_utf8;
-         return true;
+      else {
+         if ((ascii_acc & repeat_byte8(0b10000000)) == 0) {
+            return false; // pure ASCII is trivially well formed UTF-8
+         }
+         if (!validate_utf8(start, glz::size_t(fin - start))) [[unlikely]] {
+            ctx.error = error_code::invalid_utf8;
+            return true;
+         }
+         return false;
       }
-      return false;
    }
 
-   GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto* pc = std::memchr(it, '"', glz::size_t(end - it));
       if (pc) [[likely]] {
@@ -835,12 +916,34 @@ export namespace glz
       ctx.error = error_code::expected_quote;
    }
 
-   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
+   // Advances to a string's closing quote, the opening quote having already been consumed.
+   //
+   // ascii_acc receives the OR of every string byte walked, which lets the caller hand the result
+   // to validate_utf8_span and skip the UTF-8 pass outright when the span is pure ASCII. That is
+   // why this scans inline rather than calling memchr: memchr reports only where the quote is, so
+   // every caller had to make a second pass over bytes this one has already loaded.
+   export GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end, glz::uint64_t& ascii_acc) noexcept
    {
-      while (it < end) [[likely]] {
-         const auto* pc = std::memchr(it, '"', glz::size_t(end - it));
-         if (pc) [[likely]] {
-            it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
+      // The bound as a pointer, so each chunk costs one compare rather than a subtract and a
+      // compare. `end - 8` is only a pointer into the buffer once eight bytes are left; where they
+      // are not, the fallback is the opening quote, which sits before `it` and so fails the test on
+      // the first look. Never `it` itself -- that passes, and the chunk behind it would read past
+      // `end`. Reading eight at a time never passes `end`, so this is safe on buffers that are
+      // neither padded nor null terminated.
+      const auto* const chunk_limit = (end - it >= 8) ? end - 8 : it - 1;
+      while (it <= chunk_limit) {
+         glz::uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
+         const glz::uint64_t test = has_quote(chunk);
+         if (test) [[unlikely]] {
+            const glz::size_t offset = glz::size_t(countr_zero(test)) >> 3;
+            // Only bytes up to and including the quote belong to the string. Masking the rest off
+            // keeps a non-ASCII byte in whatever follows from forcing a needless validation pass.
+            ascii_acc |= chunk & (~glz::uint64_t(0) >> (56 - 8 * offset));
+            it += offset;
             auto* prev = it - 1;
             while (*prev == '\\') {
                --prev;
@@ -850,46 +953,78 @@ export namespace glz
             }
             ++it; // skip the escaped quote
          }
-         else [[unlikely]] {
-            break;
+         else {
+            ascii_acc |= chunk;
+            it += 8;
          }
+      }
+
+      // Fewer than eight bytes left in the buffer, so finish one at a time.
+      while (it < end) {
+         ascii_acc |= glz::uint64_t(glz::uint8_t(*it));
+         if (*it == '"') {
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (glz::size_t(it - prev) % 2) {
+               return;
+            }
+         }
+         ++it;
       }
 
       ctx.error = error_code::expected_quote;
    }
 
-   // Options struct for skip_string - reduces template instantiations
-   struct skip_string_opts
+   export GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      bool padded;
+      glz::uint64_t ascii_acc{};
+      skip_string_view(ctx, it, end, ascii_acc);
+   }
+
+   // Options struct for skip_string - reduces template instantiations
+   export struct skip_string_opts
+   {
       bool opening_handled;
       bool validate_skipped;
+      bool validate_utf8;
       bool null_terminated;
 
       // Convert from any opts-like type (consteval because check_* functions are consteval)
       template <typename T>
       consteval skip_string_opts(const T& opts) noexcept
-         : padded{check_is_padded(opts)},
-           opening_handled{check_opening_handled(opts)},
+         : opening_handled{check_opening_handled(opts)},
            validate_skipped{check_validate_skipped(opts)},
+           validate_utf8{check_validate_utf8(opts)},
            null_terminated{check_null_terminated(opts)}
       {}
 
-      // Direct construction - null_terminated defaults to true for the structural (non-validating)
-      // skip_until_closed call sites, which route through the end-bounded skip_string_view path
-      // and so are independent of this flag.
-      consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_,
-                                 bool null_terminated_ = true) noexcept
-         : padded{padded_},
-           opening_handled{opening_handled_},
+      // Direct construction - all values required. No defaults on purpose: a caller that forgets
+      // validate_utf8_ would silently validate against the user's explicit choice to turn it off,
+      // and a caller that forgets null_terminated_ would silently read past the end of a bounded
+      // buffer. Both are invisible at the call site, so make omission a compile error instead.
+      consteval skip_string_opts(bool opening_handled_, bool validate_skipped_, bool validate_utf8_,
+                                 bool null_terminated_) noexcept
+         : opening_handled{opening_handled_},
            validate_skipped{validate_skipped_},
+           validate_utf8{validate_utf8_},
            null_terminated{null_terminated_}
       {}
    };
 
-   template <skip_string_opts Opts>
-      requires(Opts.padded)
-   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
+   // Skips over the body of a string, leaving `it` just past its closing quote.
+   //
+   // Chunked while eight bytes remain and a byte at a time after that. The chunk test flags quotes,
+   // backslashes and control characters together, so a chunk it clears is eight bytes that need no
+   // decision at all; what it cannot cover is the end of the buffer, where an eight byte load would
+   // reach past it. A padded input has room for that load and never reaches the tail.
+   //
+   // The handover is always on a character boundary: the chunked loop advances either by a whole
+   // clear chunk or to just past a character it has finished with, never into the middle of an
+   // escape.
+   export template <skip_string_opts Opts>
+   export GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (not Opts.opening_handled) {
          ++it;
@@ -898,7 +1033,15 @@ export namespace glz
       const auto* const utf8_start = it;
 
       if constexpr (Opts.validate_skipped) {
-         while (true) {
+         // The bound as a pointer, so each chunk costs one compare. `end - scan_min` is only a
+         // pointer into the buffer once at least that much of it is left, and a string can start
+         // within a few bytes of the end; where it is not, the fallback is the opening quote, which
+         // sits before `it` and so fails the test on the first look. Never `it` itself -- that
+         // passes, and the chunk behind it would read past the end of the buffer.
+         const std::ptrdiff_t scan_min = chunk_min<8>(ctx.padded_input);
+         const auto* const chunk_limit = (end - it >= scan_min) ? end - scan_min : it - 1;
+
+         while (it <= chunk_limit) {
             glz::uint64_t swar;
             std::memcpy(&swar, it, 8);
             if constexpr (std::endian::native == std::endian::big) {
@@ -940,7 +1083,7 @@ export namespace glz
                }
                if ((backslash_count & 1) == 0) {
                   // Even number of backslashes => not escaped => closing quote found
-                  validate_utf8_span(ctx, utf8_start, it);
+                  validate_utf8_span<Opts>(ctx, utf8_start, it);
                   ++it;
                   return;
                }
@@ -953,6 +1096,16 @@ export namespace glz
             else if (c == '\\') {
                // Handle escape sequence
                ++it;
+
+               // The backslash can be the last byte the chunk covers, which lands `it` on `end`.
+               // A null-terminated buffer answers that read with its terminator, which the escape
+               // table below rejects; a bounded one has nothing there to read.
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
 
                if (*it == 'u') {
                   ++it;
@@ -971,32 +1124,6 @@ export namespace glz
             }
          }
 
-         // If we exit here, we never found a closing quote
-         ctx.error = error_code::unexpected_end;
-      }
-      else {
-         skip_string_view(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-         if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
-            return;
-         }
-         ++it; // skip the quote
-      }
-   }
-
-   template <skip_string_opts Opts>
-      requires(not Opts.padded)
-   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
-   {
-      if constexpr (not Opts.opening_handled) {
-         ++it;
-      }
-
-      const auto* const utf8_start = it;
-
-      if constexpr (Opts.validate_skipped) {
          while (true) {
             // A null-terminated buffer terminates on the trailing '\0' (caught by the control
             // character check below); a non-null-terminated buffer has no sentinel, so bound the
@@ -1014,7 +1141,7 @@ export namespace glz
 
             switch (*it) {
             case '"': {
-               validate_utf8_span(ctx, utf8_start, it);
+               validate_utf8_span<Opts>(ctx, utf8_start, it);
                ++it;
                return;
             }
@@ -1040,7 +1167,10 @@ export namespace glz
                      return;
                   }
                }
-               ctx.error = error_code::syntax_error;
+               // Same code the chunked loop above reports. Both loops run over one buffer now, so
+               // an escape that lands in the last few bytes must be diagnosed the same as one that
+               // does not.
+               ctx.error = error_code::invalid_escape;
                return;
             }
             }
@@ -1048,11 +1178,12 @@ export namespace glz
          }
       }
       else {
-         skip_string_view(ctx, it, end);
+         glz::uint64_t ascii_acc{};
+         skip_string_view(ctx, it, end, ascii_acc);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         if (validate_utf8_span(ctx, utf8_start, it)) [[unlikely]] {
+         if (validate_utf8_span<Opts>(ctx, utf8_start, it, ascii_acc)) [[unlikely]] {
             return;
          }
          ++it; // skip the quote
@@ -1060,30 +1191,178 @@ export namespace glz
    }
 
    // Options struct for skip_until_closed - reduces template instantiations
-   struct skip_until_closed_opts
+   export struct skip_until_closed_opts
    {
-      bool padded;
       bool comments;
+      bool validate_utf8;
 
-      // Convert from any opts-like type (consteval because check_is_padded is consteval)
+      // Convert from any opts-like type (consteval because check_validate_utf8 is consteval)
       template <typename T>
-      consteval skip_until_closed_opts(const T& opts) noexcept : padded{check_is_padded(opts)}, comments{opts.comments}
+      consteval skip_until_closed_opts(const T& opts) noexcept
+         : comments{opts.comments}, validate_utf8{check_validate_utf8(opts)}
       {}
 
       // Direct construction - all values required
-      consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept : padded{padded_}, comments{comments_} {}
+      consteval skip_until_closed_opts(bool comments_, bool validate_utf8_) noexcept
+         : comments{comments_}, validate_utf8{validate_utf8_}
+      {}
    };
 
-   template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
-      requires(Opts.padded && not Opts.comments)
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
+#if defined(GLZ_STRUCTURAL_SIMD)
+   // Prefix xor: bit i becomes the xor of bits 0..i. Applied to a mask of unescaped quotes it
+   // yields the bytes that sit inside a string -- opening quote included, closing quote excluded --
+   // because a byte is inside exactly when an odd number of quotes precede it.
+   export GLZ_ALWAYS_INLINE constexpr glz::uint64_t prefix_xor(glz::uint64_t x) noexcept
+   {
+      x ^= x << 1;
+      x ^= x << 2;
+      x ^= x << 4;
+      x ^= x << 8;
+      x ^= x << 16;
+      x ^= x << 32;
+      return x;
+   }
+
+   // Marks the bytes a backslash escapes. Only backslashes that start an odd numbered run escape
+   // anything, so the run parity is what the arithmetic below computes; `carry` hands a run that
+   // straddles the window boundary to the next call (1 when the next window opens on an escaped
+   // byte). This is the derivation from Langdale & Lemire's "Parsing Gigabytes of JSON per Second".
+   export GLZ_ALWAYS_INLINE glz::uint64_t escaped_mask(glz::uint64_t backslash, glz::uint64_t& carry) noexcept
+   {
+      if (backslash == 0) {
+         const glz::uint64_t escaped = carry;
+         carry = 0;
+         return escaped;
+      }
+      backslash &= ~carry;
+      const glz::uint64_t follows_escape = (backslash << 1) | carry;
+      constexpr glz::uint64_t even_bits = 0x5555555555555555ull;
+      const glz::uint64_t odd_starts = backslash & ~even_bits & ~follows_escape;
+      const glz::uint64_t even_sequences = odd_starts + backslash;
+      carry = glz::uint64_t(even_sequences < odd_starts); // unsigned wraparound is the run crossing over
+      return (even_bits ^ (even_sequences << 1)) & follows_escape;
+   }
+
+   // Settles whole 64 byte windows of a value being skipped, without looking at individual bytes.
+   //
+   // Returns true when the close matching the already consumed open was found, leaving `it` just
+   // past it. Returns false when the caller's byte-at-a-time scan has to take over, leaving `it`
+   // at a position that is not inside a string and `depth` correct for it: either a window
+   // boundary, or the opening quote of a string the window pass declined to finish.
+   //
+   // It declines on any window holding a non-ASCII byte, because skipping still validates the
+   // UTF-8 of the strings it passes over (see skip_string) and these masks say nothing about
+   // encoding. Rewinding to the open quote costs one redundant window at most and keeps that
+   // validation exactly where it was.
+   export template <skip_until_closed_opts Opts, char Open, char Close>
+   export GLZ_ALWAYS_INLINE bool skip_windows(auto&& it, auto end, glz::size_t& depth) noexcept
+   {
+      glz::uint64_t escape_carry{};
+      glz::uint64_t in_string_carry{}; // all ones while the next window opens inside a string
+      auto string_open = it; // opening quote of the string still open, when there is one
+
+      while (end - it >= 64) {
+         const auto w = detail::structural::load_window(it, Open, Close);
+
+         if constexpr (Opts.validate_utf8) {
+            if (w.non_ascii) [[unlikely]] {
+               if (in_string_carry) {
+                  it = string_open;
+               }
+               return false;
+            }
+         }
+
+         const glz::uint64_t escaped = escaped_mask(w.backslash, escape_carry);
+         const glz::uint64_t quote = w.quote & ~escaped;
+         const glz::uint64_t in_string = prefix_xor(quote) ^ in_string_carry;
+
+         // A backslash outside a string cannot occur in JSON, and the parity above takes it at
+         // face value: it cancels the next quote, and every byte after that is on the wrong side
+         // of the string boundary for the rest of the document. The byte scan reaches a backslash
+         // only through a string, so it does not make that mistake, and a malformed document must
+         // not be read one way here and another way on a target without these masks. Hand it over
+         // instead. The test is exact where it has to be -- at the first stray backslash nothing
+         // has diverged yet, so `in_string` is still right about it -- and anything it flags later
+         // only costs a window.
+         if (w.backslash & ~in_string) [[unlikely]] {
+            if (in_string_carry) {
+               it = string_open;
+            }
+            return false;
+         }
+
+         in_string_carry = glz::uint64_t(glz::int64_t(in_string) >> 63); // sign extend the last byte's state
+         if (in_string_carry && quote) {
+            // Ending inside a string means the window's last unescaped quote opened it.
+            string_open = it + (63 - std::countl_zero(quote));
+         }
+
+         const glz::uint64_t opens = w.open & ~in_string;
+         const glz::uint64_t closes = w.close & ~in_string;
+
+         // Every close in the window drops the depth by one at most, so a depth above that count
+         // cannot reach zero anywhere inside it and the net change is all that matters.
+         if (depth > glz::size_t(std::popcount(closes))) {
+            depth += glz::size_t(std::popcount(opens));
+            depth -= glz::size_t(std::popcount(closes));
+            it += 64;
+            continue;
+         }
+
+         glz::uint64_t brackets = opens | closes;
+         while (brackets) {
+            const auto i = countr_zero(brackets);
+            brackets &= brackets - 1;
+            if ((closes >> i) & 1) {
+               --depth;
+               if (depth == 0) {
+                  it += i + 1;
+                  return true;
+               }
+            }
+            else {
+               ++depth;
+            }
+         }
+         it += 64;
+      }
+
+      if (in_string_carry) {
+         it = string_open;
+      }
+      return false;
+   }
+#endif
+
+   export template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
+      requires(not Opts.comments)
+   export GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
+      // skip_validation routes skip_string through the end-bounded skip_string_view path, which
+      // stops on `end` rather than on a sentinel, so this flag has no effect from here.
+      static constexpr bool null_terminated_unused = true;
 
       glz::size_t depth = Depth;
 
-      while (it < end) [[likely]] {
+#if defined(GLZ_STRUCTURAL_SIMD)
+      if (skip_windows<Opts, open, close>(it, end, depth)) {
+         return;
+      }
+#endif
+
+      // Chunked while eight bytes remain, then a byte at a time; a padded input has room for the
+      // load that straddles the end of the document and leaves the tail below unreachable. The
+      // bound is a pointer so each chunk costs one compare rather than a subtract and a compare,
+      // and is only formed once that much buffer is left for it to point into. Where it is not, the
+      // fallback is the opening bracket, which sits before `it` and so fails the test on the first
+      // look. Never `it` itself -- that passes, and the chunk behind it would read past `end`.
+      const std::ptrdiff_t scan_min = chunk_min<8>(ctx.padded_input);
+      const auto* const chunk_limit = (end - it >= scan_min) ? end - scan_min : it - 1;
+
+      while (it <= chunk_limit) {
          glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
@@ -1095,122 +1374,8 @@ export namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               break;
-            }
-            case open: {
-               ++it;
-               ++depth;
-               break;
-            }
-            case close: {
-               ++it;
-               --depth;
-               if (depth == 0) {
-                  return;
-               }
-               break;
-            }
-            default: {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            }
-         }
-         else {
-            it += 8;
-         }
-      }
-
-      ctx.error = error_code::unexpected_end;
-   }
-
-   template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
-      requires(Opts.padded && Opts.comments)
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
-   {
-      static constexpr bool opening_not_handled = false;
-      static constexpr bool skip_validation = false;
-
-      glz::size_t depth = Depth;
-
-      while (it < end) [[likely]] {
-         glz::uint64_t chunk;
-         std::memcpy(&chunk, it, 8);
-         if constexpr (std::endian::native == std::endian::big) {
-            chunk = std::byteswap(chunk);
-         }
-         const glz::uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
-         if (test) {
-            it += (countr_zero(test) >> 3);
-
-            switch (*it) {
-            case '"': {
-               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               break;
-            }
-            case '/': {
-               skip_comment(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               break;
-            }
-            case open: {
-               ++it;
-               ++depth;
-               break;
-            }
-            case close: {
-               ++it;
-               --depth;
-               if (depth == 0) {
-                  return;
-               }
-               break;
-            }
-            default: {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            }
-         }
-         else {
-            it += 8;
-         }
-      }
-
-      ctx.error = error_code::unexpected_end;
-   }
-
-   template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
-      requires(not Opts.padded && not Opts.comments)
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
-   {
-      static constexpr bool opening_not_handled = false;
-      static constexpr bool skip_validation = false;
-
-      glz::size_t depth = Depth;
-
-      for (const auto fin = end - 7; it < fin;) {
-         glz::uint64_t chunk;
-         std::memcpy(&chunk, it, 8);
-         if constexpr (std::endian::native == std::endian::big) {
-            chunk = std::byteswap(chunk);
-         }
-         const glz::uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
-         if (test) {
-            it += (countr_zero(test) >> 3);
-
-            switch (*it) {
-            case '"': {
-               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+               skip_string<skip_string_opts{opening_not_handled, skip_validation, Opts.validate_utf8,
+                                            null_terminated_unused}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1244,14 +1409,8 @@ export namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            break;
-         }
-         case '/': {
-            skip_comment(ctx, it, end);
+            skip_string<skip_string_opts{opening_not_handled, skip_validation, Opts.validate_utf8,
+                                         null_terminated_unused}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1279,16 +1438,28 @@ export namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
-      requires(not Opts.padded && Opts.comments)
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export template <skip_until_closed_opts Opts, char open, char close, glz::size_t Depth = 1>
+      requires(Opts.comments)
+   export GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
+      // skip_validation routes skip_string through the end-bounded skip_string_view path, which
+      // stops on `end` rather than on a sentinel, so this flag has no effect from here.
+      static constexpr bool null_terminated_unused = true;
 
       glz::size_t depth = Depth;
 
-      for (const auto fin = end - 7; it < fin;) {
+      // Chunked while eight bytes remain, then a byte at a time; a padded input has room for the
+      // load that straddles the end of the document and leaves the tail below unreachable. The
+      // bound is a pointer so each chunk costs one compare rather than a subtract and a compare,
+      // and is only formed once that much buffer is left for it to point into. Where it is not, the
+      // fallback is the opening bracket, which sits before `it` and so fails the test on the first
+      // look. Never `it` itself -- that passes, and the chunk behind it would read past `end`.
+      const std::ptrdiff_t scan_min = chunk_min<8>(ctx.padded_input);
+      const auto* const chunk_limit = (end - it >= scan_min) ? end - scan_min : it - 1;
+
+      while (it <= chunk_limit) {
          glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
@@ -1300,7 +1471,8 @@ export namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+               skip_string<skip_string_opts{opening_not_handled, skip_validation, Opts.validate_utf8,
+                                            null_terminated_unused}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1341,7 +1513,8 @@ export namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
+            skip_string<skip_string_opts{opening_not_handled, skip_validation, Opts.validate_utf8,
+                                         null_terminated_unused}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1384,7 +1557,7 @@ export namespace glz
    // bare character array reads past its end, and a view of the first few digits of a longer run
    // consumes the rest of them. String literals and std::string satisfy this; a subview of a larger
    // buffer does not, unless the character just past it is a non-digit.
-   inline constexpr std::optional<glz::uint64_t> stoui(const std::string_view s) noexcept
+   export inline constexpr std::optional<glz::uint64_t> stoui(const std::string_view s) noexcept
    {
       if (s.empty()) {
          return {};
@@ -1399,7 +1572,7 @@ export namespace glz
       return {};
    }
 
-   GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       // Every standalone *it read below is guarded by it != end so the scan stays inside the
       // buffer for non-null-terminated input (the std::find_if_not calls are already bounded by
@@ -1411,6 +1584,12 @@ export namespace glz
       auto frac_start_it = end;
       if (it != end && *it == '0') {
          ++it;
+         // RFC 8259 section 6: number = [ minus ] int [ frac ] [ exp ]. The exponent may follow
+         // the integer part directly, with no fractional part in between (e.g. "0e4").
+         if (it != end && (*it | ('E' ^ 'e')) == 'e') {
+            ++it;
+            goto exp_start;
+         }
          if (it == end || *it != '.') {
             return;
          }
@@ -1448,7 +1627,7 @@ export namespace glz
    }
 
    // Options struct for skip_number - reduces template instantiations
-   struct skip_number_opts
+   export struct skip_number_opts
    {
       bool validate;
       bool null_terminated;
@@ -1465,8 +1644,8 @@ export namespace glz
       {}
    };
 
-   template <skip_number_opts Opts>
-   GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export template <skip_number_opts Opts>
+   export GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (not Opts.validate) {
          if constexpr (Opts.null_terminated) {
@@ -1487,7 +1666,7 @@ export namespace glz
    }
 
    // expects opening whitespace to be handled
-   GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       // TODO this assumes no escapes.
       if (bool(ctx.error)) [[unlikely]]
@@ -1503,13 +1682,13 @@ export namespace glz
       return sv{start, static_cast<glz::size_t>(it++ - start)};
    }
 
-   template <glz::size_t multiple>
-   GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const std::integral auto val) noexcept
+   export template <glz::size_t multiple>
+   export GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const std::integral auto val) noexcept
    {
       return val + (multiple - (val % multiple)) % multiple;
    }
 
-   struct utf8_stream_validator
+   export struct utf8_stream_validator
    {
       GLZ_ALWAYS_INLINE void reset() noexcept
       {

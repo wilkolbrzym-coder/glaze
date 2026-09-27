@@ -1,9 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/wrappers.hpp"
-// glz:header std=<cstring>
-// glz:header std=<string_view>
 // glz:header std=<type_traits>
+// glz:header include="glaze/core/custom.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/wrappers.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.wrappers;
 
 import std;
@@ -24,6 +28,37 @@ import glaze.concepts.container_concepts;
 
 export namespace glz
 {
+   template <class T>
+   struct from<JSON, quoted_t<T>>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+      {
+         ctx.scratch.clear();
+         parse<JSON>::op<Opts>(ctx.scratch, ctx, args...);
+         auto pe = glz::read<Opts>(value.val, ctx.scratch);
+         if (pe) [[unlikely]] {
+            ctx.error = pe.ec;
+         }
+      }
+   };
+
+   template <class T>
+   struct to<JSON, quoted_t<T>>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         std::string s{};
+         glz::size_t oix = 0; // overwrite index
+         using Value = core_t<decltype(value.val)>;
+         to<JSON, Value>::template op<Opts>(value.val, ctx, s, oix);
+         s.resize(oix);
+         using S = core_t<decltype(s)>;
+         to<JSON, S>::template op<Opts>(s, ctx, b, ix);
+      }
+   };
+
    template <class T>
    struct from<JSON, escape_bytes_t<T>>
    {

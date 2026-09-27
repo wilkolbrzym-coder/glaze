@@ -1,14 +1,27 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/api/impl.hpp"
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<span>
-// glz:header std=<string>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
+// glz:header include="glaze/api/api.hpp"
+// glz:header include="glaze/api/std/array.hpp"
+// glz:header include="glaze/api/std/deque.hpp"
+// glz:header include="glaze/api/std/functional.hpp"
+// glz:header include="glaze/api/std/list.hpp"
+// glz:header include="glaze/api/std/map.hpp"
+// glz:header include="glaze/api/std/optional.hpp"
+// glz:header include="glaze/api/std/shared_ptr.hpp"
+// glz:header include="glaze/api/std/string.hpp"
+// glz:header include="glaze/api/std/tuple.hpp"
+// glz:header include="glaze/api/std/unique_ptr.hpp"
+// glz:header include="glaze/api/std/variant.hpp"
+// glz:header include="glaze/api/std/vector.hpp"
+// glz:header include="glaze/api/tuplet.hpp"
+// glz:header include="glaze/api/type_support.hpp"
+// glz:header include="glaze/beve/read.hpp"
+// glz:header include="glaze/beve/write.hpp"
+// glz:header include="glaze/glaze.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.api.impl;
 
 import std;
@@ -54,9 +67,8 @@ import glaze.tuplet;
 export import glaze;
 
 import glaze.util.string_literal;
+import glaze.core.basic_types;
 
-using std::uint32_t;
-using std::size_t;
 
 namespace glz
 {
@@ -72,15 +84,15 @@ namespace glz
          return seek([&](auto&&) {}, user, path);
       }
 
-      bool read(const uint32_t format, const sv path, const sv data) noexcept override
+      bool read(const glz::uint32_t format, const sv path, const sv data) noexcept override
       {
          error_ctx pe{};
          bool success;
 
          if (format == JSON) {
             success = seek([&](auto&& val) { pe = glz::read<opts{}>(val, data); }, user, path);
-                  }
-                  else {
+         }
+         else {
             success = seek([&](auto&& val) { pe = glz::read<opts{.format = BEVE}>(val, data); }, user, path);
          }
 
@@ -93,7 +105,7 @@ namespace glz
          return false;
       }
 
-      bool write(const uint32_t format, const sv path, std::string& data) noexcept override
+      bool write(const glz::uint32_t format, const sv path, std::string& data) noexcept override
       {
          // TODO: Support write errors when seeking
          if (format == JSON) {
@@ -122,7 +134,7 @@ namespace glz
          return static_cast<V>(*reinterpret_cast<std::add_pointer_t<std::decay_t<T>>>(t));
       }
 
-      template <class Arg_tuple, class F, class Parent, size_t... Is>
+      template <class Arg_tuple, class F, class Parent, glz::size_t... Is>
          requires std::invocable<F, Parent, ref_t<glz::tuple_element_t<Is, Arg_tuple>>...>
       decltype(auto) call_args(F&& f, Parent&& parent, [[maybe_unused]] std::span<void*> args,
                                std::index_sequence<Is...>)

@@ -395,26 +395,16 @@ class Converter:
     def classify(self, include: Include, body_text: str) -> tuple[str, str | None]:
         """Return (treatment, module_name).
 
-        treatment is one of ``std`` (import std), ``module`` (import M) or
-        ``literal`` (kept verbatim in the fragment / body).
+        Every pre-code include is treated as a *textual* include that belongs in
+        the global module fragment.  This is deliberate: header-only Glaze code
+        relies on transitive includes and on macros defined by its dependencies,
+        and neither survives being replaced by ``import`` -- a module exports
+        declarations, never the transitive include set or the macros.  Keeping
+        the include textual in the fragment reproduces header-only compilation
+        exactly.  The only marker-worthy include is one whose spelling cannot be
+        compiled from the unit's location (a bare sibling name such as
+        ``types.hpp``), handled separately.
         """
-        if include.angle and include.inner in STD_HEADERS:
-            return "std", None
-        if include.angle and include.inner.startswith("glaze/"):
-            module = self.module_map.get(include.inner)
-            if module is None:
-                return "literal", None
-            if self.needs_textual(include, include.inner, body_text):
-                return "literal", None
-            return "module", module
-        if not include.angle:
-            target = resolve_project_include(include.inner, self.header_rel)
-            module = self.module_map.get(target)
-            if module is None:
-                return "literal", None
-            if self.needs_textual(include, target, body_text):
-                return "literal", None
-            return "module", module
         return "literal", None
 
     # -- entry point -----------------------------------------------------------
@@ -845,34 +835,32 @@ def convert_header(
 # ---------------------------------------------------------------------------
 
 def run_driver(args: argparse.Namespace) -> int:
-    repo = Path(args.repo).resolve()
     include_root = Path(args.include_root).resolve()
     modules_root = Path(args.modules_root).resolve()
     work = Path(args.work).resolve()
     gen_modules = work / "gen_modules"
     gen_headers = work / "gen_headers"
-    for d in (gen_modules, gen_headers):
-        if d.exists():
-            import shutil
+    if gen_modules.exists() or gen_headers.exists():
+        import shutil
 
-            shutil.rmtree(d)
-        d.mkdir(parents=True, exist_ok=True)
+        for d in (gen_modules, gen_headers):
+            if d.exists():
+                shutil.rmtree(d)
+    gen_modules.mkdir(parents=True, exist_ok=True)
+    gen_headers.mkdir(parents=True, exist_ok=True)
 
     module_map = load_module_map(modules_root)
-    try:
-        name_map = parse_name_map([Path(p) for p in args.name_map]) if args.name_map else None
-    except ConversionError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
+    name_map = parse_name_map([Path(p) for p in args.name_map]) if args.name_map else None
 
     headers = sorted(p for p in include_root.rglob("*.hpp") if p.relative_to(include_root).as_posix() in module_map)
     if args.limit:
         headers = headers[: args.limit]
 
-    rows: list[tuple[str, str, str, str]] = []
-    converted = 0
+    rows: dict[str, dict] = {}
     for header in headers:
         rel = header.relative_to(include_root).as_posix()
+        row = {"rel": rel, "roundtrip": "?", "compiles": "-", "hand": "-", "detail": "", "error": ""}
+        rows[rel] = row
         try:
             unit = convert_header(
                 header,
@@ -883,13 +871,16 @@ def run_driver(args: argparse.Namespace) -> int:
                 exports=not args.no_exports,
             )
         except ConversionError as exc:
-            rows.append((rel, "CONVERT-FAIL", "-", str(exc)[:60]))
+            row["roundtrip"] = "CONVERT-FAIL"
+            row["detail"] = str(exc)[:80]
             continue
         out = gen_modules / (rel[: -len(".hpp")] + ".ixx")
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(unit.text, encoding="utf-8", newline="\n")
-        converted += 1
+        hand = modules_root / (rel[: -len(".hpp")] + ".ixx")
+        row["hand"] = "same" if hand.exists() and hand.read_text() == unit.text else ("differs" if hand.exists() else "no-unit")
 
+    # Round trip: regenerate every header from the converted units.
     generator = Path(args.generator).resolve()
     manifest = Path(args.manifest).resolve() if args.manifest else None
     cmd = [
@@ -906,41 +897,219 @@ def run_driver(args: argparse.Namespace) -> int:
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         print("generator failed:", proc.returncode)
-        print(proc.stdout[-4000:])
-        print(proc.stderr[-4000:])
+        print((proc.stdout + proc.stderr)[-4000:])
 
-    # Round-trip check.
-    for header in headers:
-        rel = header.relative_to(include_root).as_posix()
-        produced = gen_headers / rel
-        if not produced.exists():
-            rows.append((rel, "ROUNDTRIP-FAIL", "-", "generator produced no header"))
+    for rel, row in rows.items():
+        if row["roundtrip"] == "CONVERT-FAIL":
             continue
-        a = header.read_bytes()
-        b = produced.read_bytes()
-        if a == b:
-            status = "OK"
-            detail = ""
+        produced = gen_headers / rel
+        original = include_root / rel
+        if produced.exists() and original.read_bytes() == produced.read_bytes():
+            row["roundtrip"] = "OK"
+        elif produced.exists():
+            row["roundtrip"] = "DIFF"
+            row["detail"] = "header differs"
         else:
-            status = "DIFF"
-            n = sum(1 for x, y in zip(a.splitlines(), b.splitlines()) if x != y)
-            detail = f"{n} differing lines"
-        # hand-written comparison
-        hand = modules_root / (rel[: -len(".hpp")] + ".ixx")
-        if hand.exists():
-            gen_text = (gen_modules / (rel[: -len(".hpp")] + ".ixx")).read_text()
-            diff = "same" if hand.read_text() == gen_text else "differs"
-        else:
-            diff = "no-hand-unit"
-        rows.append((rel, status, diff, detail))
+            row["roundtrip"] = "NOT-GENERATED"
 
-    ok = sum(1 for r in rows if r[1] == "OK")
-    print(f"converted {converted} header(s); round-trip OK {ok}/{len(rows)}")
-    for rel, status, diff, detail in rows:
-        if status != "OK":
-            print(f"  {status:14} {rel}  [{diff}] {detail}")
-    print("\nround-trip failures:", sum(1 for r in rows if r[1] != "OK"))
-    return 0 if ok == len(rows) else 1
+    if args.compile:
+        compile_units(rows, gen_modules, modules_root, include_root, args)
+
+    # Report.
+    total = len(rows)
+    rt_ok = sum(1 for r in rows.values() if r["roundtrip"] == "OK")
+    print(f"== glz_moduleize driver ==")
+    print(f"  headers converted      : {total}")
+    print(f"  round-trip byte-exact  : {rt_ok}/{total}")
+    if args.compile:
+        comp_ok = sum(1 for r in rows.values() if r["compiles"] == "OK")
+        print(f"  precompile OK          : {comp_ok}/{total}")
+        print(f"  identical to hand unit : {sum(1 for r in rows.values() if r['hand'] == 'same')}/{total}")
+    print()
+    if args.table:
+        widths = {"rel": 46, "roundtrip": 11, "compiles": 12, "hand": 8}
+        print(f"{'header':<{widths['rel']}} {'roundtrip':<{widths['roundtrip']}} {'compiles':<{widths['compiles']}} {'hand':<{widths['hand']}}")
+        for rel in sorted(rows):
+            r = rows[rel]
+            print(f"{rel:<{widths['rel']}} {r['roundtrip']:<{widths['roundtrip']}} {r['compiles']:<{widths['compiles']}} {r['hand']:<{widths['hand']}}")
+    failed = [r for r in rows.values() if r["roundtrip"] != "OK" or (args.compile and r["compiles"] not in ("OK",))]
+    if failed:
+        print("failures:")
+        for r in sorted(failed, key=lambda x: x["rel"]):
+            print(f"  [{r['roundtrip']}/{r['compiles']}] {r['rel']}  {r['detail']} {r['error'][:110]}")
+    ts = work / "report.tsv"
+    with ts.open("w", encoding="utf-8") as fh:
+        fh.write("header\troundtrip\tcompiles\thand\tdetail\n")
+        for rel in sorted(rows):
+            r = rows[rel]
+            fh.write(f"{rel}\t{r['roundtrip']}\t{r['compiles']}\t{r['hand']}\t{r['detail'] or r['error']}\n")
+    print(f"\nfull table: {ts}")
+    return 0 if rt_ok == total else 1
+
+
+# ---------------------------------------------------------------------------
+# Compilation (the second half of the proof)
+# ---------------------------------------------------------------------------
+
+INSERT_IMPORT_RE = re.compile(r"^\s*(?:export\s+)?import\s+([^;]+?)\s*;")
+
+
+def unit_name_and_imports(path: Path) -> tuple[str | None, set[str]]:
+    name = None
+    deps: set[str] = set()
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if name is None:
+            m = MODULE_DECL_RE.match(line)
+            if m:
+                name = m.group(1)
+                continue
+        m = INSERT_IMPORT_RE.match(line)
+        if m:
+            t = m.group(1).strip()
+            if t and t != "std":
+                deps.add(t)
+    return name, deps
+
+
+def discover_skip_units(modules_root: Path) -> dict[str, Path]:
+    """Units that carry ``glz:header skip`` (no public header, e.g. basic_types).
+
+    The generated units import these, so they have to be built too.
+    """
+    pool: dict[str, Path] = {}
+    for source in sorted(modules_root.rglob("*.ixx")):
+        text = source.read_text(encoding="utf-8", errors="replace")
+        if "glz:header skip" not in text:
+            continue
+        name, _ = unit_name_and_imports(source)
+        if name:
+            pool[name] = source
+    return pool
+
+
+def precompile_one(
+    cxx: str, std_pcm: Path, bmi_dir: Path, path: Path, name: str, includes: list[Path], timeout: int
+) -> tuple[bool, str]:
+    out = bmi_dir / f"{name.replace(':', '-')}.pcm"
+    cmd = [
+        cxx,
+        "-std=c++23",
+        "-stdlib=libc++",
+        "-x",
+        "c++-module",
+        "--precompile",
+        str(path),
+        "-o",
+        str(out),
+        f"-fmodule-file=std={std_pcm}",
+        f"-fprebuilt-module-path={bmi_dir}",
+    ]
+    for d in includes:
+        cmd += ["-I", str(d)]
+    cmd.append("-Wno-everything")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, f"timeout after {timeout}s"
+    if result.returncode == 0 and out.exists():
+        return True, ""
+    if out.exists():
+        out.unlink()
+    return False, (result.stdout + result.stderr).strip()
+
+
+def first_error(log: str) -> str:
+    for line in log.splitlines():
+        if " error:" in line or "fatal error" in line:
+            return line.strip()
+    return log.splitlines()[-1].strip() if log else ""
+
+
+def build_bmis(
+    pool: dict[str, Path], bmi_dir: Path, args: argparse.Namespace, includes: list[Path]
+) -> tuple[set[str], dict[str, str]]:
+    """Precompile every unit in ``pool`` in dependency order (fixpoint).
+
+    A unit is only attempted once all of its module imports have a BMI, so a
+    failure is never blamed on a dependency that was simply not built yet.
+    """
+    import concurrent.futures as cf
+
+    bmi_dir.mkdir(parents=True, exist_ok=True)
+    built: set[str] = set()
+    fails: dict[str, str] = {}
+    pending: dict[str, Path] = dict(pool)
+    while pending:
+        ready: list[tuple[str, Path]] = []
+        notready: dict[str, Path] = {}
+        for name, path in pending.items():
+            _, deps = unit_name_and_imports(path)
+            missing = [d for d in deps if d not in built]
+            if missing:
+                notready[name] = path
+            else:
+                ready.append((name, path))
+        if not ready:
+            for name in pending:
+                fails.setdefault(name, "unresolved import (missing module or import cycle)")
+            break
+        results: dict[str, tuple[bool, str]] = {}
+        with cf.ThreadPoolExecutor(max_workers=args.jobs) as ex:
+            futures = {
+                ex.submit(
+                    precompile_one, args.cxx, Path(args.std_pcm), bmi_dir, path, name, includes, args.compile_timeout
+                ): name
+                for name, path in ready
+            }
+            for future in cf.as_completed(futures):
+                results[futures[future]] = future.result()
+        progressed = False
+        for name, path in ready:
+            ok, log = results[name]
+            if ok:
+                built.add(name)
+                progressed = True
+            else:
+                notready[name] = path
+                fails[name] = log
+        if not progressed:
+            for name in notready:
+                fails.setdefault(name, "blocked: dependency not built")
+            break
+        pending = notready
+    return built, fails
+
+
+def compile_units(
+    rows: dict[str, dict],
+    gen_modules: Path,
+    modules_root: Path,
+    include_root: Path,
+    args: argparse.Namespace,
+) -> None:
+    pool: dict[str, Path] = {}
+    for source in sorted(gen_modules.rglob("*.ixx")):
+        name, _ = unit_name_and_imports(source)
+        if name:
+            pool[name] = source
+    pool.update(discover_skip_units(modules_root))
+
+    includes = [include_root, modules_root] + [Path(p).resolve() for p in args.extra_include]
+    built, fails = build_bmis(pool, Path(args.bmi_dir).resolve(), args, includes)
+
+    for row in rows.values():
+        if row["roundtrip"] == "CONVERT-FAIL":
+            continue
+        rel = row["rel"]
+        source = gen_modules / (rel[: -len(".hpp")] + ".ixx")
+        name, _ = unit_name_and_imports(source)
+        if name in built:
+            row["compiles"] = "OK"
+        elif name in fails:
+            row["compiles"] = "FAIL"
+            row["error"] = first_error(fails[name]) or fails[name][:110]
+        else:
+            row["compiles"] = "-"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -972,6 +1141,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Generator manifest (driver only)",
     )
     parser.add_argument("--limit", type=int, default=0, help="Only the first N headers (driver only)")
+    # compilation proof
+    parser.add_argument("--compile", action="store_true", help="Precompile the converted units (driver only)")
+    parser.add_argument("--table", action="store_true", help="Print the full per-header table (driver only)")
+    parser.add_argument("--cxx", default="clang++-22", help="Compiler for the compile proof (driver only)")
+    parser.add_argument(
+        "--std-pcm",
+        default="/home/bosyj/Projects/Modules - Glaze/toolchain/std.pcm",
+        help="Prebuilt std module (driver only)",
+    )
+    parser.add_argument("--bmi-dir", type=Path, default=Path("/tmp/glz-moduleize/bmi"), help="BMI output dir (driver only)")
+    parser.add_argument("--extra-include", action="append", default=[], help="Extra include dir (driver only)")
+    parser.add_argument("--compile-timeout", type=int, default=600, help="Per-unit compile timeout, seconds (driver only)")
+    parser.add_argument("--jobs", type=int, default=8, help="Parallel precompiles (driver only)")
     return parser.parse_args(argv)
 
 

@@ -8,7 +8,7 @@
 // glz:header include="glaze/json/read.hpp"
 // glz:header include="glaze/json/skip.hpp"
 // glz:header include="glaze/json/write.hpp"
-// glz:header include="glaze/tuplet/tuple.hpp // GLZ_NO_UNIQUE_ADDRESS"
+// glz:header include="glaze/util/attributes.hpp"
 // glz:header include="glaze/util/expected.hpp"
 // glz:header project_imports=ignore
 export module glaze.json.lazy;
@@ -67,6 +67,22 @@ export namespace glz
 
    namespace detail
    {
+      // lazy_json_view::get<std::string> unescapes its raw span by re-reading it through the JSON
+      // reader. That read is independent of the document's options except for UTF-8 validation,
+      // which the caller can turn off and must not be silently reinstated here.
+      struct lazy_string_opts : opts
+      {
+         bool validate_utf8 = true;
+      };
+
+      template <auto Opts>
+      consteval lazy_string_opts lazy_string_opts_for()
+      {
+         lazy_string_opts o{};
+         o.validate_utf8 = check_validate_utf8(Opts);
+         return o;
+      }
+
       // Skip string - returns position after closing quote
       template <auto Opts>
       GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
@@ -450,7 +466,7 @@ export namespace glz
          // short of the value's true end, so `it` is only the real extent when the parse
          // reported nothing at all.
          const bool consumed_whole_value = ctx.error == error_code::none;
-         finalize_read_context<Opts>(ctx);
+         finalize_read_context(ctx);
          if (bool(ctx.error)) {
             return error_ctx{static_cast<glz::size_t>(it - data_), ctx.error};
          }
@@ -1456,8 +1472,15 @@ export namespace glz
             return unexpected(error_ctx{0, ctx.error});
          }
          std::string_view raw{data_, static_cast<glz::size_t>(it - data_)};
-         return glz::read_json<std::string>(raw);
-         // read_json validates UTF-8, so the returned string is guaranteed well formed.
+         // The read validates UTF-8 unless the document's options turned it off, so the returned
+         // string is well formed whenever validation is enabled.
+         static constexpr auto string_opts = detail::lazy_string_opts_for<Opts>();
+         std::string unescaped{};
+         context read_ctx{};
+         if (const error_ctx ec = glz::read<string_opts>(unescaped, raw, read_ctx)) {
+            return unexpected(ec);
+         }
+         return unescaped;
       }
       else if constexpr (std::is_same_v<T, std::string_view>) {
          if (!is_string()) {
@@ -1580,7 +1603,7 @@ export namespace glz
 
          if constexpr (resizable<B>) {
             if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+               grow_buffer(b, ix + n);
             }
          }
          else {

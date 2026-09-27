@@ -1,7 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/patch.hpp"
-// glz:header std=<charconv>
 // glz:header std=<optional>
 // glz:header include="glaze/json/generic.hpp"
 // glz:header project_imports=ignore
@@ -98,6 +97,28 @@ struct glz::meta<glz::patch_op_type>
 {
    using enum glz::patch_op_type;
    static constexpr auto value = enumerate(add, remove, replace, move, copy, test);
+};
+
+// "value" is read through a custom setter so that a member which is present and JSON null is kept
+// distinct from a member that is absent: GenericType represents null itself, so reading into it
+// always engages the optional, while an absent member never calls the setter and stays nullopt.
+// Reading straight into std::optional<GenericType> would collapse both cases to nullopt and make
+// {"op":"add","path":"/a","value":null} indistinguishable from a malformed operation missing its
+// value. The getter hands back the optional so an absent value is still skipped when writing.
+template <class GenericType>
+struct glz::meta<glz::patch_op_t<GenericType>>
+{
+   using T = glz::patch_op_t<GenericType>;
+
+   static constexpr auto read_value = [](T& op, GenericType input) { op.value = std::move(input); };
+   static constexpr auto write_value = [](const T& op) -> const std::optional<GenericType>& { return op.value; };
+
+   static constexpr auto value =
+      glz::object("op", &T::op, "path", &T::path, "value", glz::custom<read_value, write_value>, "from", &T::from);
+
+   // RFC 6902 section 4: every operation carries "op" and "path". "value" and "from" are required
+   // only for particular operations, which apply_operation checks, so they are not required here.
+   static constexpr bool requires_key(const std::string_view key, const bool) { return key == "op" || key == "path"; }
 };
 
 namespace glz
@@ -219,26 +240,6 @@ namespace glz
 
          return std::pair<std::string_view, std::string>{parent, std::move(*token)};
       }
-
-      // Parse array index from string, returns nullopt for "-" (append) or invalid
-      [[nodiscard]] inline std::optional<glz::size_t> parse_array_index(std::string_view token)
-      {
-         if (token.empty()) return std::nullopt;
-
-         // "-" means append to end
-         if (token == "-") return std::nullopt;
-
-         // Leading zeros are not allowed (except "0" itself)
-         if (token.size() > 1 && token[0] == '0') return std::nullopt;
-
-         glz::size_t index = 0;
-         auto [ptr, ec] = std::from_chars(token.data(), token.data() + token.size(), index);
-         if (ec != std::errc{} || ptr != token.data() + token.size()) {
-            return std::nullopt;
-         }
-
-         return index;
-      }
    } // namespace detail
 
    // Navigate to parent of the target path and return the final key/index
@@ -337,7 +338,7 @@ namespace glz
                      arr.push_back(std::move(value));
                      return {};
                   }
-                  auto index_opt = detail::parse_array_index(*segment);
+                  auto index_opt = detail::parse_json_ptr_array_index(*segment);
                   if (!index_opt || *index_opt > arr.size()) {
                      return error_ctx{0, error_code::nonexistent_json_ptr};
                   }
@@ -366,7 +367,7 @@ namespace glz
                   current = &it->second;
                }
                else if (current->is_array()) {
-                  auto index_opt = detail::parse_array_index(*segment);
+                  auto index_opt = detail::parse_json_ptr_array_index(*segment);
                   if (!index_opt) {
                      return error_ctx{0, error_code::nonexistent_json_ptr};
                   }
@@ -403,7 +404,7 @@ namespace glz
             return {};
          }
 
-         auto index_opt = detail::parse_array_index(token);
+         auto index_opt = detail::parse_json_ptr_array_index(token);
          if (!index_opt) {
             return error_ctx{0, error_code::nonexistent_json_ptr};
          }
@@ -451,7 +452,7 @@ namespace glz
       else if (parent->is_array()) {
          auto& arr = parent->get_array();
 
-         auto index_opt = detail::parse_array_index(token);
+         auto index_opt = detail::parse_json_ptr_array_index(token);
          if (!index_opt) {
             return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
@@ -522,8 +523,9 @@ namespace glz
       [[nodiscard]] error_ctx apply_move(GenericType& doc, std::string_view from, std::string_view path,
                                          const patch_opts& opts)
       {
-         // Check for move into self (path cannot start with from)
-         if (path.starts_with(from) && (path.size() == from.size() || path[from.size()] == '/')) {
+         // RFC 6902 section 4.4: "from" MUST NOT be a proper prefix of "path", i.e. a location
+         // cannot be moved into one of its own children. Moving to the same location is a no-op.
+         if (path.size() > from.size() && path.starts_with(from) && path[from.size()] == '/') {
             return error_ctx{0, error_code::syntax_error};
          }
 
@@ -803,12 +805,17 @@ namespace glz
          return unexpected(document.error());
       }
 
-      auto ops = read_json<patch_document_t<GenericType>>(patch_json_str);
-      if (!ops) {
-         return unexpected(ops.error());
+      // RFC 6902 section 4: "op" and "path" are required on every operation, and members that are
+      // not explicitly defined for an operation are ignored. error_on_missing_keys requires exactly
+      // the non-nullable members, which are "op" and "path"; "value" and "from" stay optional.
+      // (glz::opts is qualified because the patch_opts parameter above is named opts)
+      constexpr glz::opts read_opts{.error_on_unknown_keys = false, .error_on_missing_keys = true};
+      patch_document_t<GenericType> ops{};
+      if (const auto ec = read<read_opts>(ops, patch_json_str); ec) {
+         return unexpected(ec);
       }
 
-      auto ec = patch(*document, *ops, opts);
+      auto ec = patch(*document, ops, opts);
       if (ec) {
          return unexpected(ec);
       }

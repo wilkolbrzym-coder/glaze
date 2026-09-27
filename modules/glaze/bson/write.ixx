@@ -17,6 +17,7 @@
 // glz:header include="glaze/core/reflect.hpp"
 // glz:header include="glaze/core/to.hpp"
 // glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/core/write_wrappers.hpp"
 // glz:header include="glaze/file/file_ops.hpp"
 // glz:header include="glaze/util/dump.hpp"
 // glz:header include="glaze/util/for_each.hpp"
@@ -266,16 +267,7 @@ namespace glz
       template <class T, auto Opts, glz::size_t I>
       consteval bool should_skip_reflected_field()
       {
-         using V = field_t<T, I>;
-         if constexpr (always_skipped<V>) {
-            return true;
-         }
-         else if constexpr (is_any_function_ptr<V>) {
-            return !check_write_function_pointers(Opts);
-         }
-         else {
-            return false;
-         }
+         return skipped_on_write<Opts, T, I>;
       }
    } // namespace bson_detail
 
@@ -456,14 +448,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
-         const std::string_view str = [&]() -> std::string_view {
-            if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<decltype(value)>>) {
-               return value ? std::string_view{value} : std::string_view{};
-            }
-            else {
-               return std::string_view{value};
-            }
-         }();
+         const std::string_view str = str_view<T>(value);
          (void)bson_detail::dump_string_value(ctx, str, b, ix);
       }
    };
@@ -683,6 +668,18 @@ namespace glz
          if constexpr (always_null_t<DT>) {
             (void)write_element_prefix(ctx, bson::type::null, key, b, ix);
          }
+         else if constexpr (is_specialization_v<DT, custom_t>) {
+            // The element type byte depends on what the getter yields, which may itself be nullable or
+            // a variant, so the getter is resolved here and its result dispatched like any other member.
+            unwrap_write_value(std::forward<T>(value), ctx, [&]<class Resolved>(Resolved&& resolved) {
+               if constexpr (is_specialization_v<std::remove_cvref_t<Resolved>, custom_t>) {
+                  static_assert(false_v<Resolved>, "glz::custom getter must be invocable on the parent object");
+               }
+               else {
+                  write_member_element<Opts>(key, std::forward<Resolved>(resolved), ctx, b, ix);
+               }
+            });
+         }
          else if constexpr (nullable_like<DT>) {
             if (value) {
                write_member_element<Opts>(key, *value, ctx, b, ix);
@@ -693,6 +690,13 @@ namespace glz
          }
          else if constexpr (is_variant<DT>) {
             std::visit([&](auto&& alt) { write_member_element<Opts>(key, alt, ctx, b, ix); }, std::forward<T>(value));
+         }
+         else if constexpr (!requires { to<BSON, DT>::type_code; }) {
+            // A value writer always has a type code, so this is a type BSON cannot write: either a
+            // rejection point such as glz::invoke's, or no to<BSON, DT> at all. Calling op directly makes
+            // the compiler report that (the rejection's static_assert, or the missing specialization)
+            // rather than the missing type_code, which some compilers diagnose first.
+            to<BSON, DT>::template op<Opts>(std::forward<T>(value), ctx, b, ix);
          }
          else {
             if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {
@@ -706,7 +710,8 @@ namespace glz
       // output under the given options (skip_null_members on an empty optional,
       // skip_default_members on a default-valued field, etc.).
       template <class T, auto Opts, glz::size_t I, class Value, class Tie>
-      GLZ_ALWAYS_INLINE bool should_skip_field_runtime(const Value& value, [[maybe_unused]] const Tie& t) noexcept
+      GLZ_ALWAYS_INLINE bool should_skip_field_runtime(const Value& value, [[maybe_unused]] const Tie& t,
+                                                       [[maybe_unused]] is_context auto& ctx) noexcept
       {
          using val_t = field_t<T, I>;
 
@@ -729,6 +734,9 @@ namespace glz
             else {
                if (!bool(get_member(value, member))) return true;
             }
+         }
+         else if constexpr (Opts.skip_null_members && custom_getter_returns_nullable<val_t>()) {
+            if (custom_getter_is_null(get_member(value, member), ctx)) return true;
          }
          if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
             if (is_default_value(get_member(value, member))) return true;
@@ -776,7 +784,7 @@ namespace glz
                return;
             }
             else {
-               if (bson_detail::should_skip_field_runtime<T, Opts, I>(value, t)) return;
+               if (bson_detail::should_skip_field_runtime<T, Opts, I>(value, t, ctx)) return;
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
@@ -829,7 +837,7 @@ namespace glz
             if constexpr (may_skip) {
                if (skip_member<Opts>(v)) continue;
             }
-            const std::string_view key_sv{k};
+            const std::string_view key_sv = str_view<std::remove_cvref_t<decltype(k)>>(k);
             bson_detail::write_member_element<Opts>(key_sv, v, ctx, b, ix);
          }
 

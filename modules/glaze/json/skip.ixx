@@ -1,6 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/skip.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<span>
+// glz:header std=<type_traits>
 // glz:header include="glaze/core/streaming_state.hpp"
 // glz:header include="glaze/util/parse.hpp"
 // glz:header project_imports=ignore

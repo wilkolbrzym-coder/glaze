@@ -24,6 +24,7 @@ export namespace glz
    template <class T>
    struct raw_string_t
    {
+      static constexpr bool glaze_wrapper = true;
       T& val;
    };
 
@@ -31,6 +32,7 @@ export namespace glz
    template <class T>
    struct escaped_t
    {
+      static constexpr bool glaze_wrapper = true;
       T& val;
    };
 

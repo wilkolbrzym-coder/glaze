@@ -1,16 +1,19 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/key_transformers.hpp"
-// glz:header std=<cstddef>
+// glz:header std=<cctype>
 // glz:header std=<string>
 // glz:header std=<string_view>
+// glz:header include="glaze/core/feature_test.hpp"
+// glz:header project_imports=ignore
+// glz:header trailing_newline=no
 export module glaze.util.key_transformers;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/core/feature_test.hpp"
 
-using std::size_t;
 
 namespace glz
 {
@@ -40,7 +43,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size());
       bool upper_next = false;
-      for (size_t i = 0; i < sv.size(); ++i) {
+      for (glz::size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
          if (c == '_') {
             // Skip underscore and set flag to uppercase next letter
@@ -67,7 +70,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size());
       bool upper_next = true; // Start with uppercase
-      for (size_t i = 0; i < sv.size(); ++i) {
+      for (glz::size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
          if (c == '_' && i + 1 < sv.size()) {
             upper_next = true;
@@ -91,7 +94,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size() * 2); // Reserve extra space for underscores
 
-      for (size_t i = 0; i < sv.size(); ++i) {
+      for (glz::size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
 
          if (is_upper(c)) {
@@ -125,7 +128,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size() * 2);
 
-      for (size_t i = 0; i < sv.size(); ++i) {
+      for (glz::size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
 
          if (c == '_') {
@@ -164,7 +167,7 @@ namespace glz
       out.reserve(sv.size() * 2);
 
       char prev = '\0';
-      for (size_t i = 0; i < sv.size(); ++i) {
+      for (glz::size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
 
          if (c == '_') {
@@ -196,7 +199,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size() * 2);
 
-      for (size_t i = 0; i < sv.size(); ++i) {
+      for (glz::size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
 
          if (c == '_') {

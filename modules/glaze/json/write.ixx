@@ -1217,7 +1217,7 @@ namespace glz
          return true;
       }
 
-      template <string_literal str, class B>
+      export template <string_literal str, class B>
       [[nodiscard]] GLZ_ALWAYS_INLINE bool emit_literal(is_context auto& ctx, B& out, glz::size_t& ix)
       {
          static constexpr auto s = str.sv();
@@ -1243,7 +1243,7 @@ namespace glz
       // Byte payloads have no JSON counterpart, so they are written as a string of two lowercase
       // hex digits per byte. The caller writes the surrounding quotes, which lets an indefinite
       // length payload be emitted chunk by chunk rather than assembled first.
-      template <class B>
+      export template <class B>
       [[nodiscard]] inline bool emit_hex_bytes(is_context auto& ctx, auto data, const glz::uint64_t n, B& out, glz::size_t& ix)
       {
          static constexpr char digits[] = "0123456789abcdef";

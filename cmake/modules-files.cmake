@@ -54,6 +54,7 @@ target_sources(${GLAZE_MODULES_TARGET}
       modules/glaze/core/streaming_state.ixx
       modules/glaze/core/to.ixx
       modules/glaze/core/traits.ixx
+      modules/glaze/core/tuple.ixx
       modules/glaze/core/wrapper_traits.ixx
       modules/glaze/core/wrappers.ixx
       modules/glaze/core/write.ixx
@@ -144,7 +145,7 @@ target_sources(${GLAZE_MODULES_TARGET}
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/api/hash.ixx
-    modules/glaze/api/tuplet.ixx
+    modules/glaze/api/tuple.ixx
     modules/glaze/api/type_support.ixx
     modules/glaze/api/xxh64.ixx
     modules/glaze/api/impl.ixx
@@ -203,8 +204,10 @@ target_sources(${GLAZE_MODULES_TARGET}
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/simd/avx.ixx
+    modules/glaze/simd/backends.ixx
     modules/glaze/simd/neon.ixx
     modules/glaze/simd/sse.ixx
+    modules/glaze/simd/structural.ixx
 )
 
 # reflection
@@ -277,6 +280,7 @@ target_sources(${GLAZE_MODULES_TARGET}
     modules/glaze/bson/read.ixx
     modules/glaze/bson/skip.ixx
     modules/glaze/bson/write.ixx
+    modules/glaze/bson/wrappers.ixx
 )
 
 # jsonb
@@ -361,6 +365,7 @@ target_sources(${GLAZE_MODULES_TARGET}
     modules/glaze/msgpack/read.ixx
     modules/glaze/msgpack/skip.ixx
     modules/glaze/msgpack/write.ixx
+    modules/glaze/msgpack/wrappers.ixx
 )
 
 # ext (external)

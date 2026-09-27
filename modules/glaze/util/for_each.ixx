@@ -1,21 +1,20 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/for_each.hpp"
-// glz:header std=<array>
-// glz:header std=<cstddef>
 // glz:header std=<tuple>
-// glz:header std=<type_traits>
 // glz:header std=<utility>
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.for_each;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
 // We do not mark these functions noexcept so that it can be used in exception contexts
 // Furthermore, adding noexcept can increase assembly size because exceptions need to cause termination
 
-using std::size_t;
 
 export namespace glz
 {
@@ -25,7 +24,7 @@ export namespace glz
    // the approach that passes std::integral_constant
 
    // Compile time iterate over I indices
-   template <size_t N>
+   template <glz::size_t N>
    inline constexpr void for_each(auto&& lambda)
    {
       if constexpr (N > 0) {
@@ -58,7 +57,7 @@ export namespace glz
    }
 
    // Runtime short circuiting if function returns true, return false to continue evaluation
-   template <size_t N>
+   template <glz::size_t N>
    constexpr void for_each_short_circuit(auto&& lambda)
    {
       if constexpr (N > 0) {
@@ -71,19 +70,19 @@ export namespace glz
    template <class Func, class Tuple>
    constexpr void for_each_apply(Func&& f, Tuple&& t)
    {
-      constexpr size_t N = std::tuple_size_v<std::decay_t<Tuple>>;
+      constexpr glz::size_t N = std::tuple_size_v<std::decay_t<Tuple>>;
       [&]<size_t... I>(std::index_sequence<I...>) { (f(std::get<I>(t)), ...); }(std::make_index_sequence<N>{});
    }
 
-   template <size_t I, class Lambda>
+   template <glz::size_t I, class Lambda>
    constexpr auto make_jump_function()
    {
       return +[](Lambda& l) { l.template operator()<I>(); };
    }
 
    // Important: index must be less than N
-   template <size_t N>
-   inline constexpr void visit(auto&& lambda, const size_t index)
+   template <glz::size_t N>
+   inline constexpr void visit(auto&& lambda, const glz::size_t index)
    {
       if constexpr (N > 0) {
          // Explicit sizes for small N to help the compiler and make debugging easier
@@ -327,7 +326,7 @@ export namespace glz
             // This code runs significantly slower on Clang
             // Simple tests with assembly show that this should be faster,
             // but full Glaze assembly need to be looked into
-            /*[&, index]<std::size_t... I>(std::index_sequence<I...>) {
+            /*[&, index]<size_t... I>(std::index_sequence<I...>) {
                (void)((index == I ? lambda.template operator()<I>() : void()), ...);
             }(std::make_index_sequence<N>{});*/
          }

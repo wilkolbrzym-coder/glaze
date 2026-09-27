@@ -99,6 +99,63 @@
 // glz:header pragma_once=none
 // glz:header trailing_blanks=1
 // glz:header blank_runs=2
+// glz:header std=<version> group=ff_version
+// glz:header std=<cfloat> group=ff_cfloat
+// glz:header std=<cstdint> group=ff_cstdint
+// glz:header std=<cassert> group=ff_cassert
+// glz:header std=<cstring> group=ff_cstring
+// glz:header std=<limits> group=ff_limits
+// glz:header std=<type_traits> group=ff_type_traits
+// glz:header std=<system_error> group=ff_system_error
+// glz:header std=<stdfloat> group=ff_stdfloat
+// glz:header std=<bit> group=ff_bit
+// glz:header std=<intrin.h> group=ff_intrin_h
+// glz:header std=<machine/endian.h> group=ff_machine_endian_h
+// glz:header std=<sys/byteorder.h> group=ff_sys_byteorder_h
+// glz:header std=<sys/endian.h> group=ff_sys_endian_h
+// glz:header std=<endian.h> group=ff_endian_h
+// glz:header std=<cctype> group=ff_cctype
+// glz:header std=<iterator> group=ff_iterator
+// glz:header std=<emmintrin.h> group=ff_emmintrin_h
+// glz:header std=<arm_neon.h> group=ff_arm_neon_h
+// glz:header std=<cinttypes> group=ff_cinttypes
+// glz:header std=<cmath> group=ff_cmath
+// glz:header std=<cstdlib> group=ff_cstdlib
+// glz:header std=<algorithm> group=ff_algorithm
+// glz:header std=<climits> group=ff_climits
+module;
+// glz:module-only
+// The vendored body needs a handful of C headers textually (macros and the
+// global ::memcpy / SIMD intrinsics); macros never cross an import boundary,
+// and import std only exposes the std:: spellings.  The generated header keeps
+// its own includes from the glz:emit markers in the body, so none of this
+// reaches it.
+#include <algorithm>
+#include <bit>
+#include <cassert>
+#include <cctype>
+#include <cfloat>
+#include <cinttypes>
+#include <climits>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <iterator>
+#include <limits>
+#include <string.h>
+#include <system_error>
+#include <type_traits>
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#endif
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+#endif
+// glz:end-module-only
 export module glaze.util.fast_float;
 
 import std;
@@ -110,7 +167,7 @@ import glaze.core.basic_types;
 
 #ifdef __has_include
 #if __has_include(<version>)
-#include <version>
+// glz:emit ff_version
 #endif
 #endif
 
@@ -162,16 +219,16 @@ import glaze.core.basic_types;
 #ifndef GLZ_FASTFLOAT_FLOAT_COMMON_H
 #define GLZ_FASTFLOAT_FLOAT_COMMON_H
 
-#include <cfloat>
-#include <cstdint>
-#include <cassert>
-#include <cstring>
-#include <limits>
-#include <type_traits>
-#include <system_error>
+// glz:emit ff_cfloat
+// glz:emit ff_cstdint
+// glz:emit ff_cassert
+// glz:emit ff_cstring
+// glz:emit ff_limits
+// glz:emit ff_type_traits
+// glz:emit ff_system_error
 #ifdef __has_include
 #if __has_include(<stdfloat>) && (__cplusplus > 202002L || (defined(_MSVC_LANG) && (_MSVC_LANG > 202002L)))
-#include <stdfloat>
+// glz:emit ff_stdfloat
 #endif
 #endif
 
@@ -240,7 +297,7 @@ using parse_options = parse_options_t<char>;
 } // namespace glz::fast_float
 
 #if GLZ_FASTFLOAT_HAS_BIT_CAST
-#include <bit>
+// glz:emit ff_bit
 #endif
 
 #if (defined(__x86_64) || defined(__x86_64__) || defined(_M_X64) ||            \
@@ -272,7 +329,7 @@ using parse_options = parse_options_t<char>;
 
 #if ((defined(_WIN32) || defined(_WIN64)) && !defined(__clang__)) ||           \
     (defined(_M_ARM64) && !defined(__MINGW32__))
-#include <intrin.h>
+// glz:emit ff_intrin_h
 #endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -285,15 +342,15 @@ using parse_options = parse_options_t<char>;
 #define GLZ_FASTFLOAT_IS_BIG_ENDIAN 0
 #else
 #if defined(__APPLE__) || defined(__FreeBSD__)
-#include <machine/endian.h>
+// glz:emit ff_machine_endian_h
 #elif defined(sun) || defined(__sun)
-#include <sys/byteorder.h>
+// glz:emit ff_sys_byteorder_h
 #elif defined(__MVS__)
-#include <sys/endian.h>
+// glz:emit ff_sys_endian_h
 #else
 #ifdef __has_include
 #if __has_include(<endian.h>)
-#include <endian.h>
+// glz:emit ff_endian_h
 #endif //__has_include(<endian.h>)
 #endif //__has_include
 #endif
@@ -1460,20 +1517,20 @@ from_chars(UC const *first, UC const *last, T &value, int base = 10) noexcept;
 #ifndef GLZ_FASTFLOAT_ASCII_NUMBER_H
 #define GLZ_FASTFLOAT_ASCII_NUMBER_H
 
-#include <cctype>
-#include <cstdint>
-#include <cstring>
-#include <iterator>
-#include <limits>
-#include <type_traits>
+// glz:emit ff_cctype
+// glz:emit ff_cstdint
+// glz:emit ff_cstring
+// glz:emit ff_iterator
+// glz:emit ff_limits
+// glz:emit ff_type_traits
 
 
 #ifdef GLZ_FASTFLOAT_SSE2
-#include <emmintrin.h>
+// glz:emit ff_emmintrin_h
 #endif
 
 #ifdef GLZ_FASTFLOAT_NEON
-#include <arm_neon.h>
+// glz:emit ff_arm_neon_h
 #endif
 
 namespace glz::fast_float {
@@ -2054,7 +2111,7 @@ parse_int_string(UC const *p, UC const *pend, T &value,
 #ifndef GLZ_FASTFLOAT_FAST_TABLE_H
 #define GLZ_FASTFLOAT_FAST_TABLE_H
 
-#include <cstdint>
+// glz:emit ff_cstdint
 
 namespace glz::fast_float {
 
@@ -2763,12 +2820,12 @@ using powers = powers_template<>;
 #ifndef GLZ_FASTFLOAT_DECIMAL_TO_BINARY_H
 #define GLZ_FASTFLOAT_DECIMAL_TO_BINARY_H
 
-#include <cfloat>
-#include <cinttypes>
-#include <cmath>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
+// glz:emit ff_cfloat
+// glz:emit ff_cinttypes
+// glz:emit ff_cmath
+// glz:emit ff_cstdint
+// glz:emit ff_cstdlib
+// glz:emit ff_cstring
 
 namespace glz::fast_float {
 
@@ -2974,10 +3031,10 @@ compute_float(glz::int64_t q, glz::uint64_t w) noexcept {
 #ifndef GLZ_FASTFLOAT_BIGINT_H
 #define GLZ_FASTFLOAT_BIGINT_H
 
-#include <algorithm>
-#include <climits>
-#include <cstdint>
-#include <cstring>
+// glz:emit ff_algorithm
+// glz:emit ff_climits
+// glz:emit ff_cstdint
+// glz:emit ff_cstring
 
 
 namespace glz::fast_float {
@@ -3612,10 +3669,10 @@ struct bigint : pow5_tables<> {
 #ifndef GLZ_FASTFLOAT_DIGIT_COMPARISON_H
 #define GLZ_FASTFLOAT_DIGIT_COMPARISON_H
 
-#include <algorithm>
-#include <cstdint>
-#include <cstring>
-#include <iterator>
+// glz:emit ff_algorithm
+// glz:emit ff_cstdint
+// glz:emit ff_cstring
+// glz:emit ff_iterator
 
 
 namespace glz::fast_float {
@@ -4068,10 +4125,10 @@ digit_comp(parsed_number_string_t<UC> &num, adjusted_mantissa am) noexcept {
 #define GLZ_FASTFLOAT_PARSE_NUMBER_H
 
 
-#include <cmath>
-#include <cstring>
-#include <limits>
-#include <system_error>
+// glz:emit ff_cmath
+// glz:emit ff_cstring
+// glz:emit ff_limits
+// glz:emit ff_system_error
 
 namespace glz::fast_float {
 

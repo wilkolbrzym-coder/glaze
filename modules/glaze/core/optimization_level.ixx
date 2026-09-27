@@ -1,13 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/optimization_level.hpp"
-// glz:header std=<charconv>
 // glz:header std=<cstdint>
+// glz:header project_imports=ignore
 export module glaze.core.optimization_level;
 
 import std;
+import glaze.core.basic_types;
 
-using std::uint8_t;
 
 namespace glz
 {
@@ -22,7 +22,7 @@ namespace glz
    //
    // ============================================================================
 
-   export enum struct optimization_level : uint8_t {
+   export enum struct optimization_level : glz::uint8_t {
       // -------------------------------------------------------------------------
       // SIZE (Level 0)
       // -------------------------------------------------------------------------

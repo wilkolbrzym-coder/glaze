@@ -1,28 +1,41 @@
-#pragma once
+// glz:header path="glaze/net/websocket_client.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<atomic>
+// glz:header std=<cctype>
+// glz:header std=<cstdint>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<random>
+// glz:header std=<string>
+// glz:header std=<variant>
+// glz:header std=<vector>
+// glz:header include="glaze/net/http_client.hpp"
+// glz:header include="glaze/net/websocket_connection.hpp"
+// glz:header include="glaze/util/itoa.hpp"
+// glz:header project_imports=ignore
+// glz:header license=none
+// glz:header license_gap=none
+module;
 
-#include <algorithm>
-#include <atomic>
-#include <cctype>
-#include <cstdint>
-#include <memory>
-#include <mutex>
-#include <random>
-#include <string>
-#include <variant>
-#include <vector>
+// glz:emit std
 
-#include "glaze/net/http_client.hpp"
-#include "glaze/net/websocket_connection.hpp"
-#include "glaze/util/itoa.hpp"
+// glz:emit project
 
-using std::uint16_t;
-using std::size_t;
+export module glaze.net.websocket_client;
 
-namespace glz
+import std;
+
+import glaze.core.basic_types;
+import glaze.net.http_client;
+import glaze.net.websocket_connection;
+import glaze.util.itoa;
+
+
+export namespace glz
 {
    struct websocket_client
    {
-      enum class header_validation_error : uint8_t {
+      enum class header_validation_error : glz::uint8_t {
          none,
          empty_name,
          reserved_name,
@@ -69,7 +82,7 @@ namespace glz
          std::vector<std::pair<std::string, std::string>> request_headers_;
          std::atomic<header_validation_error> last_header_validation_error_{header_validation_error::none};
 
-         size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
+         glz::size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
 #ifdef GLZ_ENABLE_SSL
          asio::ssl::verify_mode ssl_verify_mode_{asio::ssl::verify_peer}; // Default to verify peer
 #endif
@@ -321,7 +334,7 @@ namespace glz
             // Generate random Sec-WebSocket-Key
             std::string key_bytes(16, '\0');
             std::mt19937 rng(std::random_device{}());
-            std::uniform_int_distribution<uint16_t> dist(0, 255);
+            std::uniform_int_distribution<glz::uint16_t> dist(0, 255);
             for (auto& b : key_bytes) b = static_cast<char>(dist(rng));
             std::string key = glz::write_base64(key_bytes);
 
@@ -331,7 +344,7 @@ namespace glz
                                  // internals
                auto* end = glz::to_chars(port_buf, url.port);
                host_str.push_back(':');
-               host_str.append(port_buf, static_cast<size_t>(end - port_buf));
+               host_str.append(port_buf, static_cast<glz::size_t>(end - port_buf));
             }
 
             std::string handshake = "GET " + url.path + " HTTP/1.1\r\n" + "Host: " + host_str + "\r\n" +
@@ -362,7 +375,7 @@ namespace glz
          template <typename SocketType>
          void read_handshake_response(std::shared_ptr<SocketType> socket, const std::string& expected_key)
          {
-            static constexpr size_t max_handshake_size = 1024 * 16;
+            static constexpr glz::size_t max_handshake_size = 1024 * 16;
             auto response_buf = std::make_shared<asio::streambuf>(max_handshake_size);
             std::weak_ptr<impl> weak_self = weak_from_this();
 
@@ -448,7 +461,7 @@ namespace glz
                                       if (self->on_open && *self->on_open) (*self->on_open)();
 
                                       if (response_buf->size() > 0) {
-                                         std::vector<uint8_t> initial_data(response_buf->size());
+                                         std::vector<glz::uint8_t> initial_data(response_buf->size());
                                          asio::buffer_copy(asio::buffer(initial_data), response_buf->data());
                                          ws_conn->set_initial_data(std::move(initial_data));
                                       }
@@ -530,7 +543,7 @@ namespace glz
          impl_->on_error = std::make_shared<error_handler_t>(std::move(handler));
       }
 
-      void set_max_message_size(size_t size) { impl_->max_message_size = size; }
+      void set_max_message_size(glz::size_t size) { impl_->max_message_size = size; }
 
 #ifdef GLZ_ENABLE_SSL
       // Set SSL verification mode before calling connect()

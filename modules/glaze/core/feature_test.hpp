@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
-# pragma once
+
+#pragma once
+
 // Detect constexpr std::string support
 // The old GCC ABI (_GLIBCXX_USE_CXX11_ABI=0) does not have constexpr std::string::size()
 // This affects features like rename_key returning std::string
@@ -153,7 +155,7 @@ namespace glz
 //
 // Return types:
 // - Raw buffer writes (write_json(value, char*)) now return error_ctx
-//   instead of expected<std::size_t, error_ctx>. Byte count is in error_ctx::count.
+//   instead of expected<size_t, error_ctx>. Byte count is in error_ctx::count.
 //
 // New error code:
 // - error_code::buffer_overflow: Returned when writing to fixed-size buffers
@@ -202,5 +204,5 @@ namespace glz
 
 // v3.5.0 change glz::detail::to_json and glz::detail::from_json specializations
 // to glz::to<JSON and glz::from<JSON
-// The template specialization takes a std::uint32_t Format as the first template parameter
+// The template specialization takes a uint32_t Format as the first template parameter
 #define glaze_v3_5_0_to_from

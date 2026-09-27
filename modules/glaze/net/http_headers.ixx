@@ -1,29 +1,42 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/net/http_headers.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<optional>
+// glz:header std=<ranges>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<vector>
+// glz:header include="glaze/util/attributes.hpp"
+// glz:header include="glaze/util/compare.hpp"
+// glz:header project_imports=ignore
+// glz:header trailing_newline=no
+module;
 
-#pragma once
+// glz:emit std
 
-#include <algorithm>
-#include <optional>
-#include <ranges>
-#include <string>
-#include <string_view>
-#include <vector>
+// glz:emit project
+
+export module glaze.net.http_headers;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.util.compare;
 
 #include "glaze/util/attributes.hpp"
-#include "glaze/util/compare.hpp"
 
-namespace glz
+export namespace glz
 {
    namespace detail
    {
       [[nodiscard]] inline std::string_view trim_optional_whitespace(std::string_view text)
       {
-         size_t first_non_whitespace = text.find_first_not_of(" \t");
+         glz::size_t first_non_whitespace = text.find_first_not_of(" \t");
          if (first_non_whitespace == std::string_view::npos) {
             return {};
          }
-         size_t last_non_whitespace = text.find_last_not_of(" \t");
+         glz::size_t last_non_whitespace = text.find_last_not_of(" \t");
          return text.substr(first_non_whitespace, last_non_whitespace - first_non_whitespace + 1);
       }
    } // namespace detail
@@ -67,7 +80,7 @@ namespace glz
         public:
          using iterator_concept = std::forward_iterator_tag;
          using iterator_category = std::forward_iterator_tag;
-         using difference_type = ptrdiff_t;
+         using difference_type = glz::ptrdiff_t;
          using value_type = http_headers::value_type;
          using reference = std::conditional_t<IsConst, const value_type&, value_type&>;
          using pointer = std::conditional_t<IsConst, const value_type*, value_type*>;
@@ -79,7 +92,7 @@ namespace glz
          matching_iterator& operator=(matching_iterator&&) = default;
          ~matching_iterator() = default;
 
-         matching_iterator(owner_type owner, size_t start_index, std::string_view key)
+         matching_iterator(owner_type owner, glz::size_t start_index, std::string_view key)
             : owner_(owner), index_(start_index), key_(key)
          {
             seek_forward();
@@ -122,7 +135,7 @@ namespace glz
          }
 
          owner_type owner_{};
-         size_t index_{0};
+         glz::size_t index_{0};
          std::string_view key_;
       };
 
@@ -194,7 +207,7 @@ namespace glz
                                   [](const http_header& field) noexcept -> std::string_view { return field.value; });
       }
 
-      [[nodiscard]] size_t count(std::string_view name) const& noexcept
+      [[nodiscard]] glz::size_t count(std::string_view name) const& noexcept
       {
          return std::ranges::count_if(
             headers_, [name](const http_header& field) noexcept { return glz::striequal(field.name, name); });
@@ -229,7 +242,7 @@ namespace glz
          // A single range loop on the headers to reserve space, and a second
          // one for appending, will be much faster than potentially frequent
          // reallocations within a single append-loop
-         size_t expected_length{};
+         glz::size_t expected_length{};
          for (const auto& [name, value] : headers_) {
             expected_length += name.length() + value.length() + value_separator.length() + crlf.length();
          }

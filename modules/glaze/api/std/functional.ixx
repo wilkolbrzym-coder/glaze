@@ -1,9 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/api/std/functional.hpp"
-// glz:header std=<cstddef>
 // glz:header std=<functional>
-// glz:header std=<string_view>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/meta.hpp"
+// glz:header project_imports=ignore
 export module glaze.api.std.functional;
 
 import std;
@@ -13,14 +14,14 @@ import glaze.core.meta;
 import glaze.tuplet;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 export namespace glz
 {
    namespace detail
    {
-      template <const std::string_view& Str, class Tuple, size_t I = 0>
+      template <const std::string_view& Str, class Tuple, glz::size_t I = 0>
       struct expander
       {
          static constexpr auto impl() noexcept
@@ -44,10 +45,10 @@ export namespace glz
       constexpr std::string_view expander_v = expander<Str, Tuple>::value;
    }
 
-   template<class T>
+   template <class T>
    concept function = is_specialization_v<T, std::function>;
 
-   template<function T>
+   template <function T>
    struct meta<T>
    {
       static constexpr auto impl() noexcept

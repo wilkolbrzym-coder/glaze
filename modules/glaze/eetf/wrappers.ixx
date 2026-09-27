@@ -1,13 +1,27 @@
-#pragma once
+// glz:header path="glaze/eetf/wrappers.hpp"
+// glz:header include="opts.hpp" group=g_rel0
+// glz:header include="read.hpp" group=g_rel0
+// glz:header include="types.hpp" group=g_rel0
+// glz:header include="write.hpp" group=g_rel0
+// glz:header project_imports=ignore
+module;
+// glz:module-only
+#include "glaze/concepts/container_concepts.hpp"
+#include "glaze/eetf/opts.hpp"
+#include "glaze/eetf/read.hpp"
+#include "glaze/eetf/types.hpp"
+#include "glaze/eetf/write.hpp"
+// glz:end-module-only
 
 #include <glaze/core/wrappers.hpp>
 
-#include "opts.hpp"
-#include "read.hpp"
-#include "types.hpp"
-#include "write.hpp"
+// glz:emit g_rel0
+export module glaze.eetf.wrappers;
 
-namespace glz
+import std;
+import glaze.core.basic_types;
+
+export namespace glz
 {
    template <class T>
    struct atom_as_string_t

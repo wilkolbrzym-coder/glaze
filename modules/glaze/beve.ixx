@@ -1,6 +1,17 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/beve.hpp"
+// glz:header include="glaze/beve/header.hpp"
+// glz:header include="glaze/beve/lazy.hpp"
+// glz:header include="glaze/beve/ptr.hpp"
+// glz:header include="glaze/beve/read.hpp"
+// glz:header include="glaze/beve/size.hpp"
+// glz:header include="glaze/beve/wrappers.hpp"
+// glz:header include="glaze/beve/write.hpp"
+// glz:header include="glaze/core/as_array_wrapper.hpp"
+// glz:header include="glaze/core/wrapper_traits.hpp"
+// glz:header include="glaze/thread/atomic.hpp"
+// glz:header project_imports=ignore
 export module glaze.beve;
 
 export import glaze.core.as_array_wrapper;

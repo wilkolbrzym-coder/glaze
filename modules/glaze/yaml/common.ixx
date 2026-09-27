@@ -1,7 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
-
-#pragma once
+// glz:header path="glaze/yaml/common.hpp"
+// glz:header project_imports=ignore
+module;
 
 #include <array>
 #include <cctype>
@@ -14,13 +15,13 @@
 #include "glaze/core/common.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/yaml/opts.hpp"
+// glz:emit std
+export module glaze.yaml.common;
 
-using std::uint8_t;
-using std::int16_t;
-using std::int32_t;
-using std::size_t;
+import std;
+import glaze.core.basic_types;
 
-namespace glz::yaml
+export namespace glz::yaml
 {
    // YAML-specific context extending the base context
    // Adds indent tracking needed for block-style parsing
@@ -29,21 +30,21 @@ namespace glz::yaml
       // Indent stack for block-style parsing.
       // Empty stack == top level (equivalent to indent of -1).
       // back() gives the current block indent level.
-      std::vector<int16_t> indent_stack = [] {
-         std::vector<int16_t> v;
+      std::vector<glz::int16_t> indent_stack = [] {
+         std::vector<glz::int16_t> v;
          v.reserve(max_recursive_depth_limit);
          return v;
       }();
 
-      int32_t current_indent() const noexcept { return indent_stack.empty() ? int32_t(-1) : indent_stack.back(); }
+      glz::int32_t current_indent() const noexcept { return indent_stack.empty() ? glz::int32_t(-1) : indent_stack.back(); }
 
-      bool push_indent(int32_t indent) noexcept
+      bool push_indent(glz::int32_t indent) noexcept
       {
          if (indent_stack.size() >= max_recursive_depth_limit) [[unlikely]] {
             error = error_code::exceeded_max_recursive_depth;
             return false;
          }
-         indent_stack.push_back(static_cast<int16_t>(indent));
+         indent_stack.push_back(static_cast<glz::int16_t>(indent));
          return true;
       }
 
@@ -59,14 +60,14 @@ namespace glz::yaml
       {
          const char* begin{};
          const char* end{};
-         int32_t base_indent{};
+         glz::int32_t base_indent{};
       };
 
       struct transparent_string_hash
       {
          using is_transparent = void;
 
-         size_t operator()(std::string_view key) const noexcept { return std::hash<std::string_view>{}(key); }
+         glz::size_t operator()(std::string_view key) const noexcept { return std::hash<std::string_view>{}(key); }
       };
 
       struct transparent_string_equal
@@ -86,13 +87,13 @@ namespace glz::yaml
       // when handing a custom alternative's body (which sits at the variant's own column,
       // not nested deeper) to a discover-mode reader such as the map reader. -1 == unset.
       // Consumed (and reset) by the first parse_block_mapping_loop that observes it.
-      int32_t forced_block_mapping_indent = -1;
+      glz::int32_t forced_block_mapping_indent = -1;
 
       // Column of the enclosing block-sequence '-' indicator (-1 when not inside
       // a block sequence item).  Used by plain-scalar multiline folding to decide
       // whether a continuation-line '- ' is a sibling entry (terminate) or plain
       // content (continue).
-      int32_t sequence_dash_indent = -1;
+      glz::int32_t sequence_dash_indent = -1;
 
       // True while parsing an explicit block mapping key ("? key").
       // Used by plain-scalar folding to terminate on explicit key/value indicators.
@@ -137,7 +138,7 @@ struct glz::format_context<glz::YAML>
    using type = glz::yaml::yaml_context;
 };
 
-namespace glz::yaml
+export namespace glz::yaml
 {
    // Lookup table for characters that can start a plain scalar in flow context
    // In flow context, these are NOT allowed: [ ] { } , : # ' " | > @ ` \n \r
@@ -344,7 +345,7 @@ namespace glz::yaml
    }();
 
    // Scalar style detection
-   enum struct scalar_style : uint8_t {
+   enum struct scalar_style : glz::uint8_t {
       plain, // unquoted
       single_quoted, // 'string'
       double_quoted, // "string"
@@ -353,7 +354,7 @@ namespace glz::yaml
    };
 
    // YAML core schema tags
-   enum struct yaml_tag : uint8_t {
+   enum struct yaml_tag : glz::uint8_t {
       none, // No tag present (or unrecognized custom tag — silently ignored)
       str, // !!str
       int_tag, // !!int
@@ -405,11 +406,11 @@ namespace glz::yaml
 
          // Read tag name
          auto tag_start = it;
-         while (it != end && !plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
+         while (it != end && !plain_scalar_end_table[static_cast<glz::uint8_t>(*it)]) {
             ++it;
          }
 
-         std::string_view tag_name(tag_start, static_cast<size_t>(it - tag_start));
+         std::string_view tag_name(tag_start, static_cast<glz::size_t>(it - tag_start));
          if (tag_name.empty() || malformed_tag_token(tag_name)) {
             return yaml_tag::unknown;
          }
@@ -450,7 +451,7 @@ namespace glz::yaml
             return yaml_tag::unknown;
          }
 
-         std::string_view tag_uri(tag_start, static_cast<size_t>(it - tag_start));
+         std::string_view tag_uri(tag_start, static_cast<glz::size_t>(it - tag_start));
          if (tag_uri.empty() || malformed_tag_token(tag_uri)) {
             return yaml_tag::unknown;
          }
@@ -479,10 +480,10 @@ namespace glz::yaml
 
       // Named tag !name - skip it and read name
       auto tag_start = it;
-      while (it != end && !plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
+      while (it != end && !plain_scalar_end_table[static_cast<glz::uint8_t>(*it)]) {
          ++it;
       }
-      std::string_view tag_name(tag_start, static_cast<size_t>(it - tag_start));
+      std::string_view tag_name(tag_start, static_cast<glz::size_t>(it - tag_start));
       if (!tag_name.empty() && malformed_tag_token(tag_name)) {
          return yaml_tag::unknown;
       }
@@ -813,7 +814,7 @@ namespace glz::yaml
          while (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
             ++it;
          }
-         std::string_view directive_name(name_start, static_cast<size_t>(it - name_start));
+         std::string_view directive_name(name_start, static_cast<glz::size_t>(it - name_start));
 
          // Check for %YAML directive
          if (directive_name == "YAML") {
@@ -895,7 +896,7 @@ namespace glz::yaml
             while (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
                ++it;
             }
-            const std::string_view handle(handle_start, static_cast<size_t>(it - handle_start));
+            const std::string_view handle(handle_start, static_cast<glz::size_t>(it - handle_start));
 
             while (it != end && (*it == ' ' || *it == '\t')) {
                ++it;
@@ -905,7 +906,7 @@ namespace glz::yaml
             while (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
                ++it;
             }
-            const std::string_view prefix(prefix_start, static_cast<size_t>(it - prefix_start));
+            const std::string_view prefix(prefix_start, static_cast<glz::size_t>(it - prefix_start));
 
             if (handle.empty() || prefix.empty()) {
                ctx.error = error_code::syntax_error;
@@ -1009,9 +1010,9 @@ namespace glz::yaml
    // error_on_tab=false: only errors on tab at position 0 (pure tab indentation) — for block
    //   scalars where tabs after indentation spaces are valid content characters.
    template <bool error_on_tab = true, class It, class End, class Ctx>
-   inline int32_t measure_indent(It&& it, End end, Ctx& ctx) noexcept
+   inline glz::int32_t measure_indent(It&& it, End end, Ctx& ctx) noexcept
    {
-      int32_t indent = 0;
+      glz::int32_t indent = 0;
       while (it != end && *it == ' ') {
          ++indent;
          ++it;
@@ -1034,7 +1035,7 @@ namespace glz::yaml
 
    // Skip to next line and return new indentation level
    template <class It, class End, class Ctx>
-   inline int32_t skip_to_next_content_line(It&& it, End end, Ctx& ctx) noexcept
+   inline glz::int32_t skip_to_next_content_line(It&& it, End end, Ctx& ctx) noexcept
    {
       while (it != end) {
          // Skip to end of current line
@@ -1049,12 +1050,12 @@ namespace glz::yaml
 
          // Measure indent of new line
          auto start = it;
-         int32_t indent = measure_indent(it, end, ctx);
+         glz::int32_t indent = measure_indent(it, end, ctx);
          if (bool(ctx.error)) return -1;
 
          // Check if this is a content line (not blank, not comment-only)
          skip_inline_ws(it, end);
-         if (it != end && !line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+         if (it != end && !line_end_or_comment_table[static_cast<glz::uint8_t>(*it)]) {
             it = start; // Reset to start of line
             return indent;
          }
@@ -1094,7 +1095,7 @@ namespace glz::yaml
          }
          ++it;
       }
-      return std::string_view(&*start, static_cast<size_t>(it - start));
+      return std::string_view(&*start, static_cast<glz::size_t>(it - start));
    }
 
    // Detect scalar style from first character
@@ -1117,13 +1118,13 @@ namespace glz::yaml
    // Check if character can start a plain scalar in flow context
    inline constexpr bool can_start_plain_flow(char c) noexcept
    {
-      return can_start_plain_flow_table[static_cast<uint8_t>(c)];
+      return can_start_plain_flow_table[static_cast<glz::uint8_t>(c)];
    }
 
    // Check if character can start a plain scalar in block context
    inline constexpr bool can_start_plain_block(char c) noexcept
    {
-      return can_start_plain_block_table[static_cast<uint8_t>(c)];
+      return can_start_plain_block_table[static_cast<glz::uint8_t>(c)];
    }
 
    // Check if string looks like a boolean
@@ -1139,7 +1140,7 @@ namespace glz::yaml
    }
 
    // Check if character is a YAML indicator that needs quoting
-   inline constexpr bool is_yaml_indicator(char c) noexcept { return yaml_indicator_table[static_cast<uint8_t>(c)]; }
+   inline constexpr bool is_yaml_indicator(char c) noexcept { return yaml_indicator_table[static_cast<glz::uint8_t>(c)]; }
 
    // Check if string needs quoting when written
    inline bool needs_quoting(std::string_view s) noexcept
@@ -1180,13 +1181,12 @@ namespace glz::yaml
 
    // Write indentation
    template <class B>
-   inline void write_indent(B&& b, auto& ix, int32_t level, uint8_t width = 2)
+   inline void write_indent(B&& b, auto& ix, glz::int32_t level, glz::uint8_t width = 2)
    {
-      const int32_t spaces = level * width;
-      for (int32_t i = 0; i < spaces; ++i) {
+      const glz::int32_t spaces = level * width;
+      for (glz::int32_t i = 0; i < spaces; ++i) {
          b[ix++] = ' ';
       }
    }
 
 } // namespace glz::yaml
-

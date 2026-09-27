@@ -1,17 +1,16 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/buffer_pool.hpp"
-// glz:header std=<cstddef>
 // glz:header std=<memory>
 // glz:header std=<mutex>
 // glz:header std=<string>
-// glz:header std=<utility>
 // glz:header std=<vector>
+// glz:header project_imports=ignore
 export module glaze.util.buffer_pool;
 
 import std;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
@@ -33,8 +32,8 @@ namespace glz
      private:
       std::vector<std::unique_ptr<std::string>> buffers_;
       mutable std::mutex mutex_;
-      size_t max_buffers_;
-      size_t max_buffer_size_;
+      glz::size_t max_buffers_;
+      glz::size_t max_buffer_size_;
 
      public:
       /// RAII handle for borrowed buffer - automatically returns to pool on destruction
@@ -100,10 +99,10 @@ namespace glz
       /// Construct a buffer pool
       /// @param max_buffers Maximum number of buffers to keep in pool (default 1024)
       /// @param max_buffer_size Buffers larger than this are shrunk when returned (default 1MB)
-      explicit buffer_pool(size_t max_buffers = 1024, size_t max_buffer_size = 1024 * 1024) noexcept
+      explicit buffer_pool(glz::size_t max_buffers = 1024, glz::size_t max_buffer_size = 1024 * 1024) noexcept
          : max_buffers_(max_buffers), max_buffer_size_(max_buffer_size)
       {
-         buffers_.reserve((std::min)(max_buffers, size_t{64})); // Pre-allocate some capacity
+         buffers_.reserve((std::min)(max_buffers, glz::size_t{64})); // Pre-allocate some capacity
       }
 
       // Non-copyable, non-movable (due to mutex and pointers in scoped_buffers)
@@ -134,17 +133,17 @@ namespace glz
       }
 
       /// Get current number of buffers in the pool
-      [[nodiscard]] size_t size() const noexcept
+      [[nodiscard]] glz::size_t size() const noexcept
       {
          std::lock_guard lock{mutex_};
          return buffers_.size();
       }
 
       /// Get maximum number of buffers the pool will hold
-      [[nodiscard]] size_t max_size() const noexcept { return max_buffers_; }
+      [[nodiscard]] glz::size_t max_size() const noexcept { return max_buffers_; }
 
       /// Get maximum buffer size before shrinking
-      [[nodiscard]] size_t max_buffer_size() const noexcept { return max_buffer_size_; }
+      [[nodiscard]] glz::size_t max_buffer_size() const noexcept { return max_buffer_size_; }
 
      private:
       void release(std::unique_ptr<std::string> buf)

@@ -559,6 +559,12 @@ class Converter:
         body_lines = list(framing.body)
         if self.exports:
             body_lines = export_body(body_lines)
+        # Spell the bare C integer types as glz:: aliases (AGENTS.md C3); the
+        # generator renders them back, so the header is unchanged.
+        alias_text, aliases_used = qualify_builtin_aliases("\n".join(body_lines))
+        body_lines = alias_text.split("\n")
+        if aliases_used and BASIC_TYPES_MODULE not in imports:
+            imports.append(BASIC_TYPES_MODULE)
 
         output: list[str] = []
         output.extend(framing.licence)
@@ -586,6 +592,95 @@ class Converter:
         if trailing_newline:
             result += "\n" * (1 + trailing_blanks)
         return Unit(self.module_name, result, self.notes)
+
+
+# The ten C integer aliases the module side spells as ``glz::`` (AGENTS.md C3).
+BUILTIN_TYPE_ALIASES = (
+    "size_t",
+    "ptrdiff_t",
+    "int8_t",
+    "int16_t",
+    "int32_t",
+    "int64_t",
+    "uint8_t",
+    "uint16_t",
+    "uint32_t",
+    "uint64_t",
+)
+ALIAS_SET = frozenset(BUILTIN_TYPE_ALIASES)
+IDENT_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+# The internal unit that defines the ``glz::`` aliases (AGENTS.md C3).
+BASIC_TYPES_MODULE = "glaze.core.basic_types"
+
+
+def qualify_builtin_aliases(text: str) -> tuple[str, bool]:
+    """Spell the bare C integer types as ``glz::`` aliases (AGENTS.md C3).
+
+    Exact inverse of the generator's ``dequalify_builtin_type_aliases``: only the
+    ten aliases are matched, only as complete identifiers, never inside comments
+    or string/char literals, and never when they are part of a qualified name
+    (``std::size_t``, ``x.size_t``) -- so the generator renders every converted
+    alias back to the bare spelling and the header is unchanged.
+    """
+    result: list[str] = []
+    index = 0
+    length = len(text)
+    changed = False
+    # Trailing non-space characters already emitted, for the qualification check.
+    tail = ""
+
+    def preceded_by_scope() -> bool:
+        t = tail.rstrip()
+        return t.endswith(("::", ".", "->"))
+
+    while index < length:
+        ch = text[index]
+        if ch == "/" and index + 1 < length and text[index + 1] == "/":
+            end = text.find("\n", index)
+            end = length if end == -1 else end
+            result.append(text[index:end])
+            tail = text[index:end]
+            index = end
+            continue
+        if ch == "/" and index + 1 < length and text[index + 1] == "*":
+            end = text.find("*/", index + 2)
+            end = length if end == -1 else end + 2
+            result.append(text[index:end])
+            tail = text[index:end]
+            index = end
+            continue
+        if ch in {'"', "'"}:
+            start = index
+            index += 1
+            while index < length:
+                if text[index] == "\\":
+                    index += 2
+                    continue
+                if text[index] == ch:
+                    index += 1
+                    break
+                index += 1
+            result.append(text[start:index])
+            tail = text[start:index]
+            continue
+        if ch.isalpha() or ch == "_":
+            end = index + 1
+            while end < length and text[end] in IDENT_CHARS:
+                end += 1
+            token = text[index:end]
+            if token in ALIAS_SET and not preceded_by_scope():
+                result.append(f"glz::{token}")
+                tail = f"glz::{token}"
+                changed = True
+            else:
+                result.append(token)
+                tail = token
+            index = end
+            continue
+        result.append(ch)
+        tail = (tail + ch)[-8:]
+        index += 1
+    return "".join(result), changed
 
 
 # ---------------------------------------------------------------------------

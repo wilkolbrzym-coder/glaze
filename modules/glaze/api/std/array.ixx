@@ -2,16 +2,16 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/api/std/array.hpp"
 // glz:header std=<array>
-// glz:header std=<cstddef>
-// glz:header std=<string_view>
+// glz:header include="glaze/core/meta.hpp"
+// glz:header project_imports=ignore
 export module glaze.api.std.array;
 
 import std;
 
 import glaze.core.meta;
 import glaze.util.string_literal;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 export namespace glz
 {
@@ -36,7 +36,7 @@ export namespace glz
    struct num_to_string : detail::explode<num>
    {};
 
-   template <class T, size_t N>
+   template <class T, glz::size_t N>
    struct meta<std::array<T, N>>
    {
       static constexpr std::string_view name =

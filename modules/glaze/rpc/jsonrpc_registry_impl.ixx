@@ -1,18 +1,29 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/rpc/jsonrpc_registry_impl.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/ext/jsonrpc.hpp"
+// glz:header include="glaze/glaze.hpp"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit project
 
-#include "glaze/core/opts.hpp"
-#include "glaze/ext/jsonrpc.hpp"
+export module glaze.rpc.jsonrpc_registry_impl;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.core.opts;
+import glaze.ext.jsonrpc;
+
 #include "glaze/glaze.hpp"
 
-using std::uint32_t;
 
-namespace glz
+export namespace glz
 {
    // Forward declaration of the registry template
-   template <auto Opts, uint32_t Proto>
+   template <auto Opts, glz::uint32_t Proto>
    struct registry;
 
    namespace jsonrpc

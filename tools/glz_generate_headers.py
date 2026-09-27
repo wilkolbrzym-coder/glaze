@@ -86,6 +86,11 @@ class HeaderMetadata:
     includes: list[str] = field(default_factory=list)
     project_imports: str = "include"
     skip: str | None = None
+    # A handful of upstream headers carry no licence preamble and/or no final
+    # newline; the module mirrors that with `license=none` / `trailing_newline=no`
+    # so the generated framing matches byte for byte.
+    license: bool = True
+    trailing_newline: bool = True
 
 
 @dataclass
@@ -211,6 +216,10 @@ def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None
                metadata.project_imports = value
             elif key == "skip":
                metadata.skip = value or "true"
+            elif key == "license":
+               metadata.license = parse_bool(value)
+            elif key in {"trailing_newline", "newline"}:
+               metadata.trailing_newline = parse_bool(value)
             else:
                raise HeaderGenerationError(f"{source_path}:{line_number}: unknown glz:header key {key!r}")
 
@@ -228,6 +237,10 @@ def normalize_std_include(value: str) -> str:
     if value.startswith("<") and value.endswith(">"):
         return value
     return f"<{value}>"
+
+
+def parse_bool(value: str) -> bool:
+    return value.strip().lower() not in {"none", "no", "false", "off", "0"}
 
 
 def normalize_project_include(value: str) -> str:
@@ -361,6 +374,10 @@ def transform_source(
         for line in trim_blank_edges(lines[:first_decl_index])
         if not HEADER_META_RE.match(line)
     ]
+    if not metadata.license:
+        # The upstream header carries no licence preamble; the module keeps it
+        # for its own sake but `license=none` omits it from the header.
+        prefix = []
 
     # A feature-test guard that opens the body belongs *before* the include
     # block in the reference header; lift it out of the body (see helper).
@@ -474,7 +491,12 @@ def transform_source(
         output_lines.extend(body_lines)
 
     header_path = resolve_header_path(include_root, metadata.path)
-    return GeneratedHeader(module_name=module_name, source_path=source_path, header_path=header_path, content="\n".join(output_lines) + "\n")
+    # No reference header carries trailing whitespace; strip it so that
+    # conversion artefacts such as `{  ` do not leak into the output.
+    content = "\n".join(line.rstrip() for line in output_lines)
+    if metadata.trailing_newline:
+        content += "\n"
+    return GeneratedHeader(module_name=module_name, source_path=source_path, header_path=header_path, content=content)
 
 
 def trim_blank_edges(lines: list[str]) -> list[str]:

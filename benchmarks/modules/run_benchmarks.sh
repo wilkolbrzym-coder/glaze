@@ -94,9 +94,17 @@ measured() { # label reps cmd... ; records median/spread, returns rc via global
   local reps="$1"; shift
   timeit "$label" "$reps" "$@"
   local rc=$?
-  LAST_MED="$(json_field median "$label")"
-  LAST_SPREAD="$(json_field spread_pct "$label")"
+  LAST_MED="$(json_field wall_median "$label")"
+  LAST_SPREAD="$(json_field wall_spread_pct "$label")"
+  LAST_CPU="$(json_field cpu_median "$label")"
+  LAST_CSPREAD="$(json_field cpu_spread_pct "$label")"
   return $rc
+}
+
+# record both wall and child-CPU medians for the last measured compile
+record_compile() { # metric path compiler note
+  record "$1" "$2" "$3" "$LAST_MED" "s" "$LAST_SPREAD" "$4 (wall)"
+  record "$1_cpu" "$2" "$3" "$LAST_CPU" "s" "$LAST_CSPREAD" "$4 (child user+sys CPU)"
 }
 
 echo "########################################################################"
@@ -125,17 +133,17 @@ run_header_path() {
   # --- compile-time: umbrella probe ---
   measured "hdr_${tag}_compile_probe" "$REPS" "$cxx" -std=c++23 "${stdflag[@]}" "$OPT" "${IDIR[@]}" \
       -c "$RUNNER/compile_probe.cpp" -o "$WORK/bin/probe_${tag}.o"
-  record "compile_umbrella" "header" "$tag" "$LAST_MED" "s" "$LAST_SPREAD" "median of $REPS, -c, $OPT"
+  record_compile "compile_umbrella" "header" "$tag" "median of $REPS, -c, $OPT"
 
   # --- compile-time: runtime TU ---
   measured "hdr_${tag}_runtime_compile" "$REPS" "$cxx" -std=c++23 "${stdflag[@]}" "$OPT" "${IDIR[@]}" \
       -c "$RUNNER/runtime_main.cpp" -o "$WORK/bin/runtime_${tag}.o"
-  record "compile_runtime_tu" "header" "$tag" "$LAST_MED" "s" "$LAST_SPREAD" "median of $REPS, -c, $OPT"
+  record_compile "compile_runtime_tu" "header" "$tag" "median of $REPS, -c, $OPT"
 
   # --- full executable build (compile+link) ---
   measured "hdr_${tag}_runtime_exe" "$REPS" "$cxx" -std=c++23 "${stdflag[@]}" "$OPT" "${IDIR[@]}" \
       "$RUNNER/runtime_main.cpp" -o "$WORK/bin/runtime_${tag}"
-  record "build_runtime_exe" "header" "$tag" "$LAST_MED" "s" "$LAST_SPREAD" "median of $REPS, compile+link, $OPT"
+  record_compile "build_runtime_exe" "header" "$tag" "median of $REPS, compile+link, $OPT"
 
   # --- object / executable size ---
   local objsize exesize
@@ -249,12 +257,12 @@ PY
   # --- compile-time: runtime TU ---
   measured "mod_clang_runtime_compile" "$REPS" "$CXX_CLANG" "${MF[@]}" "$OPT" \
       -c "$RUNNER/runtime_main.cpp" -o "$WORK/bin/runtime_mod.o"
-  record "compile_runtime_tu" "module" "clang" "$LAST_MED" "s" "$LAST_SPREAD" "median of $REPS, -c, $OPT, BMIs prebuilt"
+  record_compile "compile_runtime_tu" "module" "clang" "median of $REPS, -c, $OPT, BMIs prebuilt"
 
   # --- full executable build (compile+link with module objects) ---
   measured "mod_clang_runtime_exe" "$REPS" "$CXX_CLANG" "${MF[@]}" "$OPT" \
       "$RUNNER/runtime_main.cpp" "${MOD_OBJS[@]}" -o "$WORK/bin/runtime_mod"
-  record "build_runtime_exe" "module" "clang" "$LAST_MED" "s" "$LAST_SPREAD" "median of $REPS, compile+link, BMIs prebuilt"
+  record_compile "build_runtime_exe" "module" "clang" "median of $REPS, compile+link, BMIs prebuilt"
 
   objsize=$(stat -c %s "$WORK/bin/runtime_mod.o")
   exesize=$(stat -c %s "$WORK/bin/runtime_mod")
@@ -296,7 +304,7 @@ if [ "$UMBRELLA_OK" -eq 1 ]; then
       -I "$MODULES" -I "$INCLUDE" -DGLZ_BENCH_MODULES)
   measured "mod_clang_compile_probe" "$REPS" "$CXX_CLANG" "${MF[@]}" "$OPT" \
       -c "$RUNNER/compile_probe.cpp" -o "$WORK/bin/probe_mod.o"
-  record "compile_umbrella" "module" "clang" "$LAST_MED" "s" "$LAST_SPREAD" "median of $REPS, -c, $OPT, BMIs prebuilt"
+  record_compile "compile_umbrella" "module" "clang" "median of $REPS, -c, $OPT, BMIs prebuilt"
   ppl_probe=$("$CXX_CLANG" "${MF[@]}" -E "$RUNNER/compile_probe.cpp" 2>/dev/null | wc -l)
   record "preprocessed_lines_umbrella" "module" "clang" "$ppl_probe" "lines" "" "compile_probe.cpp -E | wc -l"
 fi

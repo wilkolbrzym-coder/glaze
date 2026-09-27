@@ -1,22 +1,28 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/net/websocket_connection.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<array>
+// glz:header std=<atomic>
+// glz:header std=<cstring>
+// glz:header std=<deque>
+// glz:header std=<functional>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<random>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<unordered_map>
+// glz:header std=<utility>
+// glz:header std=<vector>
+// glz:header include="glaze/base64/base64.hpp"
+// glz:header include="glaze/ext/glaze_asio.hpp"
+// glz:header include="glaze/net/http_router.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
-
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cstring>
-#include <deque>
-#include <functional>
-#include <memory>
-#include <mutex>
-#include <random>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+// glz:emit std
 
 // Optional OpenSSL support - detected at compile time
 #if defined(GLZ_ENABLE_OPENSSL) && __has_include(<openssl/sha.h>)
@@ -29,24 +35,27 @@
 #endif
 #endif
 
+// glz:emit project
+
+export module glaze.net.websocket_connection;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.net.http_router;
+import glaze.util.parse;
+
 #include "glaze/base64/base64.hpp"
 #include "glaze/ext/glaze_asio.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/util/parse.hpp"
 
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
-namespace glz
+export namespace glz
 {
    // WebSocket opcode constants
-   enum class ws_opcode : uint8_t { continuation = 0x0, text = 0x1, binary = 0x2, close = 0x8, ping = 0x9, pong = 0xa };
+   enum class ws_opcode : glz::uint8_t { continuation = 0x0, text = 0x1, binary = 0x2, close = 0x8, ping = 0x9, pong = 0xa };
 
    // WebSocket close codes
-   enum class ws_close_code : uint16_t {
+   enum class ws_close_code : glz::uint16_t {
       normal = 1000,
       going_away = 1001,
       protocol_error = 1002,
@@ -64,7 +73,7 @@ namespace glz
    // WebSocket frame header helper
    struct ws_frame_header
    {
-      uint8_t data[2];
+      glz::uint8_t data[2];
 
       ws_frame_header() { reset(); }
 
@@ -75,14 +84,14 @@ namespace glz
       }
 
       void fin(bool v) { data[0] = (data[0] & ~0x80) | (v ? 0x80 : 0); }
-      void opcode(ws_opcode v) { data[0] = (data[0] & ~0x0F) | (static_cast<uint8_t>(v) & 0x0F); }
+      void opcode(ws_opcode v) { data[0] = (data[0] & ~0x0F) | (static_cast<glz::uint8_t>(v) & 0x0F); }
       void mask(bool v) { data[1] = (data[1] & ~0x80) | (v ? 0x80 : 0); }
-      void payload_len(uint8_t v) { data[1] = (data[1] & ~0x7F) | (v & 0x7F); }
+      void payload_len(glz::uint8_t v) { data[1] = (data[1] & ~0x7F) | (v & 0x7F); }
 
       bool fin() const { return (data[0] & 0x80) != 0; }
       ws_opcode opcode() const { return static_cast<ws_opcode>(data[0] & 0x0F); }
       bool mask() const { return (data[1] & 0x80) != 0; }
-      uint8_t payload_len() const { return data[1] & 0x7F; }
+      glz::uint8_t payload_len() const { return data[1] & 0x7F; }
    };
 
    // WebSocket utilities
@@ -94,9 +103,9 @@ namespace glz
       {
          struct sha1_context
          {
-            uint32_t state[5];
-            uint32_t count[2];
-            uint8_t buffer[64];
+            glz::uint32_t state[5];
+            glz::uint32_t count[2];
+            glz::uint8_t buffer[64];
          };
 
          inline void sha1_init(sha1_context* context)
@@ -109,9 +118,9 @@ namespace glz
             context->count[0] = context->count[1] = 0;
          }
 
-         inline void sha1_process(sha1_context* context, const uint8_t data[64])
+         inline void sha1_process(sha1_context* context, const glz::uint8_t data[64])
          {
-            uint32_t w[80], a, b, c, d, e, temp;
+            glz::uint32_t w[80], a, b, c, d, e, temp;
 
             for (int i = 0; i < 16; i++) {
                w[i] = (data[i * 4] << 24) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 8) | data[i * 4 + 3];
@@ -156,13 +165,13 @@ namespace glz
             context->state[4] += e;
          }
 
-         inline void sha1_update(sha1_context* context, const uint8_t* data, size_t len)
+         inline void sha1_update(sha1_context* context, const glz::uint8_t* data, glz::size_t len)
          {
-            size_t i = 0;
-            size_t j = (context->count[0] >> 3) & 63;
+            glz::size_t i = 0;
+            glz::size_t j = (context->count[0] >> 3) & 63;
 
-            if ((context->count[0] += uint32_t(len << 3)) < uint32_t(len << 3)) context->count[1]++;
-            context->count[1] += uint32_t(len >> 29);
+            if ((context->count[0] += glz::uint32_t(len << 3)) < glz::uint32_t(len << 3)) context->count[1]++;
+            context->count[1] += glz::uint32_t(len >> 29);
 
             if ((j + len) > 63) {
                std::memcpy(&context->buffer[j], data, (i = 64 - j));
@@ -176,23 +185,23 @@ namespace glz
             std::memcpy(&context->buffer[j], &data[i], len - i);
          }
 
-         inline void sha1_final(sha1_context* context, uint8_t digest[20])
+         inline void sha1_final(sha1_context* context, glz::uint8_t digest[20])
          {
-            uint8_t finalcount[8];
+            glz::uint8_t finalcount[8];
 
             for (int i = 0; i < 8; i++) {
-               finalcount[i] = (uint8_t)((context->count[(i >= 4 ? 0 : 1)] >> ((3 - (i & 3)) * 8)) & 255);
+               finalcount[i] = (glz::uint8_t)((context->count[(i >= 4 ? 0 : 1)] >> ((3 - (i & 3)) * 8)) & 255);
             }
 
-            sha1_update(context, (uint8_t*)"\200", 1);
+            sha1_update(context, (glz::uint8_t*)"\200", 1);
             while ((context->count[0] & 504) != 448) {
-               sha1_update(context, (uint8_t*)"\0", 1);
+               sha1_update(context, (glz::uint8_t*)"\0", 1);
             }
 
             sha1_update(context, finalcount, 8);
 
             for (int i = 0; i < 20; i++) {
-               digest[i] = (uint8_t)((context->state[i >> 2] >> ((3 - (i & 3)) * 8)) & 255);
+               digest[i] = (glz::uint8_t)((context->state[i >> 2] >> ((3 - (i & 3)) * 8)) & 255);
             }
          }
       }
@@ -203,7 +212,7 @@ namespace glz
          return opcode == ws_opcode::close || opcode == ws_opcode::ping || opcode == ws_opcode::pong;
       }
 
-      inline bool is_valid_close_code(uint16_t code)
+      inline bool is_valid_close_code(glz::uint16_t code)
       {
          switch (static_cast<ws_close_code>(code)) {
          case ws_close_code::normal:
@@ -249,7 +258,7 @@ namespace glz
          // Use fallback implementation when OpenSSL is not available
          fallback_sha1::sha1_context ctx;
          fallback_sha1::sha1_init(&ctx);
-         fallback_sha1::sha1_update(&ctx, reinterpret_cast<const uint8_t*>(combined.data()), combined.size());
+         fallback_sha1::sha1_update(&ctx, reinterpret_cast<const glz::uint8_t*>(combined.data()), combined.size());
          fallback_sha1::sha1_final(&ctx, hash);
 #endif
 
@@ -326,7 +335,7 @@ namespace glz
 
       // Connection info
       virtual std::string remote_address() const = 0;
-      virtual uint16_t remote_port() const = 0;
+      virtual glz::uint16_t remote_port() const = 0;
 
       // User data
       virtual void set_user_data(std::shared_ptr<void> data) = 0;
@@ -395,8 +404,8 @@ namespace glz
       }
 
       // Configuration
-      void set_max_message_size(size_t size) { max_message_size_ = size; }
-      size_t get_max_message_size() const { return max_message_size_; }
+      void set_max_message_size(glz::size_t size) { max_message_size_ = size; }
+      glz::size_t get_max_message_size() const { return max_message_size_; }
 
       // Set message handler
       inline void on_message(message_handler handler) { message_handler_ = std::move(handler); }
@@ -457,7 +466,7 @@ namespace glz
       }
 
      private:
-      size_t max_message_size_{1024 * 1024 * 16};
+      glz::size_t max_message_size_{1024 * 1024 * 16};
       open_handler open_handler_;
       message_handler message_handler_;
       close_handler close_handler_;
@@ -513,7 +522,7 @@ namespace glz
       }
 
       // Configuration
-      void set_max_message_size(size_t size) { max_message_size_ = size; }
+      void set_max_message_size(glz::size_t size) { max_message_size_ = size; }
 
       // Start the WebSocket connection (performs handshake)
       inline void start(const request& req) { perform_handshake(req); }
@@ -583,7 +592,7 @@ namespace glz
       // Get remote endpoint information
       std::string remote_address() const override { return remote_endpoint_.address().to_string(); }
 
-      uint16_t remote_port() const override { return remote_endpoint_.port(); }
+      glz::uint16_t remote_port() const override { return remote_endpoint_.port(); }
 
       // Set user data
       void set_user_data(std::shared_ptr<void> data) override { user_data_ = data; }
@@ -594,7 +603,7 @@ namespace glz
       std::string_view get_close_reason() const override { return close_reason_; }
 
       // Inject initial data read during handshake
-      inline void set_initial_data(std::vector<uint8_t> data)
+      inline void set_initial_data(std::vector<glz::uint8_t> data)
       {
          if (frame_buffer_.empty()) {
             // Avoid allocations and steal the original buffer if frame_buffer_ is empty
@@ -606,14 +615,14 @@ namespace glz
             frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
          }
 
-         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
+         glz::size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
          if (consumed > 0) {
             frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
          }
       }
 
      private:
-      size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
+      glz::size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
 
       inline void perform_handshake(const request& req)
       {
@@ -730,7 +739,7 @@ namespace glz
          }
 
          // Process complete frames
-         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
+         glz::size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
          if (consumed > 0) {
             frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
          }
@@ -755,7 +764,7 @@ namespace glz
          std::size_t header_size{};
          std::size_t expected_payload_size{};
          std::size_t consumed_payload_size{};
-         std::array<uint8_t, 4> mask_key{};
+         std::array<glz::uint8_t, 4> mask_key{};
       };
 
       // Only text message payloads need UTF-8 checks before the full frame is buffered
@@ -771,7 +780,7 @@ namespace glz
       // Save metadata for a new incomplete frame, or verify the frame already being tracked
       inline bool prepare_incomplete_text_frame(ws_opcode opcode, bool fin, bool masked, std::size_t header_size,
                                                 std::size_t expected_payload_size,
-                                                const std::array<uint8_t, 4>& mask_key)
+                                                const std::array<glz::uint8_t, 4>& mask_key)
       {
          if (!incomplete_text_frame_.active) {
             incomplete_text_frame_.active = true;
@@ -806,7 +815,7 @@ namespace glz
       // Consume only new payload bytes that arrived since the previous read
       inline bool consume_incomplete_text_payload(ws_opcode opcode, bool fin, bool masked, std::size_t header_size,
                                                   std::size_t expected_payload_size,
-                                                  const std::array<uint8_t, 4>& mask_key, uint8_t* payload,
+                                                  const std::array<glz::uint8_t, 4>& mask_key, glz::uint8_t* payload,
                                                   std::size_t available_payload_size)
       {
          if (!prepare_incomplete_text_frame(opcode, fin, masked, header_size, expected_payload_size, mask_key)) {
@@ -837,7 +846,7 @@ namespace glz
          return true;
       }
 
-      inline size_t process_frames(uint8_t* data, std::size_t length)
+      inline glz::size_t process_frames(glz::uint8_t* data, std::size_t length)
       {
          std::size_t offset = 0;
 
@@ -850,7 +859,7 @@ namespace glz
             ws_frame_header header;
             header.data[0] = data[offset];
             header.data[1] = data[offset + 1];
-            size_t header_size = 2;
+            glz::size_t header_size = 2;
 
             // After sending a Close frame, only the peer's Close response is relevant, so
             // discard any other coalesced frames (RFC 6455 Section 7.1.1 permits dropping
@@ -881,11 +890,11 @@ namespace glz
             }
 
             // Get payload length
-            uint64_t payload_length = header.payload_len();
+            glz::uint64_t payload_length = header.payload_len();
 
             if (payload_length == 126) {
                if (length - offset < 4) break;
-               payload_length = (static_cast<uint64_t>(data[offset + 2]) << 8) | data[offset + 3];
+               payload_length = (static_cast<glz::uint64_t>(data[offset + 2]) << 8) | data[offset + 3];
                header_size += 2;
             }
             else if (payload_length == 127) {
@@ -903,7 +912,7 @@ namespace glz
             }
 
             // Read mask key if present
-            std::array<uint8_t, 4> mask_key{};
+            std::array<glz::uint8_t, 4> mask_key{};
             if (header.mask()) {
                if (length - offset < header_size + 4) break;
                std::copy(data + offset + header_size, data + offset + header_size + 4, mask_key.begin());
@@ -911,8 +920,8 @@ namespace glz
             }
 
             // A WebSocket frame can be split across multiple reads
-            uint8_t* payload_ptr = data + offset + header_size;
-            const auto payload_size = static_cast<size_t>(payload_length);
+            glz::uint8_t* payload_ptr = data + offset + header_size;
+            const auto payload_size = static_cast<glz::size_t>(payload_length);
             const auto available_frame_size = length - offset;
             const auto available_payload_size =
                available_frame_size > header_size ? (std::min)(payload_size, available_frame_size - header_size) : 0;
@@ -950,7 +959,7 @@ namespace glz
             const bool continue_processing =
                handle_frame(header.opcode(), payload_ptr, payload_size, header.fin(), text_payload_consumed);
 
-            offset += header_size + static_cast<size_t>(payload_length);
+            offset += header_size + static_cast<glz::size_t>(payload_length);
 
             // A locally initiated close may have its peer response later in this same buffer.
             if (!continue_processing || closed_.load()) {
@@ -960,7 +969,7 @@ namespace glz
          return offset;
       }
 
-      inline bool handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin,
+      inline bool handle_frame(ws_opcode opcode, const glz::uint8_t* payload, std::size_t length, bool fin,
                                bool text_payload_consumed = false)
       {
          // RFC 6455 Section 5.5: "All control frames ... MUST NOT be fragmented."
@@ -1083,7 +1092,7 @@ namespace glz
          // send a Close frame, the endpoint MUST send a Close frame in response."
          // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.1
          case ws_opcode::close: {
-            uint16_t code_value = static_cast<uint16_t>(ws_close_code::normal);
+            glz::uint16_t code_value = static_cast<glz::uint16_t>(ws_close_code::normal);
             std::string reason;
 
             // Based on the RFC sections 5.5 and 5.5.1, the payload length of a
@@ -1096,7 +1105,7 @@ namespace glz
             }
 
             if (length >= 2) {
-               code_value = static_cast<uint16_t>((payload[0] << 8) | payload[1]);
+               code_value = static_cast<glz::uint16_t>((payload[0] << 8) | payload[1]);
                if (length > 2) {
                   reason = std::string(reinterpret_cast<const char*>(payload + 2), length - 2);
                }
@@ -1175,7 +1184,7 @@ namespace glz
          }
 
          std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
-         auto frame_buffer = std::make_unique<std::vector<uint8_t>>(header_size + payload.size());
+         auto frame_buffer = std::make_unique<std::vector<glz::uint8_t>>(header_size + payload.size());
 
          write_frame_header(opcode, payload.size(), fin, frame_buffer->data(), client_mode_);
          std::copy(payload.begin(), payload.end(), frame_buffer->begin() + header_size);
@@ -1184,7 +1193,7 @@ namespace glz
          if (client_mode_ && payload.size() > 0) {
             // Get the masking key from the header
             std::size_t mask_key_offset = header_size - 4;
-            const uint8_t* mask_key = frame_buffer->data() + mask_key_offset;
+            const glz::uint8_t* mask_key = frame_buffer->data() + mask_key_offset;
             // Mask the payload
             for (std::size_t i = 0; i < payload.size(); ++i) {
                (*frame_buffer)[header_size + i] ^= mask_key[i % 4];
@@ -1211,7 +1220,7 @@ namespace glz
       // Process the write queue - called when a write completes or when starting a new write
       inline void do_write()
       {
-         std::unique_ptr<std::vector<uint8_t>> frame_buffer;
+         std::unique_ptr<std::vector<glz::uint8_t>> frame_buffer;
          bool should_close_after = false;
 
          {
@@ -1310,9 +1319,9 @@ namespace glz
 
       inline void send_close_frame(ws_close_code code, std::string_view reason, bool schedule_socket_close = false)
       {
-         std::vector<uint8_t> payload(2 + reason.size());
-         payload[0] = static_cast<uint8_t>(static_cast<uint16_t>(code) >> 8);
-         payload[1] = static_cast<uint8_t>(static_cast<uint16_t>(code) & 0xFF);
+         std::vector<glz::uint8_t> payload(2 + reason.size());
+         payload[0] = static_cast<glz::uint8_t>(static_cast<glz::uint16_t>(code) >> 8);
+         payload[1] = static_cast<glz::uint8_t>(static_cast<glz::uint16_t>(code) & 0xFF);
 
          if (!reason.empty()) {
             std::copy(reason.begin(), reason.end(), payload.begin() + 2);
@@ -1351,7 +1360,7 @@ namespace glz
          return base_size + (use_masking ? 4 : 0); // Add 4 bytes for masking key if needed
       }
 
-      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, uint8_t* header,
+      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, glz::uint8_t* header,
                                      bool use_masking)
       {
          ws_frame_header frame_header;
@@ -1364,21 +1373,21 @@ namespace glz
          std::size_t header_offset = 2;
 
          if (payload_length < 126) {
-            frame_header.payload_len(static_cast<uint8_t>(payload_length));
+            frame_header.payload_len(static_cast<glz::uint8_t>(payload_length));
             header[1] = frame_header.data[1];
          }
          else if (payload_length <= 0xFFFF) {
             frame_header.payload_len(126);
             header[1] = frame_header.data[1];
-            header[2] = static_cast<uint8_t>(payload_length >> 8);
-            header[3] = static_cast<uint8_t>(payload_length & 0xFF);
+            header[2] = static_cast<glz::uint8_t>(payload_length >> 8);
+            header[3] = static_cast<glz::uint8_t>(payload_length & 0xFF);
             header_offset = 4;
          }
          else {
             frame_header.payload_len(127);
             header[1] = frame_header.data[1];
             for (int i = 0; i < 8; ++i) {
-               header[2 + i] = static_cast<uint8_t>(static_cast<uint64_t>(payload_length) >> (8 * (7 - i)));
+               header[2 + i] = static_cast<glz::uint8_t>(static_cast<glz::uint64_t>(payload_length) >> (8 * (7 - i)));
             }
             header_offset = 10;
          }
@@ -1390,7 +1399,7 @@ namespace glz
             std::mt19937 gen(rd());
             std::uniform_int_distribution<unsigned int> dist(0, 255);
             for (int i = 0; i < 4; ++i) {
-               header[header_offset + i] = static_cast<uint8_t>(dist(gen));
+               header[header_offset + i] = static_cast<glz::uint8_t>(dist(gen));
             }
             // Mask the payload (done in-place in the frame buffer after this header)
             // Note: Actual masking of payload should be done by caller if needed
@@ -1475,9 +1484,9 @@ namespace glz
 
       std::shared_ptr<SocketType> socket_;
       std::weak_ptr<websocket_server> server_;
-      std::array<uint8_t, 16384> read_buffer_;
-      std::vector<uint8_t> frame_buffer_;
-      std::vector<uint8_t> message_buffer_;
+      std::array<glz::uint8_t, 16384> read_buffer_;
+      std::vector<glz::uint8_t> frame_buffer_;
+      std::vector<glz::uint8_t> message_buffer_;
       utf8_stream_validator utf8_validator_;
       incomplete_text_frame_state incomplete_text_frame_;
       ws_opcode current_opcode_{ws_opcode::continuation};
@@ -1491,7 +1500,7 @@ namespace glz
 
       // Write queue for serializing outgoing frames (prevents interleaved writes)
       std::mutex write_mutex_;
-      std::deque<std::unique_ptr<std::vector<uint8_t>>> write_queue_;
+      std::deque<std::unique_ptr<std::vector<glz::uint8_t>>> write_queue_;
       bool write_in_progress_{false};
       bool close_after_write_{false}; // Close socket after write queue drains
 

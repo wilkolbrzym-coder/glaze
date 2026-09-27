@@ -1,10 +1,15 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/format_str.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<cstddef>
+// glz:header std=<string_view>
+// glz:header project_imports=ignore
 export module glaze.core.format_str;
 
 import std;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
@@ -12,7 +17,7 @@ namespace glz
    // Captures a string literal (including its null terminator) so that format
    // specifications can be carried through the type system, e.g.
    // glz::float_format<&T::x, "{:.2f}">.
-   export template <size_t N>
+   export template <glz::size_t N>
    struct format_str
    {
       char data[N]{};

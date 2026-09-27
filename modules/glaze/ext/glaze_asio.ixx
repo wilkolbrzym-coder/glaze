@@ -69,8 +69,14 @@ export module glaze.ext.glaze_asio;
 
 import std;
 import glaze.core.basic_types;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.core.reflect;
 import glaze.rpc.registry;
 import glaze.rpc.repe.buffer;
+import glaze.rpc.repe.header;
+import glaze.rpc.repe.repe;
 import glaze.util.buffer_pool;
 import glaze.util.memory_pool;
 

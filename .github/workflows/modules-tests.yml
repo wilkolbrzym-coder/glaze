@@ -194,7 +194,8 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
           sudo apt-get install -y \
-            clang-${LLVM_VERSION} libc++-${LLVM_VERSION}-dev libc++abi-${LLVM_VERSION}-dev
+            clang-${LLVM_VERSION} libc++-${LLVM_VERSION}-dev libc++abi-${LLVM_VERSION}-dev \
+            libeigen3-dev libasio-dev erlang-dev
           clang++-${LLVM_VERSION} --version
 
       - name: Install CMake ${{ env.CMAKE_VERSION }}
@@ -245,6 +246,10 @@ jobs:
         env:
           CXX: clang++-${{ matrix.llvm }}
           STD_PCM: ${{ runner.temp }}/std.pcm
+          # The suite covers every unit, including the optional-dependency ones:
+          # Eigen lives outside the default search path and erlang-dev installs
+          # ei.h under the Erlang tree. Standalone asio.hpp needs no extra path.
+          CPLUS_INCLUDE_PATH: /usr/include/eigen3:/usr/lib/erlang/usr/include
         run: |
           bash tests/modules/run_modules_tests.sh \
             --root "$GITHUB_WORKSPACE" \

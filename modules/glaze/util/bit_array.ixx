@@ -3,24 +3,22 @@
 // glz:header path="glaze/util/bit_array.hpp"
 // glz:header std=<array>
 // glz:header std=<bit>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
 // glz:header std=<limits>
+// glz:header project_imports=ignore
 export module glaze.util.bit_array;
 
 import std;
+import glaze.core.basic_types;
 
-using std::uint64_t;
-using std::size_t;
 
 namespace glz
 {
    // Basically std::bitset but exposes things normally not available like the bitscan functions
-   export template <size_t N, std::unsigned_integral Chunk = uint64_t>
+   export template <glz::size_t N, std::unsigned_integral Chunk = glz::uint64_t>
    struct bit_array
    {
-      static constexpr size_t n_chunk_bits = std::numeric_limits<Chunk>::digits;
-      static constexpr size_t n_chunks = (N == 0) ? 0 : (N - 1) / n_chunk_bits + 1;
+      static constexpr glz::size_t n_chunk_bits = std::numeric_limits<Chunk>::digits;
+      static constexpr glz::size_t n_chunks = (N == 0) ? 0 : (N - 1) / n_chunk_bits + 1;
 
       struct reference
       {
@@ -43,7 +41,7 @@ namespace glz
 
       std::array<Chunk, n_chunks> data{};
 
-      constexpr reference operator[](size_t pos)
+      constexpr reference operator[](glz::size_t pos)
       {
          const auto chunk = pos / n_chunk_bits;
          const auto offset = pos % n_chunk_bits;
@@ -51,7 +49,7 @@ namespace glz
          return reference{&data[chunk], maskbit};
       }
 
-      constexpr bool operator[](size_t pos) const
+      constexpr bool operator[](glz::size_t pos) const
       {
          const auto chunk = pos / n_chunk_bits;
          const auto offset = pos % n_chunk_bits;
@@ -129,7 +127,7 @@ namespace glz
 
       constexpr bit_array& operator&=(const bit_array& rhs) noexcept
       {
-         for (size_t i{}; i < n_chunks; ++i) {
+         for (glz::size_t i{}; i < n_chunks; ++i) {
             data[i] &= rhs.data[i];
          }
          return *this;

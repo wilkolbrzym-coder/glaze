@@ -2,19 +2,16 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/thread/async_vector.hpp"
 // glz:header std=<algorithm>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<cstdlib>
-// glz:header std=<initializer_list>
 // glz:header std=<mutex>
 // glz:header std=<shared_mutex>
-// glz:header std=<type_traits>
 // glz:header std=<utility>
 // glz:header std=<vector>
-export module glaze.thread.async_vector;
+// glz:header include="glaze/thread/value_proxy.hpp"
+// glz:header project_imports=ignore
+// glz:header license=none
+module;
 
-import std;
-import glaze.core.traits;
+// glz:emit std
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -26,17 +23,21 @@ import glaze.core.traits;
 #endif
 #endif
 
+// glz:emit project
+
+export module glaze.thread.async_vector;
+
+import std;
+import glaze.core.traits;
+
 import glaze.core.context;
 import glaze.core.opts;
-import glaze.thread.value_proxy;
 import glaze.util.type_traits;
+import glaze.core.basic_types;
 
 // Provides a thread-safe vector
 // Uses simple proxy objects with appropriate locks for read/write operations
 
-using std::uint32_t;
-using std::ptrdiff_t;
-using std::size_t;
 
 namespace glz
 {
@@ -49,8 +50,8 @@ namespace glz
 
      public:
       using value_type = T;
-      using size_type = size_t;
-      using difference_type = ptrdiff_t;
+      using size_type = std::size_t;
+      using difference_type = std::ptrdiff_t;
       using reference = T&;
       using const_reference = const T&;
 
@@ -408,7 +409,7 @@ namespace glz
 
 namespace glz
 {
-   template <uint32_t Format, class T>
+   template <glz::uint32_t Format, class T>
       requires(is_specialization_v<T, glz::async_vector>)
    struct from<Format, T>
    {
@@ -420,7 +421,7 @@ namespace glz
       }
    };
 
-   template <uint32_t Format, class T>
+   template <glz::uint32_t Format, class T>
       requires(is_specialization_v<T, glz::async_vector>)
    struct to<Format, T>
    {

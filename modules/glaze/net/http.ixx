@@ -10,9 +10,12 @@
 // glz:header std=<system_error>
 // glz:header project_imports=ignore
 // glz:header include="glaze/net/url.hpp" group=b1
+// glz:header include="glaze/util/compare.hpp" group=cmp
 module;
 
 // glz:emit std
+
+// glz:emit cmp
 
 // To deconflict Windows.h
 #ifdef DELETE
@@ -25,6 +28,8 @@ import std;
 
 import glaze.core.basic_types;
 import glaze.net.url;
+
+import glaze.util.compare;
 
 
 export namespace glz
@@ -261,6 +266,31 @@ export namespace glz
              value.find_first_of("\r\n") != std::string_view::npos;
    }
 
+   // RFC 9112 6.3: Content-Length and Transfer-Encoding are the only fields that
+   // tell a recipient where a message body ends. Two of either, disagreeing, let
+   // an intermediary and an endpoint split the same byte stream at different
+   // offsets, so bytes one of them reads as the next message are chosen by
+   // whoever supplied the second field (request/response smuggling). Every other
+   // field name may repeat freely, so the serializers single out just these two.
+   [[nodiscard]] inline bool header_field_frames_body(std::string_view name) noexcept
+   {
+      return striequal(name, "content-length") || striequal(name, "transfer-encoding");
+   }
+
+   // RFC 9110, Section 5.6.2:
+   // token = 1*tchar
+   // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*"
+   //       / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+   //       / DIGIT / ALPHA
+   // The single tchar predicate for the net stack: valid_header_name and the
+   // request-line method check both build on it.
+   [[nodiscard]] inline bool is_tchar(char ch) noexcept
+   {
+      return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '!' ||
+             ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\'' || ch == '*' || ch == '+' || ch == '-' ||
+             ch == '.' || ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~';
+   }
+
    // RFC 7230 3.2.6: a header field-name is one or more token characters (tchar).
    // A name that is empty or carries any other byte (CR/LF, space, colon, a
    // control char, ...) cannot be written as a well-formed field. This is the
@@ -270,11 +300,8 @@ export namespace glz
       if (name.empty()) {
          return false;
       }
-      for (const unsigned char c : name) {
-         const bool tchar = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '!' ||
-                            c == '#' || c == '$' || c == '%' || c == '&' || c == '\'' || c == '*' || c == '+' ||
-                            c == '-' || c == '.' || c == '^' || c == '_' || c == '`' || c == '|' || c == '~';
-         if (!tchar) {
+      for (const char c : name) {
+         if (!is_tchar(c)) {
             return false;
          }
       }

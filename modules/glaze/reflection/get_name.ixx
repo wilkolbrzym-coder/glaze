@@ -2,26 +2,32 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/reflection/get_name.hpp"
 // glz:header std=<array>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<optional>
 // glz:header std=<string>
 // glz:header std=<string_view>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
+// glz:header include="glaze/core/feature_test.hpp"
+// glz:header include="glaze/reflection/to_tuple.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header project_imports=ignore
 export module glaze.reflection.get_name;
 
+// TODO: Use std::source_location when deprecating clang 14
+// #include <source_location>
 import std;
 
-export import glaze.core.meta_fwd;
+export import glaze.forward;
 
 import glaze.reflection.to_tuple;
 
 import glaze.util.string_literal;
 
 import glaze.tuplet;
+import glaze.core.basic_types;
 
 #include "glaze/core/feature_test.hpp"
+
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
 
 #if defined(__clang__) || defined(__GNUC__)
 #define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
@@ -36,7 +42,7 @@ import glaze.tuplet;
 namespace glz::detail
 {
    // Get member name using P2996 reflection
-   template <class T, size_t I>
+   template <class T, glz::size_t I>
    consteval std::string_view get_member_name_p2996()
    {
       auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
@@ -63,7 +69,7 @@ namespace glz
    // For now, qualified_type_names option has no effect with P2996.
 
    // P2996 implementation of member_names_impl (base version)
-   template <class T, size_t... I>
+   template <class T, glz::size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -83,7 +89,7 @@ namespace glz::detail
    using namespace std::meta;
 
    // Get enum name at index using P2996 reflection
-   template <class T, size_t I>
+   template <class T, glz::size_t I>
    consteval std::string_view get_enum_name_p2996()
    {
 #if defined(__clang__)
@@ -99,7 +105,7 @@ namespace glz::detail
 
    // Get number of enumerators
    template <class T>
-   consteval size_t enum_count_p2996()
+   consteval glz::size_t enum_count_p2996()
    {
 #if defined(__clang__)
       constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
@@ -116,9 +122,9 @@ namespace glz::detail
    consteval auto make_enum_to_string_table()
    {
       static constexpr auto Enums = std::define_static_array(enumerators_of(^^E));
-      constexpr size_t N = Enums.size();
+      constexpr glz::size_t N = Enums.size();
       std::array<std::pair<E, std::string_view>, N> table{};
-      size_t i = 0;
+      glz::size_t i = 0;
       template for (constexpr info I : Enums)
       {
          table[i] = {[:I:], identifier_of(I)};
@@ -132,14 +138,14 @@ namespace glz::detail
 namespace glz
 {
    // P2996 enum name at index
-   template <class T, size_t I>
+   template <class T, glz::size_t I>
       requires std::is_enum_v<std::remove_cvref_t<T>>
    inline constexpr std::string_view enum_nameof = detail::get_enum_name_p2996<std::remove_cvref_t<T>, I>();
 
    // P2996 enum count
    template <class T>
       requires std::is_enum_v<std::remove_cvref_t<T>>
-   inline constexpr size_t enum_count = detail::enum_count_p2996<std::remove_cvref_t<T>>();
+   inline constexpr glz::size_t enum_count = detail::enum_count_p2996<std::remove_cvref_t<T>>();
 
    // P2996 enum to string using expansion statements
    template <class E, bool B = std::meta::is_enumerable_type(^^E)>
@@ -194,9 +200,6 @@ namespace glz
 // ============================================================================
 
 // For struct fields
-
-using std::size_t;
-
 export namespace glz::detail
 {
    // Do not const qualify this value to avoid duplicate `to_tie` template instantiations with rest of Glaze
@@ -288,7 +291,7 @@ export namespace glz
 #endif
    }();
 
-   template <class T, size_t... I>
+   template <class T, glz::size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -306,6 +309,9 @@ export namespace glz
 // ============================================================================
 namespace glz
 {
+   template <class T>
+   struct meta;
+
 #if GLZ_HAS_CONSTEXPR_STRING
    // Concept for when rename_key returns exactly std::string (allocates)
    // Requires constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
@@ -317,20 +323,20 @@ namespace glz
    // Helper to compute renamed key size at compile time
    // Using consteval forces evaluation before template instantiation
    // This unified approach works for both GCC and Clang (including Clang 19+)
-   template <class T, size_t I>
-   consteval size_t renamed_key_size()
+   template <class T, glz::size_t I>
+   consteval glz::size_t renamed_key_size()
    {
       return meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>).size();
    }
 
    // Storage for renamed key with exact size determined at compile time
-   template <class T, size_t I, size_t N = renamed_key_size<T, I>()>
+   template <class T, glz::size_t I, glz::size_t N = renamed_key_size<T, I>()>
    struct renamed_key_storage
    {
       static constexpr auto value = [] {
          std::array<char, N + 1> arr{};
          auto str = meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
-         for (size_t i = 0; i < N; ++i) {
+         for (glz::size_t i = 0; i < N; ++i) {
             arr[i] = str[i];
          }
          arr[N] = '\0';
@@ -340,22 +346,22 @@ namespace glz
 
 #if GLZ_REFLECTION26
    // Helper to compute renamed enum key size at compile time
-   template <class T, size_t I>
+   template <class T, glz::size_t I>
       requires std::is_enum_v<std::remove_cvref_t<T>>
-   consteval size_t renamed_enum_key_size()
+   consteval glz::size_t renamed_enum_key_size()
    {
       return meta<std::remove_cvref_t<T>>::rename_key(enum_nameof<T, I>).size();
    }
 
    // Storage for renamed enum key with exact size determined at compile time
-   template <class T, size_t I, size_t N = renamed_enum_key_size<T, I>()>
+   template <class T, glz::size_t I, glz::size_t N = renamed_enum_key_size<T, I>()>
       requires std::is_enum_v<std::remove_cvref_t<T>>
    struct renamed_enum_key_storage
    {
       static constexpr auto value = [] {
          std::array<char, N + 1> arr{};
          auto str = meta<std::remove_cvref_t<T>>::rename_key(enum_nameof<T, I>);
-         for (size_t i = 0; i < N; ++i) {
+         for (glz::size_t i = 0; i < N; ++i) {
             arr[i] = str[i];
          }
          arr[N] = '\0';
@@ -365,7 +371,7 @@ namespace glz
 
 #endif
 
-   template <meta_has_rename_key_string T, size_t... I>
+   template <meta_has_rename_key_string T, glz::size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -388,7 +394,7 @@ namespace glz
       { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::convertible_to<std::string_view>;
    } && !meta_has_rename_key_string<T>;
 
-   template <meta_has_rename_key_convertible T, size_t... I>
+   template <meta_has_rename_key_convertible T, glz::size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -405,7 +411,7 @@ namespace glz
       { glz::meta<std::remove_cvref_t<T>>::template rename_key<0>() } -> std::convertible_to<std::string_view>;
    } && !meta_has_rename_key_string<T> && !meta_has_rename_key_convertible<T>;
 
-   template <meta_has_rename_key_indexed T, size_t... I>
+   template <meta_has_rename_key_indexed T, glz::size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -425,7 +431,7 @@ namespace glz
    // This allows users to get the type of a member at a given index in rename_key
    namespace detail
    {
-      template <class T, size_t I>
+      template <class T, glz::size_t I>
       struct member_type_at_index
       {
          using tie_type = decltype(to_tie(std::declval<std::remove_cvref_t<T>&>()));
@@ -435,7 +441,7 @@ namespace glz
 
    // Helper to get the type of a member at a given index
    // Usage in rename_key: using member_type = glz::member_type_t<T, Index>;
-   export template <class T, size_t Index>
+   export template <class T, glz::size_t Index>
    using member_type_t = typename detail::member_type_at_index<T, Index>::type;
 }
 
@@ -500,8 +506,8 @@ export namespace glz
          return false;
       }
 
-      size_t depth{};
-      for (size_t i = 0; i < str.size(); ++i) {
+      glz::size_t depth{};
+      for (glz::size_t i = 0; i < str.size(); ++i) {
          const auto c = str[i];
          if (c == '(') {
             ++depth;
@@ -522,8 +528,8 @@ export namespace glz
 
    consteval std::string_view strip_unmatched_trailing_parens(std::string_view str)
    {
-      size_t open_count{};
-      size_t close_count{};
+      glz::size_t open_count{};
+      glz::size_t close_count{};
       for (const auto c : str) {
          if (c == '(') {
             ++open_count;
@@ -600,7 +606,7 @@ export namespace glz
    {
       const auto amp_pos = str.find("&");
       if (amp_pos != std::string_view::npos) {
-         size_t prefix = amp_pos;
+         glz::size_t prefix = amp_pos;
          while (prefix > 0 && str[prefix - 1] == ' ') {
             --prefix;
          }

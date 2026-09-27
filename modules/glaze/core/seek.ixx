@@ -116,7 +116,7 @@ namespace glz
    // Splits "/token/rest" into {"token", "/rest"}; the trailing token yields {"token", ""}
    // and an empty pointer yields {"", ""}.
    // TODO: handle ~ and / characters for full JSON pointer support
-   constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
+   export constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
    {
       if (s.empty()) {
          return {"", ""};

@@ -1193,7 +1193,7 @@ namespace glz
       // for what is pinned and why. UTF-8 is deliberately not checked here: that is the reader's
       // job, it is on by default there, and unlike the escaping decision it costs a real pass
       // over every string.
-      template <auto Opts, class B>
+      export template <auto Opts, class B>
       GLZ_ALWAYS_INLINE void emit_untrusted_string(is_context auto& ctx, const std::string_view s, B& out, glz::size_t& ix)
       {
          to<JSON, std::string_view>::template op<untrusted_string_emit_opts<Opts>>(s, ctx, out, ix);
@@ -1207,7 +1207,7 @@ namespace glz
       // next to the bytes rather than hand-maintained at the call site. They return false, with
       // ctx.error set to buffer_overflow, when a fixed-size buffer has no room left.
 
-      template <class B>
+      export template <class B>
       [[nodiscard]] GLZ_ALWAYS_INLINE bool emit_char(is_context auto& ctx, const char c, B& out, glz::size_t& ix)
       {
          if (!ensure_space(ctx, out, ix + 1)) [[unlikely]] {

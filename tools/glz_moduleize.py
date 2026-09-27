@@ -438,35 +438,46 @@ class Converter:
         # around it.  Angle `<...>` entries feed the generator's `std` block and
         # `"..."` entries its `project` block.
         scan_depth = 0
-        guard_stack: list[str] = []
-        located: list[tuple[int, Include, tuple[str, ...]]] = []
-        for i in range(prelude_start, len(raw_lines)):
-            line = raw_lines[i]
+        guard_stack: list[list[str]] = []
+        located: list[tuple[int, Include, tuple[tuple[str, ...], ...]]] = []
+        cursor = prelude_start
+        while cursor < len(raw_lines):
+            line = raw_lines[cursor]
             if PP_OPEN_RE.match(line):
-                guard_stack.append(line)
+                # Capture the whole directive, including `\`-continued lines: a
+                # guard reproduced without its continuation is a broken `#if`.
+                directive = [line]
+                while directive[-1].rstrip().endswith("\\") and cursor + 1 < len(raw_lines):
+                    cursor += 1
+                    directive.append(raw_lines[cursor])
+                guard_stack.append(directive)
                 scan_depth += 1
+                cursor += 1
                 continue
             if PP_CLOSE_RE.match(line):
                 if guard_stack:
                     guard_stack.pop()
                 scan_depth = max(0, scan_depth - 1)
+                cursor += 1
                 continue
             if PP_MID_RE.match(line):
+                cursor += 1
                 continue
             m = INCLUDE_RE.match(line)
             if m:
                 located.append(
                     (
-                        i,
+                        cursor,
                         Include(
                             inner=m.group("inner"),
                             angle=m.group("open") == "<",
                             tail=(m.group("tail") or "").strip(),
-                            line=i,
+                            line=cursor,
                         ),
-                        tuple(guard_stack),
+                        tuple(tuple(g) for g in guard_stack),
                     )
                 )
+            cursor += 1
 
         # An include may stay literal -- and compile in place in the fragment --
         # only when it sits in the pre-code region of a balanced unit.  Anywhere
@@ -478,7 +489,7 @@ class Converter:
         def literal_ok(inc: Include) -> bool:
             return inc.angle or ("/" in inc.inner and not inc.inner.startswith((".", "/")))
 
-        managed: list[tuple[Include, tuple[str, ...]]] = [
+        managed: list[tuple[Include, tuple[tuple[str, ...], ...]]] = [
             (inc, guards)
             for i, inc, guards in located
             if not literal_ok(inc) or not (prologue_mode and i < body_start)
@@ -498,7 +509,7 @@ class Converter:
         # The generator sorts each metadata block, so an out-of-order run is cut
         # into ordered chunks (each becomes its own block) to keep the header's
         # original include order.
-        runs: list[list[tuple[Include, tuple[str, ...]]]] = []
+        runs: list[list[tuple[Include, tuple[tuple[str, ...], ...]]]] = []
         for entry in managed:
             inc = entry[0]
             if runs:
@@ -514,7 +525,7 @@ class Converter:
 
         marker_for_line: dict[int, str] = {}
         managed_lines: set[int] = set()
-        compile_includes: list[tuple[Include, tuple[str, ...]]] = []
+        compile_includes: list[tuple[Include, tuple[tuple[str, ...], ...]]] = []
         for run in runs:
             kind = kind_of(run[0][0])
             n = group_counter[kind]
@@ -583,7 +594,8 @@ class Converter:
         if compile_includes:
             gmf_lines.append("// glz:module-only")
             for inc, guards in compile_includes:
-                gmf_lines.extend(guards)
+                for guard in guards:
+                    gmf_lines.extend(guard)
                 if inc.angle:
                     gmf_lines.append(f"#include <{inc.inner}>")
                 else:
@@ -667,6 +679,21 @@ def qualify_builtin_aliases(text: str) -> tuple[str, bool]:
 
     while index < length:
         ch = text[index]
+        # A preprocessor line must be copied verbatim: naming a type inside a
+        # `#if` expression (e.g. `sizeof(size_t) == 8`) would turn it into a
+        # syntax error once the alias is qualified.
+        at_line_start = index == 0 or text[index - 1] == "\n"
+        if at_line_start:
+            look = index
+            while look < length and text[look] in " \t":
+                look += 1
+            if look < length and text[look] == "#":
+                end = text.find("\n", index)
+                end = length if end == -1 else end
+                result.append(text[index:end])
+                tail = text[index:end]
+                index = end
+                continue
         if ch == "/" and index + 1 < length and text[index + 1] == "/":
             end = text.find("\n", index)
             end = length if end == -1 else end
@@ -790,22 +817,35 @@ def _classify_scope(header: str) -> str:
     return "other"
 
 
+EXPORTABLE_KEYWORDS = frozenset(
+    """template struct class enum concept using typedef inline constexpr consteval constinit
+    static_assert void bool char int long short signed unsigned float double auto friend
+    virtual explicit extern""".split()
+)
+
+
 def export_body(body: list[str]) -> list[str]:
     """Prefix ``export`` on every exportable namespace-scope declaration.
 
     The previous hand conversion exported exactly the declarations other units
-    reference.  Exporting a superset is equally correct for consumers and is
-    derivable from the input alone, so this marks every namespace-scope
-    declaration that *can* legally carry ``export``.  Declarations with
-    internal linkage (namespace-scope ``static`` and anonymous-namespace
-    members) may not be exported by the language, so they are left alone -- that
-    is the only reason a declaration is skipped.
+    reference.  This marks the namespace-scope declarations that can safely
+    carry ``export`` and are unambiguously declarations: internal linkage
+    (``static`` and anonymous-namespace members) may not be exported, namespace
+    definitions are left alone, out-of-class member definitions cannot be
+    exported, and a declaration is only recognised when it starts with a
+    declaration keyword.  The rule is deliberately conservative -- an
+    unrecognised declaration is simply not exported, which is always legal.
     """
     code = _strip_to_code(body)
     stack: list[str] = []
     open_decl = False
     marked: list[int] = []
     header_buf: list[str] = []
+    # A line that continues a preprocessor directive (`#if ... \`): the export
+    # scanner must never touch it.
+    continuation: set[int] = {
+        i for i in range(1, len(body)) if body[i - 1].rstrip().endswith("\\")
+    }
 
     def at_namespace_scope() -> bool:
         return not stack or stack[-1] == "ns"
@@ -828,18 +868,22 @@ def export_body(body: list[str]) -> list[str]:
         stripped = raw.strip()
         if not stripped:
             continue
-        if stripped.startswith("#"):
+        if stripped.startswith("#") or index in continuation:
             continue
         if not open_decl and at_namespace_scope() and not stripped.startswith(("}", "{")):
+            first = re.split(r"[\s<(]", stripped, 1)[0]
             if re.match(r"^(?:inline\s+)?namespace\b", stripped):
                 begins = False  # export the members, not the namespace
             elif re.match(r"^export\b", stripped):
                 begins = False
             elif re.match(r"^static\b", stripped):
                 begins = False
+            elif first not in EXPORTABLE_KEYWORDS:
+                begins = False  # not recognisably a declaration start
             elif re.search(r"\w(?:<[^>]*>)?\s*::\s*[\w~]+\s*\(", declaration_signature(index)):
-                # out-of-class member definition
-                begins = False
+                begins = False  # out-of-class member definition
+            elif "::" in declaration_signature(index) and "operator" in declaration_signature(index):
+                begins = False  # out-of-class operator definition
             else:
                 begins = True
                 marked.append(index)

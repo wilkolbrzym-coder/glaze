@@ -1,10 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/write_wrappers.hpp"
-// glz:header std=<concepts>
 // glz:header std=<functional>
 // glz:header std=<type_traits>
 // glz:header std=<utility>
+// glz:header include="glaze/core/common.hpp // glaze_value_t, get_member, context"
+// glz:header include="glaze/core/meta.hpp // remove_meta_wrapper_t, meta_wrapper_v, custom_write"
+// glz:header include="glaze/util/type_traits.hpp // is_specialization_v, return_type, function_traits"
+// glz:header project_imports=ignore
 export module glaze.core.write_wrappers;
 
 import std;

@@ -7,6 +7,7 @@
 // glz:header include="glaze/util/expected.hpp"
 // glz:header std=<cstddef>
 // glz:header std=<map>
+// glz:header std=<stdexcept> group=stdexcept_include
 // glz:header std=<variant>
 // glz:header std=<vector>
 // glz:header project_imports=ignore
@@ -37,7 +38,7 @@ import glaze.core.basic_types;
 #endif
 
 #if __cpp_exceptions
-#include <stdexcept>
+// glz:emit stdexcept_include
 #endif
 
 export namespace glz

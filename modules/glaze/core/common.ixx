@@ -2,26 +2,36 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/common.hpp"
 // glz:header std=<array>
-// glz:header std=<atomic>
-// glz:header std=<bitset>
-// glz:header std=<concepts>
-// glz:header std=<complex>
 // glz:header std=<cstddef>
 // glz:header std=<functional>
 // glz:header std=<iterator>
 // glz:header std=<optional>
 // glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<tuple>
 // glz:header std=<type_traits>
-// glz:header std=<utility>
-// glz:header std=<variant>
 // glz:header std=<vector>
+// glz:header include="glaze/concepts/container_concepts.hpp"
+// glz:header include="glaze/core/array_apply.hpp"
+// glz:header include="glaze/core/cast.hpp"
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/core/error_category.hpp"
+// glz:header include="glaze/core/feature_test.hpp"
+// glz:header include="glaze/core/meta.hpp"
+// glz:header include="glaze/util/bit_array.hpp"
+// glz:header include="glaze/util/expected.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/help.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header include="glaze/util/tuple.hpp"
+// glz:header include="glaze/util/type_traits.hpp"
+// glz:header include="glaze/util/validate.hpp"
+// glz:header include="glaze/util/variant.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.common;
 
 import std;
 
 import glaze.core.context;
+import glaze.core.error_category;
 import glaze.core.array_apply;
 import glaze.core.cast;
 import glaze.core.meta;
@@ -40,11 +50,22 @@ import glaze.util.string_literal;
 import glaze.util.tuple;
 import glaze.util.type_traits;
 import glaze.util.variant;
+import glaze.core.basic_types;
 
 #include "glaze/core/feature_test.hpp"
 #include "glaze/util/inline.hpp"
 
-using std::size_t;
+
+// These std headers are only needed on the P2996 path, where the specializations
+// in the `#if GLZ_REFLECTION26` block below (glz::specified<std::complex<T>>,
+// std::bitset<N>, std::atomic<T>) prevent auto-reflection from producing incorrect
+// serialization for these stdlib types. Pre-C++26 users save the per-TU parse cost.
+// Included at file scope, not inside `namespace glz`, so std names stay in ::std.
+#if GLZ_REFLECTION26
+#include <atomic>
+#include <bitset>
+#include <complex>
+#endif
 
 namespace glz
 {
@@ -299,6 +320,9 @@ namespace glz
    export template <class T>
    concept mimics_bool_t = has_mimic<T> && bool_t<mimic_type<T>>;
 
+   // Note: custom_num_t, custom_str_t, custom_bool_t concepts are defined in core/custom_meta.hpp
+   // (requires custom_t from wrappers.hpp which is not included here)
+
    export template <class T>
    concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> &&
                             map_subscriptable<std::decay_t<T>>;
@@ -362,7 +386,7 @@ namespace glz
 
    template <class T>
    constexpr bool is_std_array = false;
-   template <class T, size_t N>
+   template <class T, std::size_t N>
    constexpr bool is_std_array<std::array<T, N>> = true;
 
    export template <class T>
@@ -371,7 +395,7 @@ namespace glz
    static_assert(has_fixed_size_container<int[54]>);
 
    export template <class T>
-   constexpr size_t get_size() noexcept
+   constexpr glz::size_t get_size() noexcept
    {
       if constexpr (is_span<T>) {
          return T::extent;
@@ -535,7 +559,7 @@ namespace glz
    struct specified<std::complex<T>> : std::true_type
    {};
 
-   template <size_t N>
+   template <glz::size_t N>
    struct specified<std::bitset<N>> : std::true_type
    {};
 

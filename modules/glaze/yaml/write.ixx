@@ -1,30 +1,44 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 // glz:header path="glaze/yaml/write.hpp"
+// glz:header include="glaze/core/buffer_traits.hpp"
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/core/custom_meta.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/core/to.hpp"
+// glz:header include="glaze/core/wrappers.hpp"
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/core/write_chars.hpp"
+// glz:header include="glaze/core/write_wrappers.hpp"
+// glz:header include="glaze/util/dump.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header include="glaze/util/variant.hpp"
+// glz:header include="glaze/yaml/common.hpp"
+// glz:header include="glaze/yaml/opts.hpp"
 // glz:header project_imports=ignore
-module;
-
-#include "glaze/core/buffer_traits.hpp"
-#include "glaze/core/chrono.hpp"
-#include "glaze/core/custom_meta.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/to.hpp"
-#include "glaze/core/wrappers.hpp"
-#include "glaze/core/write.hpp"
-#include "glaze/core/write_chars.hpp"
-#include "glaze/core/write_wrappers.hpp"
-#include "glaze/util/dump.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/parse.hpp"
-#include "glaze/util/variant.hpp"
-#include "glaze/yaml/common.hpp"
-#include "glaze/yaml/opts.hpp"
-// glz:emit std
 export module glaze.yaml.write;
 
 import std;
 import glaze.core.basic_types;
+
+import glaze.core.buffer_traits;
+import glaze.core.chrono;
+import glaze.core.custom_meta;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.core.to;
+import glaze.core.wrappers;
+import glaze.core.write;
+import glaze.core.write_chars;
+import glaze.core.write_wrappers;
+import glaze.util.dump;
+import glaze.util.for_each;
+import glaze.util.parse;
+import glaze.util.variant;
+import glaze.yaml.common;
+import glaze.yaml.opts;
 
 export namespace glz
 {

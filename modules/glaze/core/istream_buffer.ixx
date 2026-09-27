@@ -1,21 +1,22 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/istream_buffer.hpp"
-// glz:header std=<concepts>
 // glz:header std=<cstddef>
 // glz:header std=<cstring>
 // glz:header std=<istream>
 // glz:header std=<limits>
 // glz:header std=<vector>
+// glz:header include="glaze/core/buffer_traits.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.istream_buffer;
 
 import std;
 
 import glaze.core.buffer_traits;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::size_t;
 
 export namespace glz
 {
@@ -55,9 +56,9 @@ export namespace glz
    // Must be large enough to hold any single JSON value (floats can be ~24 bytes,
    // plus overhead for keys, syntax, etc.). Set to 2 * write_padding_bytes for
    // consistency with output buffers which resize to this value on first write.
-   inline constexpr size_t min_streaming_buffer_size = 512;
+   inline constexpr glz::size_t min_streaming_buffer_size = 512;
 
-   template <byte_input_stream Stream, size_t DefaultCapacity = 65536>
+   template <byte_input_stream Stream, glz::size_t DefaultCapacity = 65536>
       requires(DefaultCapacity >= min_streaming_buffer_size)
    class basic_istream_buffer
    {
@@ -66,20 +67,20 @@ export namespace glz
 
       Stream* stream_;
       std::vector<char> buffer_;
-      size_t read_pos_ = 0; // Current read position in buffer
-      size_t data_end_ = 0; // End of valid data in buffer
-      size_t total_consumed_ = 0; // Total bytes consumed (for error reporting)
+      glz::size_t read_pos_ = 0; // Current read position in buffer
+      glz::size_t data_end_ = 0; // End of valid data in buffer
+      glz::size_t total_consumed_ = 0; // Total bytes consumed (for error reporting)
       bool eof_reached_ = false;
 
      public:
       using value_type = char;
       using const_reference = const char&;
-      using size_type = size_t;
+      using size_type = glz::size_t;
       using const_iterator = const char*;
       using stream_type = Stream;
 
       // Construct with input stream and optional initial capacity
-      explicit basic_istream_buffer(Stream& stream, size_t initial_capacity = DefaultCapacity)
+      explicit basic_istream_buffer(Stream& stream, glz::size_t initial_capacity = DefaultCapacity)
          : stream_(&stream), buffer_(initial_capacity)
       {
          // Perform initial fill
@@ -98,7 +99,7 @@ export namespace glz
       const char* data() const noexcept { return buffer_.data() + read_pos_; }
 
       // Number of unread bytes currently in buffer
-      size_t size() const noexcept { return data_end_ - read_pos_; }
+      glz::size_t size() const noexcept { return data_end_ - read_pos_; }
 
       // Check if buffer has no unread data
       bool empty() const noexcept { return read_pos_ >= data_end_; }
@@ -115,7 +116,7 @@ export namespace glz
          }
 
          // Shift unconsumed data to beginning of buffer
-         const size_t remaining = size();
+         const glz::size_t remaining = size();
          if (read_pos_ > 0 && remaining > 0) {
             std::memmove(buffer_.data(), buffer_.data() + read_pos_, remaining);
          }
@@ -125,9 +126,9 @@ export namespace glz
          // Read data from stream until buffer is full or EOF
          // This handles slow streams that return fewer bytes than requested
          while (data_end_ < buffer_.size() && stream_ && !eof_reached_) {
-            const size_t space = buffer_.size() - data_end_;
+            const glz::size_t space = buffer_.size() - data_end_;
             stream_->read(buffer_.data() + data_end_, static_cast<std::streamsize>(space));
-            const auto bytes_read = static_cast<size_t>(stream_->gcount());
+            const auto bytes_read = static_cast<glz::size_t>(stream_->gcount());
             data_end_ += bytes_read;
 
             if (bytes_read == 0) {
@@ -144,14 +145,14 @@ export namespace glz
       }
 
       // Mark bytes as consumed after successful parsing
-      void consume(size_t bytes) noexcept
+      void consume(glz::size_t bytes) noexcept
       {
          read_pos_ += bytes;
          total_consumed_ += bytes;
       }
 
       // Total bytes consumed across all refills (for error position reporting)
-      size_t bytes_consumed() const noexcept { return total_consumed_; }
+      glz::size_t bytes_consumed() const noexcept { return total_consumed_; }
 
       // Check if stream is exhausted and buffer is empty
       bool eof() const noexcept { return eof_reached_ && empty(); }
@@ -182,7 +183,7 @@ export namespace glz
       Stream* stream() const noexcept { return stream_; }
 
       // Current buffer capacity
-      size_t buffer_capacity() const noexcept { return buffer_.size(); }
+      glz::size_t buffer_capacity() const noexcept { return buffer_.size(); }
 
       // Iterator support for range concepts
       const_iterator begin() const noexcept { return data(); }
@@ -190,7 +191,7 @@ export namespace glz
    };
 
    // buffer_traits specialization for basic_istream_buffer
-   template <class Stream, size_t N>
+   template <class Stream, glz::size_t N>
    struct buffer_traits<basic_istream_buffer<Stream, N>>
    {
       static constexpr bool is_resizable = false;
@@ -198,41 +199,41 @@ export namespace glz
       static constexpr bool is_output_streaming = false; // Output streaming
       static constexpr bool is_input_streaming = true; // Input streaming
 
-      GLZ_ALWAYS_INLINE static constexpr size_t capacity(const basic_istream_buffer<Stream, N>& b) noexcept
+      GLZ_ALWAYS_INLINE static constexpr glz::size_t capacity(const basic_istream_buffer<Stream, N>& b) noexcept
       {
          return b.size();
       }
 
-      GLZ_ALWAYS_INLINE static bool ensure_capacity(basic_istream_buffer<Stream, N>&, size_t) noexcept
+      GLZ_ALWAYS_INLINE static bool ensure_capacity(basic_istream_buffer<Stream, N>&, glz::size_t) noexcept
       {
          return true; // Input buffer capacity is managed by refill
       }
 
-      GLZ_ALWAYS_INLINE static void finalize(basic_istream_buffer<Stream, N>&, size_t) noexcept
+      GLZ_ALWAYS_INLINE static void finalize(basic_istream_buffer<Stream, N>&, glz::size_t) noexcept
       {
          // No-op for input buffers
       }
 
-      GLZ_ALWAYS_INLINE static void flush(basic_istream_buffer<Stream, N>&, size_t) noexcept
+      GLZ_ALWAYS_INLINE static void flush(basic_istream_buffer<Stream, N>&, glz::size_t) noexcept
       {
          // No-op for input buffers (flush is for output)
       }
 
       GLZ_ALWAYS_INLINE static bool refill(basic_istream_buffer<Stream, N>& b) { return b.refill(); }
 
-      GLZ_ALWAYS_INLINE static void consume(basic_istream_buffer<Stream, N>& b, size_t bytes) noexcept
+      GLZ_ALWAYS_INLINE static void consume(basic_istream_buffer<Stream, N>& b, glz::size_t bytes) noexcept
       {
          b.consume(bytes);
       }
 
-      GLZ_ALWAYS_INLINE static size_t bytes_consumed(const basic_istream_buffer<Stream, N>& b) noexcept
+      GLZ_ALWAYS_INLINE static glz::size_t bytes_consumed(const basic_istream_buffer<Stream, N>& b) noexcept
       {
          return b.bytes_consumed();
       }
    };
 
    // Convenience alias for std::istream (polymorphic, works with any standard stream)
-   template <size_t DefaultCapacity = 65536>
+   template <glz::size_t DefaultCapacity = 65536>
    using istream_buffer = basic_istream_buffer<std::istream, DefaultCapacity>;
 
 } // namespace glz

@@ -418,6 +418,7 @@ def transform_source(
     import_std_seen = False
     in_global_fragment = False
     conditional_depth = 0
+    body_code_seen = False
     prelude_lines: list[str] = []
     transformed_lines: list[str] = []
 
@@ -445,8 +446,9 @@ def transform_source(
             conditional_depth = max(0, conditional_depth - 1)
 
         if in_global_fragment:
-            # Unconditional raw includes are module-internal (see hoist_include).
-            # Conditional ones belong to the surrounding block and stay in place.
+            # Unconditional raw includes in the global module fragment are
+            # module-internal (the fragment exists to make the module compile);
+            # conditional ones belong to the surrounding block and stay in place.
             if conditional_depth == 0 and RAW_INCLUDE_RE.match(line):
                 continue
             prelude_lines.append(line)
@@ -473,11 +475,19 @@ def transform_source(
         # and the reference headers contain no such declaration.
         if GLOBAL_STD_USING_RE.match(line):
             continue
-        # Unconditional raw includes are module-internal and never reach the
-        # public header; the header's include set comes from metadata/imports.
+        # An unconditional raw include appearing before any body code is a
+        # module-internal dependency (e.g. `#include "glaze/util/inline.hpp"` so
+        # that GLZ_ALWAYS_INLINE is defined) and never reaches the header.  One
+        # that appears after the body has started is a genuine mid-body include
+        # that the reference header keeps, so it is emitted in place.
         if conditional_depth == 0 and RAW_INCLUDE_RE.match(line):
+            if body_code_seen:
+                transformed_lines.append(line)
             continue
         transformed_lines.append(line)
+        stripped_line = line.strip()
+        if stripped_line and not stripped_line.startswith(("//", "/*", "*", "#")):
+            body_code_seen = True
 
     if import_std_seen and not metadata.std:
         # Advisory only.  With the explicit include=/std= contract an empty std

@@ -1065,7 +1065,7 @@ namespace glz
          auto buffer = std::make_shared<std::string>(std::move(response_str));
          auto self = this->shared_from_this();
 
-         asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code ec, size_t) {
+         asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code ec, std::size_t) {
             if (handler) handler(ec);
          });
       }
@@ -1083,7 +1083,7 @@ namespace glz
             chunk.reserve(data.size() + 20); // 20 is a good estimate for hex size + CRLFs
 
             // Chunk size in hex, converted efficiently with std::to_chars
-            std::array<char, 16> size_buf{}; // 64-bit std::size_t in hex is at most 16 chars
+            std::array<char, 16> size_buf{}; // 64-bit size_t in hex is at most 16 chars
             if (auto [ptr, ec] = std::to_chars(size_buf.data(), size_buf.data() + size_buf.size(), data.size(), 16);
                 ec == std::errc()) {
                chunk.append(std::string_view(size_buf.data(), ptr - size_buf.data()));
@@ -1094,7 +1094,7 @@ namespace glz
 
             auto buffer = std::make_shared<std::string>(std::move(chunk));
             asio::async_write(*socket_, asio::buffer(*buffer),
-                              [self, buffer, handler](std::error_code ec, size_t) {
+                              [self, buffer, handler](std::error_code ec, std::size_t) {
                                  if (handler) handler(ec);
                               });
          }
@@ -1102,7 +1102,7 @@ namespace glz
             // Send raw data
             auto buffer = std::make_shared<std::string>(data);
             asio::async_write(*socket_, asio::buffer(*buffer),
-                              [self, buffer, handler](std::error_code ec, size_t) {
+                              [self, buffer, handler](std::error_code ec, std::size_t) {
                                  if (handler) handler(ec);
                               });
          }
@@ -1147,7 +1147,7 @@ namespace glz
             std::string final_chunk = "0\r\n\r\n";
             auto buffer = std::make_shared<std::string>(std::move(final_chunk));
 
-            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, size_t) {
+            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, std::size_t) {
                if (handler) handler();
                asio::error_code close_ec;
                self->socket_->lowest_layer().close(close_ec);
@@ -1240,7 +1240,7 @@ namespace glz
             // For TCP sockets, use async_receive with message_peek for more responsive detection
             auto buffer = std::make_shared<std::array<uint8_t, 1>>();
             socket_->async_receive(
-               asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, size_t) {
+               asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
                   if (ec && self->disconnect_handler_) {
                      self->is_closed_ = true;
                      self->disconnect_handler_();

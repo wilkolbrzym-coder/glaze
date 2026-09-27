@@ -25,6 +25,8 @@
 module;
 // glz:module-only
 #include "glaze/simd/simd.hpp"
+// GLZ_REFLECTION26 is a macro, and macros do not cross module boundaries.
+#include "glaze/core/feature_test.hpp"
 // glz:end-module-only
 
 // glz:emit std

@@ -2,7 +2,8 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/api/std/optional.hpp"
 // glz:header std=<optional>
-// glz:header std=<string_view>
+// glz:header include="glaze/core/meta.hpp"
+// glz:header project_imports=ignore
 export module glaze.api.std.optional;
 
 import std;
@@ -12,7 +13,7 @@ import glaze.util.string_literal;
 
 export namespace glz
 {
-   template<class T>
+   template <class T>
    struct meta<std::optional<T>>
    {
       static constexpr std::string_view name = join_v<chars<"std::optional<">, name_v<T>, chars<">">>;

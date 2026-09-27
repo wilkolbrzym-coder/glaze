@@ -309,8 +309,18 @@ export namespace glz
 // ============================================================================
 namespace glz
 {
+   // glz:module-only
+   // The primary template is declared in glaze/forward.hpp, which this unit
+   // re-exports, so redeclaring it here would conflict.  The standalone header
+   // still needs the declaration; `#if 0` keeps it out of this translation unit
+   // while the module-only markers hide the scaffolding from the header.
+#if 0
+   // glz:end-module-only
    template <class T>
    struct meta;
+   // glz:module-only
+#endif
+   // glz:end-module-only
 
 #if GLZ_HAS_CONSTEXPR_STRING
    // Concept for when rename_key returns exactly std::string (allocates)

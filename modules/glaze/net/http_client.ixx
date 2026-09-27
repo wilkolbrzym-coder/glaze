@@ -44,8 +44,8 @@ import glaze.net.http_router;
 import glaze.util.itoa;
 import glaze.util.key_transformers;
 
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/util/env.hpp"
+import glaze.ext.glaze_asio;
+import glaze.util.env;
 #include <glaze/glaze.hpp>
 
 export namespace glz

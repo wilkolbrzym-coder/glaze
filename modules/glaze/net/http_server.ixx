@@ -55,7 +55,7 @@ import glaze.util.compare;
 import glaze.util.itoa;
 import glaze.util.key_transformers;
 
-#include "glaze/ext/glaze_asio.hpp"
+import glaze.ext.glaze_asio;
 #include <glaze/glaze.hpp>
 
 

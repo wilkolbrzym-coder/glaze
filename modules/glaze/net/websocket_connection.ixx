@@ -45,8 +45,8 @@ import glaze.core.basic_types;
 import glaze.net.http_router;
 import glaze.util.parse;
 
-#include "glaze/base64/base64.hpp"
-#include "glaze/ext/glaze_asio.hpp"
+import glaze.base64;
+import glaze.ext.glaze_asio;
 
 
 export namespace glz

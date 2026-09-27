@@ -18,6 +18,7 @@ import std;
 
 import glaze.core.basic_types;
 import glaze.net.http_router;
+import glaze.net.http;
 
 
 export namespace glz

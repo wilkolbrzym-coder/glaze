@@ -21,7 +21,7 @@ import glaze.json.schema;
 import glaze.net.http_router;
 import glaze.rpc.repe.repe;
 
-#include "glaze/glaze.hpp"
+import glaze;
 
 
 export namespace glz

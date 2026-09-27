@@ -1,28 +1,24 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/generic_fwd.hpp"
-// glz:header std=<concepts>
+// glz:header include="glaze/containers/ordered_small_map.hpp"
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/forward.hpp"
+// glz:header include="glaze/util/expected.hpp"
 // glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<cstdlib>
-// glz:header std=<initializer_list>
 // glz:header std=<map>
-// glz:header std=<stdexcept>
-// glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
 // glz:header std=<variant>
 // glz:header std=<vector>
-// glz:header include="glaze/forward.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.generic:fwd;
 
 import std;
 
 import glaze.containers.ordered_small_map;
 import glaze.core.context;
-import glaze.core.meta_fwd;
+import glaze.forward;
 import glaze.util.expected;
+import glaze.core.basic_types;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -40,9 +36,9 @@ import glaze.util.expected;
 #endif
 #endif
 
-using std::int64_t;
-using std::uint64_t;
-using std::size_t;
+#if __cpp_exceptions
+#include <stdexcept>
+#endif
 
 export namespace glz
 {
@@ -51,6 +47,10 @@ export namespace glz
       GLZ_THROW_OR_ABORT(std::runtime_error(msg));
    }
 }
+
+// glz:emit std
+
+// glz:emit project
 
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off broken MSVC warning for "declaration of 'v' hides previous local declaration"
@@ -80,13 +80,13 @@ export namespace glz
    template <class null_t, class array_t, class object_t>
    struct generic_val_type<num_mode::i64, null_t, array_t, object_t>
    {
-      using type = std::variant<null_t, int64_t, double, std::string, bool, array_t, object_t>;
+      using type = std::variant<null_t, glz::int64_t, double, std::string, bool, array_t, object_t>;
    };
 
    template <class null_t, class array_t, class object_t>
    struct generic_val_type<num_mode::u64, null_t, array_t, object_t>
    {
-      using type = std::variant<null_t, uint64_t, int64_t, double, std::string, bool, array_t, object_t>;
+      using type = std::variant<null_t, glz::uint64_t, glz::int64_t, double, std::string, bool, array_t, object_t>;
    };
 
    // Concept for map types usable with generic_json.
@@ -184,16 +184,16 @@ export namespace glz
       {
          // Can be used for int and the like
          if constexpr (Mode == num_mode::u64) {
-            if (holds<uint64_t>()) {
-               return static_cast<T>(get<uint64_t>());
+            if (holds<glz::uint64_t>()) {
+               return static_cast<T>(get<glz::uint64_t>());
             }
-            if (holds<int64_t>()) {
-               return static_cast<T>(get<int64_t>());
+            if (holds<glz::int64_t>()) {
+               return static_cast<T>(get<glz::int64_t>());
             }
          }
          else if constexpr (Mode == num_mode::i64) {
-            if (holds<int64_t>()) {
-               return static_cast<T>(get<int64_t>());
+            if (holds<glz::int64_t>()) {
+               return static_cast<T>(get<glz::int64_t>());
             }
          }
          return static_cast<T>(get<double>());
@@ -256,10 +256,10 @@ export namespace glz
       generic_json& operator=(const T value)
       {
          if constexpr (Mode == num_mode::u64) {
-            data = static_cast<uint64_t>(value);
+            data = static_cast<glz::uint64_t>(value);
          }
          else if constexpr (Mode == num_mode::i64) {
-            data = static_cast<int64_t>(value);
+            data = static_cast<glz::int64_t>(value);
          }
          else {
             data = static_cast<double>(value);
@@ -273,7 +273,7 @@ export namespace glz
       generic_json& operator=(const T value)
       {
          if constexpr (Mode == num_mode::u64 || Mode == num_mode::i64) {
-            data = static_cast<int64_t>(value);
+            data = static_cast<glz::int64_t>(value);
          }
          else {
             data = static_cast<double>(value);
@@ -364,10 +364,10 @@ export namespace glz
       {
          if constexpr (Mode == num_mode::u64) {
             if constexpr (std::unsigned_integral<T>) {
-               data = static_cast<uint64_t>(val);
+               data = static_cast<glz::uint64_t>(val);
             }
             else if constexpr (std::signed_integral<T>) {
-               data = static_cast<int64_t>(val);
+               data = static_cast<glz::int64_t>(val);
             }
             else {
                data = static_cast<double>(val);
@@ -375,7 +375,7 @@ export namespace glz
          }
          else if constexpr (Mode == num_mode::i64) {
             if constexpr (std::integral<T>) {
-               data = static_cast<int64_t>(val);
+               data = static_cast<glz::int64_t>(val);
             }
             else {
                data = static_cast<double>(val);
@@ -412,10 +412,10 @@ export namespace glz
       [[nodiscard]] bool is_number() const noexcept
       {
          if constexpr (Mode == num_mode::u64) {
-            return holds<uint64_t>() || holds<int64_t>() || holds<double>();
+            return holds<glz::uint64_t>() || holds<glz::int64_t>() || holds<double>();
          }
          else if constexpr (Mode == num_mode::i64) {
-            return holds<int64_t>() || holds<double>();
+            return holds<glz::int64_t>() || holds<double>();
          }
          else {
             return holds<double>();
@@ -437,17 +437,17 @@ export namespace glz
       [[nodiscard]] double& get_number()
       {
          if constexpr (Mode == num_mode::u64) {
-            if (holds<uint64_t>()) {
+            if (holds<glz::uint64_t>()) {
                glaze_error(
                   "Cannot get reference to double when variant holds uint64_t. Use as<double>() for conversion.");
             }
-            if (holds<int64_t>()) {
+            if (holds<glz::int64_t>()) {
                glaze_error(
                   "Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
             }
          }
          else if constexpr (Mode == num_mode::i64) {
-            if (holds<int64_t>()) {
+            if (holds<glz::int64_t>()) {
                glaze_error(
                   "Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
             }
@@ -457,17 +457,17 @@ export namespace glz
       [[nodiscard]] const double& get_number() const
       {
          if constexpr (Mode == num_mode::u64) {
-            if (holds<uint64_t>()) {
+            if (holds<glz::uint64_t>()) {
                glaze_error(
                   "Cannot get reference to double when variant holds uint64_t. Use as<double>() for conversion.");
             }
-            if (holds<int64_t>()) {
+            if (holds<glz::int64_t>()) {
                glaze_error(
                   "Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
             }
          }
          else if constexpr (Mode == num_mode::i64) {
-            if (holds<int64_t>()) {
+            if (holds<glz::int64_t>()) {
                glaze_error(
                   "Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
             }
@@ -480,13 +480,13 @@ export namespace glz
          requires(Mode != num_mode::f64)
       {
          if constexpr (Mode == num_mode::u64) {
-            if (holds<uint64_t>()) {
-               return static_cast<double>(get<uint64_t>());
+            if (holds<glz::uint64_t>()) {
+               return static_cast<double>(get<glz::uint64_t>());
             }
          }
          if constexpr (Mode == num_mode::u64 || Mode == num_mode::i64) {
-            if (holds<int64_t>()) {
-               return static_cast<double>(get<int64_t>());
+            if (holds<glz::int64_t>()) {
+               return static_cast<double>(get<glz::int64_t>());
             }
          }
          return get<double>();
@@ -496,14 +496,14 @@ export namespace glz
       [[nodiscard]] bool is_uint64() const noexcept
          requires(Mode == num_mode::u64)
       {
-         return holds<uint64_t>();
+         return holds<glz::uint64_t>();
       }
 
       // Check if the number is stored as int64_t (only available in i64/u64 modes)
       [[nodiscard]] bool is_int64() const noexcept
          requires(Mode != num_mode::f64)
       {
-         return holds<int64_t>();
+         return holds<glz::int64_t>();
       }
 
       // Check if the number is stored as double (only available in i64/u64 modes)
@@ -541,7 +541,7 @@ export namespace glz
       }
 
       // returns the count of items in an object or an array, or the size of a string, otherwise returns zero
-      [[nodiscard]] size_t size() const noexcept
+      [[nodiscard]] glz::size_t size() const noexcept
       {
          if (auto* v = get_if<object_t>()) {
             return v->size();

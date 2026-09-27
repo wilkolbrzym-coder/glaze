@@ -1,12 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/constraint.hpp"
-// glz:header std=<concepts>
-// glz:header std=<cstdint>
-// glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<type_traits>
 // glz:header std=<utility>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.constraint;
 
 import std;
@@ -18,8 +19,8 @@ import glaze.core.opts;
 import glaze.tuplet;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
+import glaze.core.basic_types;
 
-using std::uint32_t;
 
 namespace glz
 {
@@ -48,7 +49,7 @@ namespace glz
       typename T::constraint_t;
    };
 
-   template <uint32_t Format, is_read_constraint T>
+   template <glz::uint32_t Format, is_read_constraint T>
    struct from<Format, T>
    {
       template <auto Opts>
@@ -185,7 +186,7 @@ namespace glz
       }
    };
 
-   template <uint32_t Format, is_read_constraint T>
+   template <glz::uint32_t Format, is_read_constraint T>
    struct to<Format, T>
    {
       template <auto Opts>
@@ -245,7 +246,7 @@ namespace glz
       t.val;
    };
 
-   template <uint32_t Format, is_self_constraint T>
+   template <glz::uint32_t Format, is_self_constraint T>
    struct from<Format, T>
    {
       template <auto Opts>

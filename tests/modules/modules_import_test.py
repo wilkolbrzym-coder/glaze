@@ -37,6 +37,28 @@ from pathlib import Path
 MODULE_DECL = re.compile(r"^\s*(?:export\s+)?module\s+([A-Za-z_][\w.]*(?::[A-Za-z_][\w.]*)?)\s*;")
 IMPORT_DECL = re.compile(r"^\s*(?:export\s+)?import\s+([^;]+?)\s*;")
 
+EXCLUDED_UNITS_FILE = Path(__file__).resolve().with_name("excluded_units.txt")
+
+
+def load_exclusions() -> dict[str, str]:
+    """Units that cannot be module interface units, with the reason why.
+
+    A unit belongs here only when it is structurally impossible under the frozen
+    1:1 module/header mapping, never because it is inconvenient or failing.
+    Excluded units are printed on every run and are never counted as passes.
+    Format: one ``module.name<TAB>reason`` per line, ``#`` starts a comment.
+    """
+    if not EXCLUDED_UNITS_FILE.exists():
+        return {}
+    out: dict[str, str] = {}
+    for line in EXCLUDED_UNITS_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, _, reason = line.partition("\t")
+        out[name.strip()] = reason.strip()
+    return out
+
 
 def parse_unit(p: Path) -> dict:
     name = None
@@ -108,6 +130,8 @@ class Driver:
         unnamed = [str(u["path"]) for u in units if not u["name"]]
         if unnamed:
             raise SystemExit(f"setup error: module units without a module declaration: {unnamed}")
+        self.excluded = load_exclusions()
+        units = [u for u in units if u["name"] not in self.excluded]
         self.units = units
         self.by_name = {u["name"]: u for u in units}
 
@@ -341,6 +365,12 @@ def main() -> int:
     print(f"  std module  : {drv.std_pcm}")
     print(f"  units       : {len(units)}")
     print(f"  levels      : {[len(l) for l in drv.levels]}")
+    if drv.excluded:
+        print()
+        print("== EXCLUDED UNITS (not counted as passes) ==")
+        for name, reason in sorted(drv.excluded.items()):
+            print(f"  {name}")
+            print(f"     {reason}")
     print()
     print("-- phase 1: precompile module units --")
     t0 = time.time()
@@ -395,7 +425,8 @@ def main() -> int:
     print()
     print(f"  RESULT: {'PASS' if si['pass'] else 'FAIL'} "
           f"({si['import_ok']} importable, {si['import_partition']} partition, "
-          f"{si['import_failed']} failed of {si['units_total']})")
+          f"{si['import_failed']} failed of {si['units_total']}, "
+          f"{len(drv.excluded)} excluded)")
     return 0 if si["pass"] else 1
 
 

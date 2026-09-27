@@ -1,0 +1,10 @@
+# Module units that cannot be module interface units under the frozen 1:1
+# module/header mapping (AGENTS.md C5).  Listed here only when the limitation is
+# structural, never because a unit is failing or inconvenient.  Every entry is
+# printed on each run of modules_import_test.py and is never counted as a pass.
+#
+# Format: <module.name><TAB><reason>
+
+glaze.net.websocket_connection	websocket_connection.hpp defines websocket_server, which http_router.hpp forward-declares (needed for websocket_handler = std::shared_ptr<websocket_server>), and it needs the complete request type from http_router.hpp. Importing one from the other is either a redeclaration across modules or a circular module dependency. Fixing it needs a shared forward-declaration module or merging the two, both of which the frozen mapping forbids. Upstream's own modules branch left this file a header.
+glaze.net.websocket_client	transitively imports glaze.net.websocket_connection, so it cannot be precompiled while that unit is not a module.
+glaze.net.http_server	http_server.hpp defines streaming_response, which http_router.hpp forward-declares, and it needs http_router.hpp complete: the same mutual dependency as websocket_connection. Upstream's own modules branch left this file a header.

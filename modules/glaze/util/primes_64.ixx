@@ -3,11 +3,12 @@
 // glz:header path="glaze/util/primes_64.hpp"
 // glz:header std=<array>
 // glz:header std=<cstdint>
+// glz:header project_imports=ignore
 export module glaze.util.primes_64;
 
 import std;
+import glaze.core.basic_types;
 
-using std::uint64_t;
 
 namespace glz
 {
@@ -15,7 +16,7 @@ namespace glz
    // If you have a 10% chance of success, 128 tries has 1 : 719'380 odds of failure
    // formula: 1 / (1 - .10)^128
    // If you have a 15% chance of success, 128 tries has 1 : 1'082'374'392 odds of failure
-   export inline constexpr std::array<uint64_t, 128> primes_64 = {
+   export inline constexpr std::array<glz::uint64_t, 128> primes_64 = {
       12835920395396008793ull, 15149911783463666029ull, 15211026597907833541ull, 14523965596842631817ull,
       16449355892475772073ull, 15002762636229733759ull, 12275448295353509891ull, 16826285440568349437ull,
       17433093378066653197ull, 10902769355249605843ull,

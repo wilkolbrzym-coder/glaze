@@ -1,30 +1,43 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/write.hpp"
-// glz:header std=<algorithm>
-// glz:header std=<array>
-// glz:header std=<bit>
 // glz:header std=<charconv>
-// glz:header std=<chrono>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<cstring>
-// glz:header std=<forward_list>
 // glz:header std=<iterator>
 // glz:header std=<ostream>
-// glz:header std=<ratio>
-// glz:header std=<span>
-// glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
 // glz:header std=<variant>
-// glz:header std=<vector>
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/simd/avx.hpp"
+// glz:header include="glaze/simd/neon.hpp"
+// glz:header include="glaze/simd/simd.hpp"
+// glz:header include="glaze/simd/sse.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header include="glaze/core/buffer_traits.hpp" group=project2
+// glz:header include="glaze/core/opts.hpp" group=project2
+// glz:header include="glaze/core/reflect.hpp" group=project2
+// glz:header include="glaze/core/to.hpp" group=project2
+// glz:header include="glaze/core/write.hpp" group=project2
+// glz:header include="glaze/core/write_chars.hpp" group=project2
+// glz:header include="glaze/json/ptr.hpp" group=project2
+// glz:header include="glaze/util/dump.hpp" group=project2
+// glz:header include="glaze/util/for_each.hpp" group=project2
+// glz:header include="glaze/util/itoa.hpp" group=project2
+// glz:header project_imports=ignore
 module;
-
+// glz:module-only
 #include "glaze/simd/simd.hpp"
+// glz:end-module-only
+
+// glz:emit std
+
+// glz:emit project
+
+#if defined(_MSC_VER) && !defined(__clang__)
+// disable "unreachable code" warnings, which are often invalid due to constexpr branching
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
+// glz:emit project2
 
 export module glaze.json.write;
 
@@ -68,19 +81,11 @@ import glaze.tuplet;
 import glaze.simd.avx;
 import glaze.simd.neon;
 import glaze.simd.sse;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-#if defined(_MSC_VER) && !defined(__clang__)
-// disable "unreachable code" warnings, which are often invalid due to constexpr branching
-#pragma warning(push)
-#pragma warning(disable : 4702)
-#endif
 
-using std::uint8_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 namespace glz
 {
@@ -97,21 +102,6 @@ namespace glz
       {
          to<JSON, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                              std::forward<B>(b), std::forward<IX>(ix));
-      }
-   };
-
-   template <class T>
-   struct to<JSON, quoted_t<T>>
-   {
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
-      {
-         static thread_local std::string s(128, ' ');
-         size_t oix = 0;
-         using Value = core_t<decltype(value.val)>;
-         to<JSON, Value>::template op<Opts>(value.val, ctx, s, oix);
-         s.resize(oix);
-         serialize<JSON>::op<Opts>(s, ctx, b, ix);
       }
    };
 
@@ -191,7 +181,7 @@ namespace glz
          static constexpr auto num_members = reflect<T>::size;
 
          if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
-            for_each<N>([&]<size_t I>() {
+            for_each<N>([&]<glz::size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -203,7 +193,7 @@ namespace glz
                dump<quoted_key>(b, ix);
 
                static constexpr auto sub_partial = get<1>(group);
-               static constexpr auto index = glz::key_index<T>(key);
+               static constexpr auto index = key_index<T>(key);
                static_assert(index < num_members, "Invalid key passed to partial write");
                if constexpr (glaze_object_t<T>) {
                   static constexpr auto member = get<index>(reflect<T>::values);
@@ -223,7 +213,7 @@ namespace glz
             });
          }
          else if constexpr (writable_map_t<T>) {
-            for_each<N>([&]<size_t I>() {
+            for_each<N>([&]<glz::size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -357,7 +347,7 @@ namespace glz
 
                // Use visit to dispatch to correct member and serialize value
                visit<N>(
-                  [&]<size_t I>() {
+                  [&]<glz::size_t I>() {
                      using val_t = field_t<V, I>;
                      if constexpr (reflectable<V>) {
                         to<JSON, val_t>::template op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
@@ -450,7 +440,7 @@ namespace glz
             bool first = true;
 
             // Iterate over all keys in struct order, skipping excluded ones
-            for_each<N>([&]<size_t I>() {
+            for_each<N>([&]<glz::size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -522,9 +512,9 @@ namespace glz
    // Some types like numbers must have space to be quoted
    // All types must have space for a trailing comma
    template <class T>
-   constexpr size_t required_padding()
+   constexpr glz::size_t required_padding()
    {
-      constexpr auto value = []() -> size_t {
+      constexpr auto value = []() -> glz::size_t {
          if constexpr (boolean_like<T>) {
             return 8;
          }
@@ -581,9 +571,9 @@ namespace glz
    // Only use this if you are not prettifying
    // Returns zero if the fixed size cannot be determined
    template <class T>
-   inline constexpr size_t fixed_padding = [] {
+   inline constexpr glz::size_t fixed_padding = [] {
       constexpr auto N = reflect<T>::size;
-      size_t fixed = 2 + 16; // {} + extra padding
+      glz::size_t fixed = 2 + 16; // {} + extra padding
       for_each_short_circuit<N>([&]<auto I>() -> bool {
          using val_t = field_t<T, I>;
          if constexpr (required_padding<val_t>()) {
@@ -637,7 +627,7 @@ namespace glz
 
          std::memcpy(&b[ix], "\"", 1);
          ++ix;
-         for (size_t i = value.size(); i > 0; --i) {
+         for (glz::size_t i = value.size(); i > 0; --i) {
             if (value[i - 1]) {
                std::memcpy(&b[ix], "1", 1);
             }
@@ -662,8 +652,8 @@ namespace glz
          static constexpr auto N = reflect<T>::size;
 
          static constexpr auto max_length = [] {
-            size_t length{};
-            [&]<size_t... I>(std::index_sequence<I...>) {
+            glz::size_t length{};
+            [&]<glz::size_t... I>(std::index_sequence<I...>) {
                ((length += reflect<T>::keys[I].size()), ...);
             }(std::make_index_sequence<N>{});
             return length;
@@ -676,7 +666,7 @@ namespace glz
          std::memcpy(&b[ix], "[", 1);
          ++ix;
 
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (get_member(value, get<I>(reflect<T>::values))) {
                std::memcpy(&b[ix], "\"", 1);
                ++ix;
@@ -736,7 +726,7 @@ namespace glz
          static_assert(num_t<typename T::value_type>);
          // we need to know it is a number type to allocate buffer space
 
-         static constexpr size_t max_length = 256;
+         static constexpr glz::size_t max_length = 256;
          if (!ensure_space(ctx, b, ix + max_length)) [[unlikely]] {
             return;
          }
@@ -839,7 +829,7 @@ namespace glz
                else if constexpr (array_char_t<T>) {
                   const auto* start = value.data();
                   const auto* end = static_cast<const char*>(std::memchr(start, '\0', value.size()));
-                  return sv{start, end ? size_t(end - start) : value.size()};
+                  return sv{start, end ? glz::size_t(end - start) : value.size()};
                }
                else if constexpr (u8str_t<T>) {
                   return sv{reinterpret_cast<const char*>(value.data()), value.size()};
@@ -865,7 +855,7 @@ namespace glz
 
                std::memcpy(&b[ix], "\"", 1);
                ++ix;
-               if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
+               if (const auto escaped = char_escape_table[glz::uint8_t(value)]; escaped) {
                   std::memcpy(&b[ix], &escaped, 2);
                   ix += 2;
                }
@@ -873,7 +863,7 @@ namespace glz
                   // null character treated as empty string
                }
                else if constexpr (check_escape_control_characters(Opts)) {
-                  if (uint8_t(value) < 0x20) {
+                  if (glz::uint8_t(value) < 0x20) {
                      // Write as \uXXXX format
                      char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
                      constexpr char hex_digits[] = "0123456789ABCDEF";
@@ -987,21 +977,21 @@ namespace glz
                   // Escape handler: writes the escaped form of *c into data, advances both pointers
                   auto write_escape = [&]() {
                      if constexpr (check_escape_control_characters(Opts)) {
-                        if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
+                        if (const auto escaped = char_escape_table[glz::uint8_t(*c)]; escaped) {
                            std::memcpy(data, &escaped, 2);
                            data += 2;
                         }
                         else {
                            char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
                            constexpr char hex_digits[] = "0123456789ABCDEF";
-                           unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
-                           unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+                           unicode_escape[4] = hex_digits[(glz::uint8_t(*c) >> 4) & 0xF];
+                           unicode_escape[5] = hex_digits[glz::uint8_t(*c) & 0xF];
                            std::memcpy(data, unicode_escape, 6);
                            data += 6;
                         }
                      }
                      else {
-                        std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                        std::memcpy(data, &char_escape_table[glz::uint8_t(*c)], 2);
                         data += 2;
                      }
                      ++c;
@@ -1020,18 +1010,18 @@ namespace glz
                   if (n > 7) {
                      for (const auto end_m7 = e - 7; c < end_m7;) {
                         std::memcpy(data, c, 8);
-                        uint64_t swar;
+                        glz::uint64_t swar;
                         std::memcpy(&swar, c, 8);
                         if constexpr (std::endian::native == std::endian::big) {
                            swar = std::byteswap(swar);
                         }
 
-                        constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
-                        const uint64_t lo7 = swar & lo7_mask;
-                        const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
-                        const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                        const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                        uint64_t next = ~((quote & backslash & less_32) | swar);
+                        constexpr glz::uint64_t lo7_mask = repeat_byte8(0b01111111);
+                        const glz::uint64_t lo7 = swar & lo7_mask;
+                        const glz::uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
+                        const glz::uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                        const glz::uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                        glz::uint64_t next = ~((quote & backslash & less_32) | swar);
 
                         next &= repeat_byte8(0b10000000);
                         if (next == 0) {
@@ -1040,7 +1030,7 @@ namespace glz
                            continue;
                         }
 
-                        const auto length = (std::countr_zero(next) >> 3);
+                        const auto length = (countr_zero(next) >> 3);
                         c += length;
                         data += length;
                         write_escape();
@@ -1049,16 +1039,16 @@ namespace glz
 
                   // Scalar tail
                   for (; c < e; ++c) {
-                     if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
+                     if (const auto escaped = char_escape_table[glz::uint8_t(*c)]; escaped) {
                         std::memcpy(data, &escaped, 2);
                         data += 2;
                      }
                      else if constexpr (check_escape_control_characters(Opts)) {
-                        if (uint8_t(*c) < 0x20) {
+                        if (glz::uint8_t(*c) < 0x20) {
                            char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
                            constexpr char hex_digits[] = "0123456789ABCDEF";
-                           unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
-                           unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+                           unicode_escape[4] = hex_digits[(glz::uint8_t(*c) >> 4) & 0xF];
+                           unicode_escape[5] = hex_digits[glz::uint8_t(*c) & 0xF];
                            std::memcpy(data, unicode_escape, 6);
                            data += 6;
                         }
@@ -1073,7 +1063,7 @@ namespace glz
                      }
                   }
 
-                  ix += size_t(data - start);
+                  ix += glz::size_t(data - start);
 
                   std::memcpy(&b[ix], "\"", 1);
                   ++ix;
@@ -1311,7 +1301,7 @@ namespace glz
             if constexpr (has_size<T> && array_padding_known<T> && !has_bounded_capacity<B>) {
                const auto n = value.size();
 
-               static constexpr auto value_padding = []() -> size_t {
+               static constexpr auto value_padding = []() -> glz::size_t {
                   if constexpr (required_padding<typename T::value_type>() > 0)
                      return required_padding<typename T::value_type>();
                   else
@@ -1657,7 +1647,7 @@ namespace glz
       requires(std::is_array_v<T>)
    struct to<JSON, T>
    {
-      template <auto Opts, class V, size_t N, class... Args>
+      template <auto Opts, class V, glz::size_t N, class... Args>
       GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
       {
          serialize<JSON>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
@@ -1728,7 +1718,7 @@ namespace glz
             std::memcpy(&b[ix], null_v, 4);
          }
          else {
-            static constexpr uint32_t null_v = 1819047278;
+            static constexpr glz::uint32_t null_v = 1819047278;
             std::memcpy(&b[ix], &null_v, 4);
          }
          ix += 4;
@@ -2106,7 +2096,7 @@ namespace glz
                dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
             }
          }
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if constexpr (glaze_array_t<V>) {
                serialize<JSON>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
             }
@@ -2152,7 +2142,7 @@ namespace glz
             }
          }
          using V = std::decay_t<T>;
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if constexpr (glaze_array_t<V>) {
                serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
             }
@@ -2218,7 +2208,7 @@ namespace glz
          static constexpr auto N = glz::tuple_size_v<V> / 2;
 
          bool first = true;
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
             decltype(auto) item = glz::get<2 * I + 1>(value.value);
             using val_t = std::decay_t<decltype(item)>;
@@ -2297,7 +2287,7 @@ namespace glz
          // When merging it is possible that objects are completed empty
          // and therefore behave like skipped members even when skip_null_members is off
 
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             // We don't want to dump a comma when nothing is written
             const auto ix_start = ix;
             using Value = core_t<decltype(get<I>(value.value))>;
@@ -2332,7 +2322,7 @@ namespace glz
             return false;
          }
          else {
-            return []<size_t... I>(std::index_sequence<I...>) {
+            return []<glz::size_t... I>(std::index_sequence<I...>) {
                return (write_can_error<field_t<T, I>>() || ...);
             }(std::make_index_sequence<N>{});
          }
@@ -2415,7 +2405,7 @@ namespace glz
             static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
             if constexpr (maybe_skipped<Opts, T>) {
                bool first = true;
-               for_each<N>([&]<size_t I>() {
+               for_each<N>([&]<glz::size_t I>() {
                   using val_t = field_t<T, I>;
 
                   if constexpr (meta_has_skip<T>) {
@@ -2538,14 +2528,14 @@ namespace glz
                });
             }
             else {
-               static constexpr size_t fixed_max_size = Opts.prettify ? 0 : fixed_padding<T>;
+               static constexpr glz::size_t fixed_max_size = Opts.prettify ? 0 : fixed_padding<T>;
                if constexpr (fixed_max_size && not check_write_unchecked(Options)) {
                   if (!ensure_space(ctx, b, ix + fixed_max_size)) [[unlikely]] {
                      return;
                   }
                }
 
-               for_each<N>([&]<size_t I>() {
+               for_each<N>([&]<glz::size_t I>() {
                   if constexpr (write_can_error<T>()) {
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
@@ -2608,7 +2598,8 @@ namespace glz
                         to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                      }
                      else {
-                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
+                                                                 ix);
                      }
                   }
                });
@@ -2748,7 +2739,7 @@ namespace glz
          }
       }
       context ctx{};
-      size_t ix = 0;
+      glz::size_t ix = 0;
       to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
                                                                                 buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
@@ -2764,7 +2755,7 @@ namespace glz
    [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
       context ctx{};
-      size_t ix = 0;
+      glz::size_t ix = 0;
       to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
                                                                                 buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
@@ -2802,7 +2793,7 @@ namespace glz
          }
       }
       context ctx{};
-      size_t ix = 0;
+      glz::size_t ix = 0;
       to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
                                                                                 ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
@@ -2818,7 +2809,7 @@ namespace glz
    [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
       context ctx{};
-      size_t ix = 0;
+      glz::size_t ix = 0;
       to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
                                                                                 ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
@@ -2863,7 +2854,6 @@ namespace glz
       }
       return {};
    }
-
 }
 
 #if defined(_MSC_VER) && !defined(__clang__)

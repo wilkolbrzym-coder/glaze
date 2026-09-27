@@ -10,15 +10,22 @@
 // glz:header std=<initializer_list>
 // glz:header std=<iterator>
 // glz:header std=<limits>
+// glz:header std=<optional>
 // glz:header std=<stdexcept>
 // glz:header std=<type_traits>
 // glz:header std=<utility>
 // glz:header std=<vector>
+
+// glz:header include="glaze/core/feature_test.hpp"
+// glz:header include="glaze/util/attributes.hpp"
 // glz:header project_imports=ignore
 export module glaze.containers.ordered_map;
 
 import std;
 import glaze.core.basic_types;
+
+#include "glaze/core/feature_test.hpp"
+#include "glaze/util/attributes.hpp"
 
 
 #ifndef GLZ_THROW_OR_ABORT
@@ -90,8 +97,8 @@ namespace glz
       glz::uint32_t load_threshold_ = 0;
       float max_load_factor_ = default_max_load_factor;
 
-      [[no_unique_address]] Hash hash_;
-      [[no_unique_address]] KeyEqual equal_;
+      GLZ_NO_UNIQUE_ADDRESS Hash hash_;
+      GLZ_NO_UNIQUE_ADDRESS KeyEqual equal_;
 
       template <class...>
       struct first_emplace_arg;
@@ -776,6 +783,40 @@ namespace glz
          }
          return it->second;
       }
+
+#if GLZ_HAS_OPTIONAL_REF
+      std::optional<mapped_type&> lookup(const key_type& key)
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      std::optional<const mapped_type&> lookup(const key_type& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
+      std::optional<mapped_type&> lookup(const K& key)
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
+      std::optional<const mapped_type&> lookup(const K& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return std::nullopt;
+         return it->second;
+      }
+#endif
 
       mapped_type& operator[](const key_type& key)
       {

@@ -31,22 +31,25 @@ namespace glz
    export inline std::string read_base64(const std::string_view input)
    {
       std::string decoded_data;
-      static constexpr std::array<int, 256> decode_table = [] {
-         std::array<int, 256> t;
+      // Values are -1..63, so int8_t keeps the table at 256 B rather than 1 KB.
+      static constexpr std::array<glz::int8_t, 256> decode_table = [] {
+         std::array<glz::int8_t, 256> t;
          t.fill(-1);
          for (int i = 0; i < 64; ++i) {
-            t[base64_chars[i]] = i;
+            t[glz::uint8_t(base64_chars[i])] = glz::int8_t(i);
          }
          return t;
       }();
 
-      int val = 0, valb = -8;
-      for (unsigned char c : input) {
-         if (decode_table[c] == -1) break; // Stop decoding at padding '=' or invalid characters
-         val = (val << 6) + decode_table[c];
+      glz::uint32_t val = 0; // unsigned: the accumulator is a bit register, not a number
+      int valb = -8;
+      for (glz::uint8_t c : input) {
+         const int decoded = decode_table[c];
+         if (decoded == -1) break; // Stop decoding at padding '=' or invalid characters
+         val = (val << 6) | glz::uint32_t(decoded);
          valb += 6;
          if (valb >= 0) {
-            decoded_data.push_back((val >> valb) & 0xFF);
+            decoded_data.push_back(static_cast<char>((val >> valb) & 0xFF));
             valb -= 8;
          }
       }

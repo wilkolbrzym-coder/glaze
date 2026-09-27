@@ -2,6 +2,9 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/compare/compare.hpp"
 // glz:header std=<functional>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header project_imports=ignore
 export module glaze.compare;
 
 import std;

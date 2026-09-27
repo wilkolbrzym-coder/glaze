@@ -1,13 +1,19 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
-
-#pragma once
+// glz:header path="glaze/util/env.hpp"
+// glz:header project_imports=ignore
+module;
 
 #include <cstdlib>
 #include <optional>
 #include <string>
+// glz:emit std
+export module glaze.util.env;
 
-namespace glz
+import std;
+import glaze.core.basic_types;
+
+export namespace glz
 {
    // Copy an environment variable into owned storage.
    // Returns std::nullopt if the variable is not present.
@@ -15,7 +21,7 @@ namespace glz
    {
 #if defined(_MSC_VER) && !defined(__clang__)
       char* value = nullptr;
-      size_t len = 0;
+      glz::size_t len = 0;
       const int rc = _dupenv_s(&value, &len, name);
       if (rc == 0 && value) {
          std::string out{value};

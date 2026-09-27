@@ -7,6 +7,13 @@
 // glz:header include="glaze/core/wrappers.hpp"
 // glz:header include="glaze/reflection/get_name.hpp"
 // glz:header include="glaze/util/primes_64.hpp"
+// glz:note Mid-body include group: the reference header re-includes these after
+// glz:note the main namespace closes. The three headers are imported as modules
+// glz:note above; this group only exists so the generated header keeps the
+// glz:note includes at that position.
+// glz:header include="glaze/core/common.hpp" group=mid
+// glz:header include="glaze/reflection/get_name.hpp" group=mid
+// glz:header include="glaze/reflection/to_tuple.hpp" group=mid
 // glz:header project_imports=ignore
 export module glaze.core.reflect;
 
@@ -1442,9 +1449,7 @@ namespace glz
 
 #include <initializer_list>
 
-#include "glaze/core/common.hpp"
-#include "glaze/reflection/get_name.hpp"
-#include "glaze/reflection/to_tuple.hpp"
+// glz:emit mid
 
 namespace glz
 {

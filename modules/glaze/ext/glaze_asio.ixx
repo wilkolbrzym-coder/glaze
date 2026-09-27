@@ -1,6 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 // glz:header path="glaze/ext/glaze_asio.hpp"
+// glz:header include="glaze/rpc/registry.hpp" group=a1
+// glz:header include="glaze/rpc/repe/buffer.hpp" group=a2
+// glz:header include="glaze/util/buffer_pool.hpp" group=a3
+// glz:header include="glaze/util/memory_pool.hpp" group=a4
 // glz:header project_imports=ignore
 module;
 
@@ -56,15 +60,19 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include <coroutine>
 #include <span>
 
-#include "glaze/rpc/registry.hpp"
-#include "glaze/rpc/repe/buffer.hpp"
-#include "glaze/util/buffer_pool.hpp"
-#include "glaze/util/memory_pool.hpp"
+// glz:emit a1
+// glz:emit a2
+// glz:emit a3
+// glz:emit a4
 // glz:emit std
 export module glaze.ext.glaze_asio;
 
 import std;
 import glaze.core.basic_types;
+import glaze.rpc.registry;
+import glaze.rpc.repe.buffer;
+import glaze.util.buffer_pool;
+import glaze.util.memory_pool;
 
 export namespace glz
 {

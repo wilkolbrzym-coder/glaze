@@ -48,6 +48,9 @@ import glaze.concepts.container_concepts;
 
 import glaze.util.dump;
 import glaze.core.basic_types;
+import glaze.beve.header;
+import glaze.util.string_literal;
+import glaze.core.traits;
 
 
 namespace glz

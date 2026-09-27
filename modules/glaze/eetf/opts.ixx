@@ -1,22 +1,26 @@
-#pragma once
+// glz:header path="glaze/eetf/opts.hpp"
+// glz:header project_imports=ignore
+module;
 
 #include "glaze/core/opts.hpp"
+// glz:emit std
+export module glaze.eetf.opts;
 
-using std::uint8_t;
-using std::uint32_t;
+import std;
+import glaze.core.basic_types;
 
-namespace glz::eetf
+export namespace glz::eetf
 {
 
    // layout erlang term
-   inline constexpr uint8_t map_layout = 0;
-   inline constexpr uint8_t proplist_layout = 1;
+   inline constexpr glz::uint8_t map_layout = 0;
+   inline constexpr glz::uint8_t proplist_layout = 1;
 
    struct eetf_opts
    {
-      uint32_t format = EETF;
-      uint32_t internal{};
-      uint8_t layout = map_layout;
+      glz::uint32_t format = EETF;
+      glz::uint32_t internal{};
+      glz::uint8_t layout = map_layout;
       bool error_on_unknown_keys = true;
       bool shrink_to_fit = false;
       bool prettify = false;
@@ -27,4 +31,3 @@ namespace glz::eetf
    };
 
 } // namespace glz::eetf
-

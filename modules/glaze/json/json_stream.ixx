@@ -1,12 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/json_stream.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<istream>
 // glz:header std=<iterator>
 // glz:header std=<optional>
-// glz:header std=<utility>
-// glz:header std=<vector>
+// glz:header include="glaze/core/istream_buffer.hpp"
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.json_stream;
 
 import std;
@@ -18,9 +18,8 @@ import glaze.core.opts;
 import glaze.core.streaming_state;
 
 import glaze.json.read;
+import glaze.core.basic_types;
 
-using std::ptrdiff_t;
-using std::size_t;
 
 export namespace glz
 {
@@ -45,7 +44,7 @@ export namespace glz
    //   T - The type to deserialize each value into
    //   Stream - Byte-oriented input stream (default: std::istream)
 
-   template <class T, byte_input_stream Stream = std::istream, size_t BufferCapacity = 65536>
+   template <class T, byte_input_stream Stream = std::istream, glz::size_t BufferCapacity = 65536>
    class json_stream_reader
    {
       basic_istream_buffer<Stream, BufferCapacity> buffer_;
@@ -101,7 +100,7 @@ export namespace glz
       error_ctx last_error() const noexcept { return last_error_; }
 
       // Total bytes consumed from the stream
-      size_t bytes_consumed() const noexcept { return buffer_.bytes_consumed(); }
+      glz::size_t bytes_consumed() const noexcept { return buffer_.bytes_consumed(); }
 
       // Access to underlying buffer for advanced use
       basic_istream_buffer<Stream, BufferCapacity>& buffer() noexcept { return buffer_; }
@@ -117,7 +116,7 @@ export namespace glz
         public:
          using iterator_category = std::input_iterator_tag;
          using value_type = T;
-         using difference_type = ptrdiff_t;
+         using difference_type = std::ptrdiff_t;
          using pointer = const T*;
          using reference = const T&;
 
@@ -169,8 +168,8 @@ export namespace glz
          while (!buffer_.eof()) {
             bool found_non_ws = false;
             const char* data = buffer_.data();
-            size_t size = buffer_.size();
-            size_t i = 0;
+            glz::size_t size = buffer_.size();
+            glz::size_t i = 0;
 
             for (; i < size; ++i) {
                char c = data[i];

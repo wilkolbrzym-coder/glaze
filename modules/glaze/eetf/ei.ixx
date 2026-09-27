@@ -1,4 +1,13 @@
-#pragma once
+// glz:header path="glaze/eetf/ei.hpp"
+// glz:header include="defs.hpp" group=g_rel0
+// glz:header include="types.hpp" group=g_rel0
+// glz:header project_imports=ignore
+module;
+// glz:module-only
+#include "glaze/concepts/container_concepts.hpp"
+#include "glaze/eetf/defs.hpp"
+#include "glaze/eetf/types.hpp"
+// glz:end-module-only
 
 #include <ei.h>
 
@@ -6,19 +15,22 @@
 #include <glaze/core/common.hpp>
 #include <glaze/core/context.hpp>
 
-#include "defs.hpp"
-#include "types.hpp"
+// glz:emit g_rel0
+export module glaze.eetf.ei;
 
-namespace glz
+import std;
+import glaze.core.basic_types;
+
+export namespace glz
 {
 
    template <class Ctx, class It0, class It1>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool check_invalid_offset(Ctx&& ctx, It0&& it, It1&& end, size_t off) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool check_invalid_offset(Ctx&& ctx, It0&& it, It1&& end, glz::size_t off) noexcept
    {
       // Callers maintain it <= end (every advance is bounds-checked or followed by invalid_end),
       // so end - it is non-negative. Computing the remaining size as a subtraction avoids the
       // out-of-bounds pointer arithmetic that (it + off) > end would incur for a large off.
-      if (static_cast<size_t>(end - it) < off) [[unlikely]] {
+      if (static_cast<glz::size_t>(end - it) < off) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return true;
       }

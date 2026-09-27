@@ -18,6 +18,7 @@ import glaze.core.context;
 import glaze.core.opts;
 import glaze.core.read;
 
+import glaze.util.compare;
 import glaze.util.dump;
 
 import glaze.file.file_ops;

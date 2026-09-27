@@ -48,9 +48,20 @@ HEADERS=(
 )
 
 echo "== header smoke: $CXX, include root $INCLUDE =="
+
+# AppleClang before clang 17 does not accept -std=c++23; c++2b is the same draft
+# and is what Xcode 15's clang knows. Use the first spelling the compiler accepts
+# rather than assuming one.
+STD=c++23
+for cand in c++23 c++2b; do
+  printf 'int main() { return 0; }\n' > "$WORK/probe.cpp"
+  if "$CXX" -std="$cand" -fsyntax-only "$WORK/probe.cpp" >/dev/null 2>&1; then STD=$cand; break; fi
+done
+echo "  standard: -std=$STD"
+
 for header in "${HEADERS[@]}"; do
   printf '#include <%s>\nint main() { return 0; }\n' "$header" > "$WORK/one.cpp"
-  "$CXX" -std=c++23 -I "$INCLUDE" -c "$WORK/one.cpp" -o "$WORK/one.o"
+  "$CXX" -std="$STD" -I "$INCLUDE" -c "$WORK/one.cpp" -o "$WORK/one.o"
   echo "  ok  $header"
 done
 
@@ -69,7 +80,7 @@ int main() {
   return (out.id == 7 && out.name == "glaze") ? 0 : 2;
 }
 CPP
-"$CXX" -std=c++23 -I "$INCLUDE" "$WORK/roundtrip.cpp" -o "$WORK/roundtrip"
+"$CXX" -std="$STD" -I "$INCLUDE" "$WORK/roundtrip.cpp" -o "$WORK/roundtrip"
 "$WORK/roundtrip"
 
 echo "== header smoke PASSED =="

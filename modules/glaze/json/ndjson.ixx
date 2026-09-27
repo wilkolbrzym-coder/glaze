@@ -1,11 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/ndjson.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<string>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
+// glz:header std=<cstring>
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.ndjson;
 
 import std;
@@ -32,8 +31,8 @@ import glaze.util.for_each;
 import glaze.util.string_literal;
 import glaze.util.tuple;
 import glaze.tuplet;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 #include "glaze/util/inline.hpp"
 
@@ -124,7 +123,7 @@ namespace glz
    // one after the start of a record always ends it.
    GLZ_ALWAYS_INLINE bool window_holds_record_end(const char* it, const char* end) noexcept
    {
-      const size_t n = size_t(end - it);
+      const glz::size_t n = glz::size_t(end - it);
       if (n == 0) {
          return false;
       }
@@ -157,9 +156,9 @@ namespace glz
                if (ctx.stream.source_at_eof()) {
                   return true;
                }
-               const size_t available = size_t(end - it);
+               const glz::size_t available = glz::size_t(end - it);
                refill_window(ctx, it, end);
-               if (size_t(end - it) <= available) {
+               if (glz::size_t(end - it) <= available) {
                   return false; // the refill brought nothing new: the record does not fit
                }
             }
@@ -198,9 +197,9 @@ namespace glz
          bool progressed = false;
          if constexpr (has_streaming_state<Ctx>) {
             if (ctx.stream.enabled() && !ctx.stream.source_at_eof()) {
-               const size_t available = size_t(end - it);
+               const glz::size_t available = glz::size_t(end - it);
                refill_window(ctx, it, end);
-               progressed = size_t(end - it) > available;
+               progressed = glz::size_t(end - it) > available;
             }
          }
          if (!progressed) {
@@ -310,7 +309,7 @@ namespace glz
             }
          };
 
-         for (size_t i = 0; i < n; ++i) {
+         for (glz::size_t i = 0; i < n; ++i) {
             if (!ndjson_has_next_record<Opts>(ctx, it, end)) {
                if (bool(ctx.error)) [[unlikely]] {
                   return;

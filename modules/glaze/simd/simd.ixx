@@ -1,7 +1,7 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
-
-#pragma once
+// For the license information refer to glaze.hpp
+// glz:header path="glaze/simd/simd.hpp"
+module;
 
 #if !defined(GLZ_DISABLE_SIMD)
 #if defined(__x86_64__) || defined(_M_X64)
@@ -37,3 +37,5 @@
 #define GLZ_USE_WASM_SIMD128
 #endif
 #endif
+// glz:emit std
+export module glaze.simd.simd;

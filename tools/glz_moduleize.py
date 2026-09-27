@@ -74,6 +74,7 @@ PRAGMA_ONCE_RE = re.compile(r"^\s*#\s*pragma\s+once\b")
 # `#include <x>` / `#include "x"`, optionally with a trailing `// comment`.
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s+(?P<open>[<"])(?P<inner>[^>"]+)[>"]\s*(?P<tail>//.*)?$')
 PP_OPEN_RE = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef)\b")
+PP_MID_RE = re.compile(r"^\s*#\s*(?:else|elif)\b")
 PP_CLOSE_RE = re.compile(r"^\s*#\s*endif\b")
 PP_ANY_RE = re.compile(r"^\s*#")
 DEFINE_RE = re.compile(r"^\s*#\s*define\s+(?P<name>[A-Za-z_]\w*)")
@@ -426,38 +427,61 @@ class Converter:
         framing = split_framing(raw_lines)
         body_text = "\n".join(framing.body)
 
-        includes, include_indices = prelude_includes(framing.prelude)
-        # `balanced` decides whether the pre-code region can be lifted into the
-        # global module fragment at all.
-        balanced = prelude_is_balanced(framing.prelude)
-        has_non_include_prelude = any(
-            not is_blank(l) and not is_comment(l) and i not in include_indices
-            for i, l in enumerate(framing.prelude)
-        )
-        prologue_mode = bool(framing.prelude) and balanced
+        # Absolute indices of the pre-code region and the body.
+        body_start = len(raw_lines) - len(framing.body)
+        prelude_start = body_start - len(framing.prelude)
+        # `prologue_mode`: the pre-code region is balanced, so it can be lifted
+        # whole into the global module fragment and rendered there verbatim.
+        prologue_mode = bool(framing.prelude) and prelude_is_balanced(framing.prelude)
 
-        # Classify every depth-0 prelude include and decide which ones must be
-        # managed (replaced by a marker + metadata) rather than left verbatim.
-        treatments: dict[int, tuple[str, str | None]] = {}
-        managed: dict[int, bool] = {}
-        for inc in includes:
-            treatment, module = self.classify(inc, body_text)
-            treatments[inc.line] = (treatment, module)
-            # A literal include can be compiled verbatim only when the compiler
-            # can resolve it from the include search path: an angle header, or a
-            # slash-qualified path.  A bare sibling name (`types.hpp`) cannot.
-            literal_ok = treatment == "literal" and (
-                inc.angle or ("/" in inc.inner and not inc.inner.startswith((".", "/")))
-            )
-            # In body mode the generator drops every unconditional include that
-            # precedes code, so nothing may stay verbatim.
-            managed[inc.line] = (not literal_ok) or (not prologue_mode)
+        # Every `#include` in the header together with the preprocessor guards
+        # around it.  Angle `<...>` entries feed the generator's `std` block and
+        # `"..."` entries its `project` block.
+        scan_depth = 0
+        guard_stack: list[str] = []
+        located: list[tuple[int, Include, tuple[str, ...]]] = []
+        for i in range(prelude_start, len(raw_lines)):
+            line = raw_lines[i]
+            if PP_OPEN_RE.match(line):
+                guard_stack.append(line)
+                scan_depth += 1
+                continue
+            if PP_CLOSE_RE.match(line):
+                if guard_stack:
+                    guard_stack.pop()
+                scan_depth = max(0, scan_depth - 1)
+                continue
+            if PP_MID_RE.match(line):
+                continue
+            m = INCLUDE_RE.match(line)
+            if m:
+                located.append(
+                    (
+                        i,
+                        Include(
+                            inner=m.group("inner"),
+                            angle=m.group("open") == "<",
+                            tail=(m.group("tail") or "").strip(),
+                            line=i,
+                        ),
+                        tuple(guard_stack),
+                    )
+                )
+
+        # An include may stay literal -- and compile in place in the fragment --
+        # only when it sits in the pre-code region of a balanced unit.  Anywhere
+        # else a textual include would land in the module purview, where it would
+        # attach foreign declarations to this module; such includes are replaced
+        # by a marker and compiled from a hidden fragment copy instead.
+        managed: list[tuple[Include, tuple[str, ...]]] = [
+            (inc, guards)
+            for i, inc, guards in located
+            if not (prologue_mode and i < body_start)
+        ]
 
         metadata: list[str] = [f'// glz:header path="{self.header_rel}"']
         group_counter: dict[str, int] = {"std": 0, "project": 0}
         emitted_groups: list[str] = []
-        imports: list[str] = []
-        compile_includes: list[Include] = []
 
         def kind_of(inc: Include) -> str:
             # The generator picks the block from the delimiter: `<...>` entries
@@ -465,40 +489,40 @@ class Converter:
             return "std" if inc.angle else "project"
 
         # Split the managed includes into maximal runs of adjacent, same-kind
-        # entries; each run becomes one emit marker and one metadata block.
-        runs: list[list[Include]] = []
-        for inc in includes:
-            if not managed[inc.line]:
-                continue
+        # entries whose rendered spelling is already in non-decreasing order.
+        # The generator sorts each metadata block, so an out-of-order run is cut
+        # into ordered chunks (each becomes its own block) to keep the header's
+        # original include order.
+        runs: list[list[tuple[Include, tuple[str, ...]]]] = []
+        for entry in managed:
+            inc = entry[0]
             if runs:
-                prev = runs[-1][-1]
-                if prev.line == inc.line - 1 and kind_of(prev) == kind_of(inc):
-                    runs[-1].append(inc)
+                prev = runs[-1][-1][0]
+                if (
+                    prev.line == inc.line - 1
+                    and kind_of(prev) == kind_of(inc)
+                    and prev.meta_value() <= inc.meta_value()
+                ):
+                    runs[-1].append(entry)
                     continue
-            runs.append([inc])
+            runs.append([entry])
 
         marker_for_line: dict[int, str] = {}
         managed_lines: set[int] = set()
+        compile_includes: list[tuple[Include, tuple[str, ...]]] = []
         for run in runs:
-            kind = kind_of(run[0])
+            kind = kind_of(run[0][0])
             n = group_counter[kind]
             group_counter[kind] += 1
             group = kind if n == 0 else f"{kind}{n + 1}"
             emitted_groups.append(group)
-            marker_for_line[run[0].line] = group
-            managed_lines.update(inc.line for inc in run)
-            for inc in run:
+            marker_for_line[run[0][0].line] = group
+            managed_lines.update(entry[0].line for entry in run)
+            for inc, guards in run:
                 key = "std" if inc.angle else "include"
                 suffix = "" if group == kind else f" group={group}"
                 metadata.append(f"// glz:header {key}={inc.meta_value()}{suffix}")
-                treatment, module = treatments[inc.line]
-                if treatment == "module":
-                    imports.append(module)
-                elif treatment == "literal":
-                    # Managed but not importable: it still needs a real
-                    # definition for the unit to compile.  That copy is hidden
-                    # in a glz:module-only block so it never reaches the header.
-                    compile_includes.append(inc)
+                compile_includes.append((inc, guards))
 
         metadata.append("// glz:header project_imports=ignore")
         if not framing.has_pragma:
@@ -511,50 +535,63 @@ class Converter:
         if blank_runs > 1:
             metadata.append(f"// glz:header blank_runs={blank_runs}")
         if trailing_blanks:
-            metadata.append("// glz:header trailing_blanks={}".format(trailing_blanks))
+            metadata.append(f"// glz:header trailing_blanks={trailing_blanks}")
         if not trailing_newline:
             metadata.append("// glz:header trailing_newline=no")
 
-        # The pre-code region as it goes into the unit.  Managed include runs
-        # become markers; literal includes stay verbatim.  In prologue mode the
-        # region lives in the global module fragment; in body mode it is copied
-        # into the module body verbatim.
+        # The pre-code region as it goes into the unit: managed include runs
+        # become markers, literal includes stay verbatim.
         region: list[str] = []
-        for i, line in enumerate(framing.prelude):
-            if i in marker_for_line:
-                region.append(f"// glz:emit {marker_for_line[i]}")
-            elif i in managed_lines:
+        for abs_i in range(prelude_start, body_start):
+            if abs_i in marker_for_line:
+                region.append(f"// glz:emit {marker_for_line[abs_i]}")
+            elif abs_i in managed_lines:
                 continue
             else:
-                region.append(line)
-        if prologue_mode and not emitted_groups:
-            # Even with nothing managed, the fragment must render in place
-            # (prologue mode) rather than be dropped; an empty marker does that.
-            region.append("// glz:emit std")
+                region.append(raw_lines[abs_i])
 
-        # Textual includes that keep the unit compiling but never reach the
-        # header.
-        gmf_lines: list[str] = []
-        if compile_includes:
-            gmf_lines.append("// glz:module-only")
-            for inc in compile_includes:
-                if inc.angle:
-                    gmf_lines.append(f"#include <{inc.inner}>")
-                else:
-                    gmf_lines.append(f'#include "{resolve_project_include(inc.inner, self.header_rel)}"')
-            gmf_lines.append("// glz:end-module-only")
-        if prologue_mode:
-            gmf_lines.extend(region)
+        # The body, with managed includes replaced by markers.
+        body_lines: list[str] = []
+        for offset, line in enumerate(framing.body):
+            abs_i = body_start + offset
+            if abs_i in marker_for_line:
+                body_lines.append(f"// glz:emit {marker_for_line[abs_i]}")
+            elif abs_i in managed_lines:
+                continue
+            else:
+                body_lines.append(line)
 
-        body_lines = list(framing.body)
         if self.exports:
             body_lines = export_body(body_lines)
         # Spell the bare C integer types as glz:: aliases (AGENTS.md C3); the
         # generator renders them back, so the header is unchanged.
         alias_text, aliases_used = qualify_builtin_aliases("\n".join(body_lines))
         body_lines = alias_text.split("\n")
-        if aliases_used and BASIC_TYPES_MODULE not in imports:
+        imports: list[str] = []
+        if aliases_used:
             imports.append(BASIC_TYPES_MODULE)
+
+        # Textual copies that keep the unit compiling but never reach the
+        # header, hidden in a glz:module-only block.  Their preprocessor guards
+        # are reproduced so platform-specific headers stay conditional.
+        gmf_lines: list[str] = []
+        if compile_includes:
+            gmf_lines.append("// glz:module-only")
+            for inc, guards in compile_includes:
+                gmf_lines.extend(guards)
+                if inc.angle:
+                    gmf_lines.append(f"#include <{inc.inner}>")
+                else:
+                    gmf_lines.append(f'#include "{resolve_project_include(inc.inner, self.header_rel)}"')
+                gmf_lines.extend("#endif" for _ in guards)
+            gmf_lines.append("// glz:end-module-only")
+        if prologue_mode:
+            gmf_lines.extend(region)
+            # The pre-code region must render in place rather than be dropped as
+            # module-internal, which needs at least one emit marker in it.  The
+            # `prelude` block is always empty in prologue mode, so naming it
+            # never re-emits a real include block at the wrong position.
+            gmf_lines.append("// glz:emit prelude")
 
         output: list[str] = []
         output.extend(framing.licence)
@@ -755,6 +792,20 @@ def export_body(body: list[str]) -> list[str]:
     def at_namespace_scope() -> bool:
         return not stack or stack[-1] == "ns"
 
+    def declaration_signature(start: int) -> str:
+        """Text of the declaration beginning at ``start`` up to its ``{``/``;``.
+
+        Used to reject out-of-class member definitions: ``export`` on the
+        ``template <...>`` line of ``X<T>::member()`` is rejected by the compiler
+        ("cannot export ... as it is not at namespace scope").
+        """
+        parts: list[str] = []
+        for line in code[start : start + 12]:
+            parts.append(line)
+            if "{" in line or ";" in line:
+                break
+        return " ".join(parts)
+
     for index, raw in enumerate(code):
         stripped = raw.strip()
         if not stripped:
@@ -767,6 +818,9 @@ def export_body(body: list[str]) -> list[str]:
             elif re.match(r"^export\b", stripped):
                 begins = False
             elif re.match(r"^static\b", stripped):
+                begins = False
+            elif re.search(r"\w\s*::\s*[\w~]+\s*\(", declaration_signature(index)):
+                # out-of-class member definition
                 begins = False
             else:
                 begins = True

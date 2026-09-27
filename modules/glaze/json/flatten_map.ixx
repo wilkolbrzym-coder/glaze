@@ -1,10 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/flatten_map.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/json/read.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.flatten_map;
 
 import std;
@@ -27,8 +29,8 @@ import glaze.util.type_traits;
 import glaze.tuplet;
 
 import glaze.concepts.container_concepts;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
@@ -79,7 +81,7 @@ namespace glz
       }
       else if constexpr (glaze_array_t<V>) {
          static constexpr auto N = glz::tuple_size_v<meta_t<V>>;
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -88,7 +90,7 @@ namespace glz
       }
       else if constexpr (is_std_tuple<V>) {
          static constexpr auto N = glz::tuple_size_v<V>;
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -97,7 +99,7 @@ namespace glz
       }
       else if constexpr (tuple_t<V>) {
          static constexpr auto N = glz::tuple_size_v<V>;
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -106,7 +108,7 @@ namespace glz
       }
       else if constexpr (has_fixed_size_container<V>) {
          static constexpr auto N = get_size<V>();
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -191,7 +193,7 @@ namespace glz
       }
       else if constexpr (glaze_array_t<V>) {
          static constexpr auto N = reflect<V>::size;
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -200,7 +202,7 @@ namespace glz
       }
       else if constexpr (is_std_tuple<V>) {
          static constexpr auto N = glz::tuple_size_v<V>;
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -209,7 +211,7 @@ namespace glz
       }
       else if constexpr (tuple_t<V>) {
          static constexpr auto N = glz::tuple_size_v<V>;
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -218,7 +220,7 @@ namespace glz
       }
       else if constexpr (has_fixed_size_container<V>) {
          static constexpr auto N = get_size<V>();
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }

@@ -1,8 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/as_array_wrapper.hpp"
-// glz:header std=<cstdint>
-// glz:header std=<utility>
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/reflection/to_tuple.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.as_array_wrapper;
 
 import std;
@@ -15,12 +18,12 @@ import glaze.core.common;
 import glaze.util.type_traits;
 
 import glaze.reflection.to_tuple;
+import glaze.core.basic_types;
 
-using std::uint32_t;
 
 export namespace glz
 {
-   template <uint32_t Format, class T>
+   template <glz::uint32_t Format, class T>
       requires(is_specialization_v<T, as_array_wrapper>)
    struct from<Format, T>
    {
@@ -32,7 +35,7 @@ export namespace glz
       }
    };
 
-   template <uint32_t Format, class T>
+   template <glz::uint32_t Format, class T>
       requires(is_specialization_v<T, as_array_wrapper>)
    struct to<Format, T>
    {

@@ -6,20 +6,22 @@
 // glz:header std=<bit>
 // glz:header std=<charconv>
 // glz:header std=<chrono>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
 // glz:header std=<limits>
-// glz:header std=<map>
-// glz:header std=<optional>
-// glz:header std=<string>
 // glz:header std=<string_view>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
-// glz:header std=<variant>
-// glz:header std=<vector>
+// glz:header include="glaze/bson/header.hpp"
+// glz:header include="glaze/core/buffer_traits.hpp"
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/core/to.hpp"
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/file/file_ops.hpp"
+// glz:header include="glaze/util/dump.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/uuid.hpp"
+// glz:header project_imports=ignore
 export module glaze.bson.write;
 
 import glaze.bson.header;
@@ -49,15 +51,10 @@ import glaze.util.variant;
 import glaze.tuplet;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::int32_t;
-using std::int64_t;
-using std::uint8_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 // BSON writer — https://bsonspec.org/spec.html
 //
@@ -98,7 +95,7 @@ namespace glz
       // is already in wire order. On big-endian hosts we byteswap first.
 
       template <std::integral T, class B>
-      GLZ_ALWAYS_INLINE void dump_le(T value, B& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE void dump_le(T value, B& b, glz::size_t& ix) noexcept
       {
          if constexpr (std::endian::native == std::endian::big) {
             value = static_cast<T>(std::byteswap(static_cast<std::make_unsigned_t<T>>(value)));
@@ -110,7 +107,7 @@ namespace glz
       // Patch a little-endian integer into a previously reserved slot without
       // advancing `pos`. Used to backfill document lengths.
       template <std::integral T, class B>
-      GLZ_ALWAYS_INLINE void patch_le(T value, B& b, size_t pos) noexcept
+      GLZ_ALWAYS_INLINE void patch_le(T value, B& b, glz::size_t pos) noexcept
       {
          if constexpr (std::endian::native == std::endian::big) {
             value = static_cast<T>(std::byteswap(static_cast<std::make_unsigned_t<T>>(value)));
@@ -119,16 +116,16 @@ namespace glz
       }
 
       template <class B>
-      GLZ_ALWAYS_INLINE void dump_le_double(double value, B& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE void dump_le_double(double value, B& b, glz::size_t& ix) noexcept
       {
-         const uint64_t bits = std::bit_cast<uint64_t>(value);
-         dump_le<uint64_t>(bits, b, ix);
+         const glz::uint64_t bits = std::bit_cast<glz::uint64_t>(value);
+         dump_le<glz::uint64_t>(bits, b, ix);
       }
 
       // --- Raw byte writers ----------------------------------------------------
 
       template <class B>
-      GLZ_ALWAYS_INLINE void put_byte(uint8_t byte, B& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE void put_byte(glz::uint8_t byte, B& b, glz::size_t& ix) noexcept
       {
          using V = typename std::decay_t<B>::value_type;
          b[ix] = static_cast<V>(byte);
@@ -136,7 +133,7 @@ namespace glz
       }
 
       template <class B>
-      GLZ_ALWAYS_INLINE void put_bytes(const void* src, size_t n, B& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE void put_bytes(const void* src, glz::size_t n, B& b, glz::size_t& ix) noexcept
       {
          if (n) {
             std::memcpy(&b[ix], src, n);
@@ -148,7 +145,7 @@ namespace glz
 
       // Reserve 4 bytes for the int32 length field and record the starting ix.
       template <class B>
-      GLZ_ALWAYS_INLINE bool reserve_document_length(is_context auto& ctx, B& b, size_t& ix, size_t& start) noexcept
+      GLZ_ALWAYS_INLINE bool reserve_document_length(is_context auto& ctx, B& b, glz::size_t& ix, glz::size_t& start) noexcept
       {
          if (!ensure_space(ctx, b, ix + 4 + write_padding_bytes)) [[unlikely]] {
             return false;
@@ -160,26 +157,26 @@ namespace glz
 
       // Emit the terminating null byte and backfill the int32 length.
       template <class B>
-      GLZ_ALWAYS_INLINE bool finalize_document(is_context auto& ctx, B& b, size_t& ix, size_t start) noexcept
+      GLZ_ALWAYS_INLINE bool finalize_document(is_context auto& ctx, B& b, glz::size_t& ix, glz::size_t start) noexcept
       {
          if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
             return false;
          }
          put_byte(0, b, ix);
-         const size_t total = ix - start;
-         if (total > static_cast<size_t>((std::numeric_limits<int32_t>::max)())) [[unlikely]] {
+         const glz::size_t total = ix - start;
+         if (total > static_cast<glz::size_t>((std::numeric_limits<glz::int32_t>::max)())) [[unlikely]] {
             ctx.error = error_code::invalid_length;
             return false;
          }
-         patch_le<int32_t>(static_cast<int32_t>(total), b, start);
+         patch_le<glz::int32_t>(static_cast<glz::int32_t>(total), b, start);
          return true;
       }
 
       // --- Element prefix: type_byte | key cstring | 0x00 ---------------------
 
       template <class B>
-      GLZ_ALWAYS_INLINE bool write_element_prefix(is_context auto& ctx, uint8_t type_byte, std::string_view key, B& b,
-                                                  size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE bool write_element_prefix(is_context auto& ctx, glz::uint8_t type_byte, std::string_view key, B& b,
+                                                  glz::size_t& ix) noexcept
       {
          if (!ensure_space(ctx, b, ix + 2 + key.size() + write_padding_bytes)) [[unlikely]] {
             return false;
@@ -193,19 +190,19 @@ namespace glz
       // --- BSON string value: int32(len+1) | UTF-8 | 0x00 ---------------------
 
       template <class B>
-      GLZ_ALWAYS_INLINE bool dump_string_value(is_context auto& ctx, std::string_view str, B& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE bool dump_string_value(is_context auto& ctx, std::string_view str, B& b, glz::size_t& ix) noexcept
       {
          // The length field stores byte count of the UTF-8 payload PLUS the
          // trailing null byte, per spec.
-         if (str.size() > static_cast<size_t>((std::numeric_limits<int32_t>::max)()) - 1) [[unlikely]] {
+         if (str.size() > static_cast<glz::size_t>((std::numeric_limits<glz::int32_t>::max)()) - 1) [[unlikely]] {
             ctx.error = error_code::invalid_length;
             return false;
          }
          if (!ensure_space(ctx, b, ix + 4 + str.size() + 1 + write_padding_bytes)) [[unlikely]] {
             return false;
          }
-         const int32_t len = static_cast<int32_t>(str.size() + 1);
-         dump_le<int32_t>(len, b, ix);
+         const glz::int32_t len = static_cast<glz::int32_t>(str.size() + 1);
+         dump_le<glz::int32_t>(len, b, ix);
          put_bytes(str.data(), str.size(), b, ix);
          put_byte(0, b, ix);
          return true;
@@ -252,21 +249,21 @@ namespace glz
       // Returns the key bytes for the given index as a string_view over a
       // caller-owned scratch buffer or the precomputed table. The returned
       // string_view does not include the null terminator.
-      GLZ_ALWAYS_INLINE std::string_view array_key(size_t index, std::array<char, 24>& scratch) noexcept
+      GLZ_ALWAYS_INLINE std::string_view array_key(glz::size_t index, std::array<char, 24>& scratch) noexcept
       {
          if (index < small_array_keys.size()) {
             const auto& entry = small_array_keys[index];
-            size_t n = 0;
+            glz::size_t n = 0;
             while (entry[n] != '\0') ++n;
             return std::string_view{entry.data(), n};
          }
          auto [end, ec] = std::to_chars(scratch.data(), scratch.data() + scratch.size(), index);
-         return std::string_view{scratch.data(), static_cast<size_t>(end - scratch.data())};
+         return std::string_view{scratch.data(), static_cast<glz::size_t>(end - scratch.data())};
       }
 
       // --- Skip logic (ported from JSONB) ------------------------------------
 
-      template <class T, auto Opts, size_t I>
+      template <class T, auto Opts, glz::size_t I>
       consteval bool should_skip_reflected_field()
       {
          using V = field_t<T, I>;
@@ -309,7 +306,7 @@ namespace glz
    template <>
    struct to<BSON, bool>
    {
-      static constexpr uint8_t type_code = bson::type::boolean;
+      static constexpr glz::uint8_t type_code = bson::type::boolean;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(bool value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -340,7 +337,7 @@ namespace glz
    struct to<BSON, T>
    {
       static constexpr bool fits_int32 = (sizeof(T) <= 2) || (sizeof(T) == 4 && std::is_signed_v<T>);
-      static constexpr uint8_t type_code = fits_int32 ? bson::type::int32 : bson::type::int64;
+      static constexpr glz::uint8_t type_code = fits_int32 ? bson::type::int32 : bson::type::int64;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(T value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -349,19 +346,19 @@ namespace glz
             if (!ensure_space(ctx, b, ix + 4 + write_padding_bytes)) [[unlikely]] {
                return;
             }
-            bson_detail::dump_le<int32_t>(static_cast<int32_t>(value), b, ix);
+            bson_detail::dump_le<glz::int32_t>(static_cast<glz::int32_t>(value), b, ix);
          }
          else {
             if (!ensure_space(ctx, b, ix + 8 + write_padding_bytes)) [[unlikely]] {
                return;
             }
-            if constexpr (std::same_as<T, uint64_t>) {
-               if (value > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) [[unlikely]] {
+            if constexpr (std::same_as<T, glz::uint64_t>) {
+               if (value > static_cast<glz::uint64_t>((std::numeric_limits<glz::int64_t>::max)())) [[unlikely]] {
                   ctx.error = error_code::invalid_length;
                   return;
                }
             }
-            bson_detail::dump_le<int64_t>(static_cast<int64_t>(value), b, ix);
+            bson_detail::dump_le<glz::int64_t>(static_cast<glz::int64_t>(value), b, ix);
          }
       }
    };
@@ -372,7 +369,7 @@ namespace glz
    template <std::floating_point T>
    struct to<BSON, T>
    {
-      static constexpr uint8_t type_code = bson::type::double_;
+      static constexpr glz::uint8_t type_code = bson::type::double_;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(T value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -399,7 +396,7 @@ namespace glz
    struct to<BSON, T>
    {
       using U = std::underlying_type_t<T>;
-      static constexpr uint8_t type_code = to<BSON, U>::type_code;
+      static constexpr glz::uint8_t type_code = to<BSON, U>::type_code;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(T value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -420,7 +417,7 @@ namespace glz
    struct to<BSON, T>
    {
       using Rep = typename std::remove_cvref_t<T>::rep;
-      static constexpr uint8_t type_code = to<BSON, Rep>::type_code;
+      static constexpr glz::uint8_t type_code = to<BSON, Rep>::type_code;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -439,7 +436,7 @@ namespace glz
    struct to<BSON, T>
    {
       using Rep = typename std::remove_cvref_t<T>::rep;
-      static constexpr uint8_t type_code = to<BSON, Rep>::type_code;
+      static constexpr glz::uint8_t type_code = to<BSON, Rep>::type_code;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -454,7 +451,7 @@ namespace glz
    template <str_t T>
    struct to<BSON, T>
    {
-      static constexpr uint8_t type_code = bson::type::string;
+      static constexpr glz::uint8_t type_code = bson::type::string;
 
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -476,7 +473,7 @@ namespace glz
    template <>
    struct to<BSON, bson::object_id>
    {
-      static constexpr uint8_t type_code = bson::type::object_id;
+      static constexpr glz::uint8_t type_code = bson::type::object_id;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(const bson::object_id& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -491,7 +488,7 @@ namespace glz
    template <>
    struct to<BSON, bson::datetime>
    {
-      static constexpr uint8_t type_code = bson::type::datetime;
+      static constexpr glz::uint8_t type_code = bson::type::datetime;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(const bson::datetime& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -499,14 +496,14 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 8 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         bson_detail::dump_le<int64_t>(value.ms_since_epoch, b, ix);
+         bson_detail::dump_le<glz::int64_t>(value.ms_since_epoch, b, ix);
       }
    };
 
    template <>
    struct to<BSON, bson::timestamp>
    {
-      static constexpr uint8_t type_code = bson::type::timestamp;
+      static constexpr glz::uint8_t type_code = bson::type::timestamp;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(const bson::timestamp& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -515,15 +512,15 @@ namespace glz
             return;
          }
          // BSON timestamp wire format: low 32 bits = increment, high 32 bits = seconds.
-         bson_detail::dump_le<uint32_t>(value.increment, b, ix);
-         bson_detail::dump_le<uint32_t>(value.seconds, b, ix);
+         bson_detail::dump_le<glz::uint32_t>(value.increment, b, ix);
+         bson_detail::dump_le<glz::uint32_t>(value.seconds, b, ix);
       }
    };
 
    template <>
    struct to<BSON, bson::regex>
    {
-      static constexpr uint8_t type_code = bson::type::regex;
+      static constexpr glz::uint8_t type_code = bson::type::regex;
 
       template <auto Opts>
       static void op(const bson::regex& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -548,7 +545,7 @@ namespace glz
    template <>
    struct to<BSON, bson::javascript>
    {
-      static constexpr uint8_t type_code = bson::type::javascript;
+      static constexpr glz::uint8_t type_code = bson::type::javascript;
 
       template <auto Opts>
       static void op(const bson::javascript& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -560,7 +557,7 @@ namespace glz
    template <>
    struct to<BSON, bson::decimal128>
    {
-      static constexpr uint8_t type_code = bson::type::decimal128;
+      static constexpr glz::uint8_t type_code = bson::type::decimal128;
 
       template <auto Opts>
       static void op(const bson::decimal128& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -575,7 +572,7 @@ namespace glz
    template <>
    struct to<BSON, bson::min_key>
    {
-      static constexpr uint8_t type_code = bson::type::min_key;
+      static constexpr glz::uint8_t type_code = bson::type::min_key;
 
       template <auto Opts>
       static void op(const bson::min_key&, is_context auto&&, auto&&, auto&) noexcept
@@ -587,7 +584,7 @@ namespace glz
    template <>
    struct to<BSON, bson::max_key>
    {
-      static constexpr uint8_t type_code = bson::type::max_key;
+      static constexpr glz::uint8_t type_code = bson::type::max_key;
 
       template <auto Opts>
       static void op(const bson::max_key&, is_context auto&&, auto&&, auto&) noexcept
@@ -601,28 +598,28 @@ namespace glz
    template <class Bytes>
    struct to<BSON, bson::binary<Bytes>>
    {
-      static constexpr uint8_t type_code = bson::type::binary;
+      static constexpr glz::uint8_t type_code = bson::type::binary;
 
       template <auto Opts>
       static void op(const bson::binary<Bytes>& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
-         const size_t n = value.data.size();
+         const glz::size_t n = value.data.size();
          // Subtype 0x02 (binary_old) is spec-required to wrap the payload in
          // a redundant inner int32 length, so its outer length is 4 + N.
          const bool is_binary_old = value.subtype == bson::binary_subtype::binary_old;
-         const size_t cap = static_cast<size_t>((std::numeric_limits<int32_t>::max)()) - (is_binary_old ? 4 : 0);
+         const glz::size_t cap = static_cast<glz::size_t>((std::numeric_limits<glz::int32_t>::max)()) - (is_binary_old ? 4 : 0);
          if (n > cap) [[unlikely]] {
             ctx.error = error_code::invalid_length;
             return;
          }
-         const size_t extra = is_binary_old ? 4 : 0;
+         const glz::size_t extra = is_binary_old ? 4 : 0;
          if (!ensure_space(ctx, b, ix + 5 + extra + n + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         bson_detail::dump_le<int32_t>(static_cast<int32_t>(n + extra), b, ix);
+         bson_detail::dump_le<glz::int32_t>(static_cast<glz::int32_t>(n + extra), b, ix);
          bson_detail::put_byte(value.subtype, b, ix);
          if (is_binary_old) {
-            bson_detail::dump_le<int32_t>(static_cast<int32_t>(n), b, ix);
+            bson_detail::dump_le<glz::int32_t>(static_cast<glz::int32_t>(n), b, ix);
          }
          if (n) {
             bson_detail::put_bytes(value.data.data(), n, b, ix);
@@ -634,7 +631,7 @@ namespace glz
    template <>
    struct to<BSON, uuid>
    {
-      static constexpr uint8_t type_code = bson::type::binary;
+      static constexpr glz::uint8_t type_code = bson::type::binary;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(const uuid& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -642,7 +639,7 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 5 + 16 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         bson_detail::dump_le<int32_t>(16, b, ix);
+         bson_detail::dump_le<glz::int32_t>(16, b, ix);
          bson_detail::put_byte(bson::binary_subtype::uuid, b, ix);
          bson_detail::put_bytes(value.bytes.data(), 16, b, ix);
       }
@@ -652,7 +649,7 @@ namespace glz
    template <>
    struct to<BSON, std::chrono::system_clock::time_point>
    {
-      static constexpr uint8_t type_code = bson::type::datetime;
+      static constexpr glz::uint8_t type_code = bson::type::datetime;
 
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(const std::chrono::system_clock::time_point& value, is_context auto&& ctx,
@@ -662,7 +659,7 @@ namespace glz
             return;
          }
          const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(value.time_since_epoch()).count();
-         bson_detail::dump_le<int64_t>(static_cast<int64_t>(ms), b, ix);
+         bson_detail::dump_le<glz::int64_t>(static_cast<glz::int64_t>(ms), b, ix);
       }
    };
 
@@ -679,7 +676,7 @@ namespace glz
    namespace bson_detail
    {
       template <auto Opts, class T, class B>
-      void write_member_element(std::string_view key, T&& value, is_context auto& ctx, B&& b, size_t& ix)
+      void write_member_element(std::string_view key, T&& value, is_context auto& ctx, B&& b, glz::size_t& ix)
       {
          using DT = std::remove_cvref_t<T>;
 
@@ -708,7 +705,7 @@ namespace glz
       // Returns true iff the struct field at index I should be omitted from
       // output under the given options (skip_null_members on an empty optional,
       // skip_default_members on a default-valued field, etc.).
-      template <class T, auto Opts, size_t I, class Value, class Tie>
+      template <class T, auto Opts, glz::size_t I, class Value, class Tie>
       GLZ_ALWAYS_INLINE bool should_skip_field_runtime(const Value& value, [[maybe_unused]] const Tie& t) noexcept
       {
          using val_t = field_t<T, I>;
@@ -752,13 +749,13 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<BSON, T>
    {
-      static constexpr uint8_t type_code = bson::type::document;
+      static constexpr glz::uint8_t type_code = bson::type::document;
       static constexpr auto N = reflect<T>::size;
 
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
-         size_t start{};
+         glz::size_t start{};
          if (!bson_detail::reserve_document_length(ctx, b, ix, start)) [[unlikely]] {
             return;
          }
@@ -772,7 +769,7 @@ namespace glz
             }
          }();
 
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
             if constexpr (bson_detail::should_skip_reflected_field<T, Opts, I>()) {
@@ -808,7 +805,7 @@ namespace glz
    template <writable_map_t T>
    struct to<BSON, T>
    {
-      static constexpr uint8_t type_code = bson::type::document;
+      static constexpr glz::uint8_t type_code = bson::type::document;
 
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
@@ -818,7 +815,7 @@ namespace glz
          static_assert(str_t<key_t> || std::is_convertible_v<key_t, std::string_view>,
                        "BSON map keys must be string-like (cstring on the wire)");
 
-         size_t start{};
+         glz::size_t start{};
          if (!bson_detail::reserve_document_length(ctx, b, ix, start)) [[unlikely]] {
             return;
          }
@@ -849,18 +846,18 @@ namespace glz
    template <writable_array_t T>
    struct to<BSON, T>
    {
-      static constexpr uint8_t type_code = bson::type::array;
+      static constexpr glz::uint8_t type_code = bson::type::array;
 
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
-         size_t start{};
+         glz::size_t start{};
          if (!bson_detail::reserve_document_length(ctx, b, ix, start)) [[unlikely]] {
             return;
          }
 
          std::array<char, 24> scratch{};
-         size_t i = 0;
+         glz::size_t i = 0;
          for (auto&& item : value) {
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -880,19 +877,19 @@ namespace glz
       requires glaze_array_t<T>
    struct to<BSON, T>
    {
-      static constexpr uint8_t type_code = bson::type::array;
+      static constexpr glz::uint8_t type_code = bson::type::array;
       static constexpr auto N = reflect<T>::size;
 
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
-         size_t start{};
+         glz::size_t start{};
          if (!bson_detail::reserve_document_length(ctx, b, ix, start)) [[unlikely]] {
             return;
          }
 
          std::array<char, 24> scratch{};
-         for_each<N>([&]<size_t I>() {
+         for_each<N>([&]<glz::size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
             const std::string_view key = bson_detail::array_key(I, scratch);

@@ -3,6 +3,9 @@
 // glz:header path="glaze/util/nullable_traits.hpp"
 // glz:header std=<memory>
 // glz:header std=<optional>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header project_imports=ignore
 export module glaze.util.nullable_traits;
 
 import std;
@@ -17,8 +20,9 @@ import glaze.util.type_traits;
 export namespace glz
 {
    // Emplace a default-constructed value into a nullable type so the inner value can be parsed into.
-   // Handles std::optional, std::unique_ptr, std::shared_ptr, raw pointers when allocation is allowed,
-   // and nullable-like types exposing emplace() or a glz::meta constructor.
+   // Handles std::optional, std::unique_ptr, std::shared_ptr, raw pointers (when Opts/ctx permit
+   // allocation), and any other nullable_like type exposing emplace() or a glz::meta constructor.
+   // Returns true on success; on failure, sets ctx.error = invalid_nullable_read and returns false.
    template <auto Opts, nullable_like T>
    inline bool nullable_emplace(T& nullable, auto& ctx)
    {

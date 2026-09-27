@@ -9,13 +9,16 @@
 // glz:header std=<type_traits>
 // glz:header std=<utility>
 // glz:header include="glaze/util/inline.hpp"
+// glz:header std=<array> group=tuple_tail
+// glz:header std=<tuple> group=tuple_tail
+// glz:header std=<variant> group=tuple_tail
 // glz:header project_imports=ignore
+module;
+#include "glaze/util/inline.hpp"
 export module glaze.tuplet;
 
 import std;
 import glaze.core.basic_types;
-
-#include "glaze/util/inline.hpp"
 
 #if (__has_cpp_attribute(no_unique_address))
 #define GLZ_NO_UNIQUE_ADDRESS [[no_unique_address]]
@@ -512,9 +515,7 @@ namespace glz
    } // namespace tuplet
 } // namespace glz
 
-#include <array>
-#include <tuple>
-#include <variant>
+// glz:emit tuple_tail
 
 export namespace glz
 {

@@ -1,12 +1,17 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/record/recorder.hpp"
-// glz:header std=<cstddef>
 // glz:header std=<deque>
 // glz:header std=<string>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
 // glz:header std=<variant>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/csv.hpp // TODO: split out recorder specializations so this isn't necessary"
+// glz:header include="glaze/json.hpp // TODO: split out recorder specializations so this isn't necessary"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header include="glaze/util/type_traits.hpp"
+// glz:header include="glaze/util/variant.hpp"
+// glz:header project_imports=ignore
+// glz:header license=none
 export module glaze.record.recorder;
 
 import std;
@@ -24,8 +29,8 @@ import glaze.util.parse;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
 import glaze.util.variant;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
@@ -41,7 +46,8 @@ namespace glz
          void operator=(T& ref)
          {
             using container_type = std::decay_t<decltype(data[0].second.first)>;
-            data.emplace_back(std::make_pair(name, std::make_pair(container_type{std::deque<std::decay_t<T>>{}}, &ref)));
+            data.emplace_back(
+               std::make_pair(name, std::make_pair(container_type{std::deque<std::decay_t<T>>{}}, &ref)));
          }
       };
    }
@@ -94,8 +100,8 @@ namespace glz
             dumpn(check_indentation_char(Opts), ctx.depth, args...);
          }
 
-         const size_t n = value.data.size();
-         for (size_t i = 0; i < n; ++i) {
+         const glz::size_t n = value.data.size();
+         for (glz::size_t i = 0; i < n; ++i) {
             auto& [name, v] = value.data[i];
             serialize<JSON>::op<Opts>(name, ctx, args...); // write name as key
 
@@ -150,8 +156,8 @@ namespace glz
          }
 
          // we read into available containers, we do not initialize here
-         const size_t n = value.data.size();
-         for (size_t i = 0; i < n; ++i) {
+         const glz::size_t n = value.data.size();
+         for (glz::size_t i = 0; i < n; ++i) {
             if (*it == '}') [[unlikely]] {
                ctx.error = error_code::expected_brace;
             }
@@ -207,8 +213,8 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          if constexpr (Opts.layout == rowwise) {
-            const size_t n = value.data.size();
-            for (size_t i = 0; i < n; ++i) {
+            const glz::size_t n = value.data.size();
+            for (glz::size_t i = 0; i < n; ++i) {
                auto& [name, v] = value.data[i];
                dump_maybe_empty(name, args...);
 
@@ -228,7 +234,7 @@ namespace glz
          else {
             // dump titles
             const auto n = value.data.size();
-            size_t i = 0;
+            glz::size_t i = 0;
             for (auto& [name, data] : value.data) {
                dump_maybe_empty(name, args...);
                ++i;
@@ -239,7 +245,7 @@ namespace glz
 
             dump('\n', args...);
 
-            size_t row = 0;
+            glz::size_t row = 0;
             bool end = false;
             while (true) {
                i = 0;

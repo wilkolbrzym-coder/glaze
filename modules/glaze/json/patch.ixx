@@ -17,6 +17,8 @@ import glaze.json.write;
 
 import glaze.core.common;
 import glaze.core.context;
+import glaze.core.opts;
+import glaze.core.seek;
 import glaze.forward;
 
 import glaze.util.expected;

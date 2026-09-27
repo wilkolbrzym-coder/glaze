@@ -7,17 +7,18 @@
 // glz:header std=<cstdint>
 // glz:header std=<string>
 // glz:header std=<vector>
+// glz:header include="glaze/concepts/container_concepts.hpp"
+// glz:header include="glaze/util/inline.hpp"
+// glz:header project_imports=ignore
 export module glaze.bson.header;
 
 import std;
 
 import glaze.concepts.container_concepts;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::int64_t;
-using std::uint8_t;
-using std::uint32_t;
 
 // BSON - https://bsonspec.org/spec.html
 //
@@ -38,44 +39,44 @@ export namespace glz::bson
    // Element type codes. These identify the wire format of a document value.
    namespace type
    {
-      inline constexpr uint8_t double_ = 0x01; // IEEE 754 binary64
-      inline constexpr uint8_t string = 0x02; // int32 length (bytes+1) | UTF-8 | 0x00
-      inline constexpr uint8_t document = 0x03; // embedded BSON document
-      inline constexpr uint8_t array = 0x04; // document with integer-string keys
-      inline constexpr uint8_t binary = 0x05; // int32 length | subtype | bytes
-      inline constexpr uint8_t undefined = 0x06; // DEPRECATED (read-only support)
-      inline constexpr uint8_t object_id = 0x07; // 12 bytes
-      inline constexpr uint8_t boolean = 0x08; // 0x00 = false, 0x01 = true
-      inline constexpr uint8_t datetime = 0x09; // int64 ms since Unix epoch, UTC
-      inline constexpr uint8_t null = 0x0A; // no value bytes
-      inline constexpr uint8_t regex = 0x0B; // cstring pattern | cstring options
-      inline constexpr uint8_t db_pointer = 0x0C; // DEPRECATED (read-only support)
-      inline constexpr uint8_t javascript = 0x0D; // string (length-prefixed)
-      inline constexpr uint8_t symbol = 0x0E; // DEPRECATED (read-only support)
-      inline constexpr uint8_t code_w_scope = 0x0F; // DEPRECATED (read-only support)
-      inline constexpr uint8_t int32 = 0x10;
-      inline constexpr uint8_t timestamp = 0x11; // uint64: low 32 increment, high 32 seconds
-      inline constexpr uint8_t int64 = 0x12;
-      inline constexpr uint8_t decimal128 = 0x13; // IEEE 754-2008 decimal128 (opaque)
-      inline constexpr uint8_t min_key = 0xFF; // compares lower than all other values
-      inline constexpr uint8_t max_key = 0x7F; // compares higher than all other values
+      inline constexpr glz::uint8_t double_ = 0x01; // IEEE 754 binary64
+      inline constexpr glz::uint8_t string = 0x02; // int32 length (bytes+1) | UTF-8 | 0x00
+      inline constexpr glz::uint8_t document = 0x03; // embedded BSON document
+      inline constexpr glz::uint8_t array = 0x04; // document with integer-string keys
+      inline constexpr glz::uint8_t binary = 0x05; // int32 length | subtype | bytes
+      inline constexpr glz::uint8_t undefined = 0x06; // DEPRECATED (read-only support)
+      inline constexpr glz::uint8_t object_id = 0x07; // 12 bytes
+      inline constexpr glz::uint8_t boolean = 0x08; // 0x00 = false, 0x01 = true
+      inline constexpr glz::uint8_t datetime = 0x09; // int64 ms since Unix epoch, UTC
+      inline constexpr glz::uint8_t null = 0x0A; // no value bytes
+      inline constexpr glz::uint8_t regex = 0x0B; // cstring pattern | cstring options
+      inline constexpr glz::uint8_t db_pointer = 0x0C; // DEPRECATED (read-only support)
+      inline constexpr glz::uint8_t javascript = 0x0D; // string (length-prefixed)
+      inline constexpr glz::uint8_t symbol = 0x0E; // DEPRECATED (read-only support)
+      inline constexpr glz::uint8_t code_w_scope = 0x0F; // DEPRECATED (read-only support)
+      inline constexpr glz::uint8_t int32 = 0x10;
+      inline constexpr glz::uint8_t timestamp = 0x11; // uint64: low 32 increment, high 32 seconds
+      inline constexpr glz::uint8_t int64 = 0x12;
+      inline constexpr glz::uint8_t decimal128 = 0x13; // IEEE 754-2008 decimal128 (opaque)
+      inline constexpr glz::uint8_t min_key = 0xFF; // compares lower than all other values
+      inline constexpr glz::uint8_t max_key = 0x7F; // compares higher than all other values
    }
 
    // Binary data subtype codes, carried in the byte immediately after the
    // length of a type::binary element.
    namespace binary_subtype
    {
-      inline constexpr uint8_t generic = 0x00;
-      inline constexpr uint8_t function = 0x01;
-      inline constexpr uint8_t binary_old = 0x02; // DEPRECATED
-      inline constexpr uint8_t uuid_old = 0x03; // DEPRECATED
-      inline constexpr uint8_t uuid = 0x04; // RFC 9562 UUID, canonical byte order
-      inline constexpr uint8_t md5 = 0x05;
-      inline constexpr uint8_t encrypted = 0x06;
-      inline constexpr uint8_t column = 0x07; // compressed BSON column
-      inline constexpr uint8_t sensitive = 0x08;
-      inline constexpr uint8_t vector = 0x09;
-      inline constexpr uint8_t user_defined_min = 0x80; // 0x80..0xFF reserved for users
+      inline constexpr glz::uint8_t generic = 0x00;
+      inline constexpr glz::uint8_t function = 0x01;
+      inline constexpr glz::uint8_t binary_old = 0x02; // DEPRECATED
+      inline constexpr glz::uint8_t uuid_old = 0x03; // DEPRECATED
+      inline constexpr glz::uint8_t uuid = 0x04; // RFC 9562 UUID, canonical byte order
+      inline constexpr glz::uint8_t md5 = 0x05;
+      inline constexpr glz::uint8_t encrypted = 0x06;
+      inline constexpr glz::uint8_t column = 0x07; // compressed BSON column
+      inline constexpr glz::uint8_t sensitive = 0x08;
+      inline constexpr glz::uint8_t vector = 0x09;
+      inline constexpr glz::uint8_t user_defined_min = 0x80; // 0x80..0xFF reserved for users
    }
 
    // Opaque 12-byte MongoDB ObjectId. MongoDB assigns meaning to the bytes
@@ -83,7 +84,7 @@ export namespace glz::bson
    // fixed-size blob. Glaze does the same — generation is left to the user.
    struct object_id
    {
-      std::array<uint8_t, 12> bytes{};
+      std::array<glz::uint8_t, 12> bytes{};
 
       [[nodiscard]] constexpr bool operator==(const object_id&) const noexcept = default;
       [[nodiscard]] constexpr auto operator<=>(const object_id&) const noexcept = default;
@@ -94,7 +95,7 @@ export namespace glz::bson
    // which the BSON codec auto-maps to this type.
    struct datetime
    {
-      int64_t ms_since_epoch{};
+      glz::int64_t ms_since_epoch{};
 
       [[nodiscard]] constexpr bool operator==(const datetime&) const noexcept = default;
       [[nodiscard]] constexpr auto operator<=>(const datetime&) const noexcept = default;
@@ -105,8 +106,8 @@ export namespace glz::bson
    // increment counter and whose high 32 bits hold seconds since epoch.
    struct timestamp
    {
-      uint32_t increment{};
-      uint32_t seconds{};
+      glz::uint32_t increment{};
+      glz::uint32_t seconds{};
 
       [[nodiscard]] constexpr bool operator==(const timestamp&) const noexcept = default;
       [[nodiscard]] constexpr auto operator<=>(const timestamp&) const noexcept = default;
@@ -136,7 +137,7 @@ export namespace glz::bson
    // for now — this type carries the raw bytes for round-trip interop.
    struct decimal128
    {
-      std::array<uint8_t, 16> bytes{};
+      std::array<glz::uint8_t, 16> bytes{};
 
       [[nodiscard]] constexpr bool operator==(const decimal128&) const noexcept = default;
    };
@@ -166,7 +167,7 @@ export namespace glz::bson
    struct binary
    {
       Bytes data{};
-      uint8_t subtype = binary_subtype::generic;
+      glz::uint8_t subtype = binary_subtype::generic;
 
       [[nodiscard]] constexpr bool operator==(const binary&) const noexcept = default;
    };

@@ -11,6 +11,11 @@ export module glaze.json.json_format;
 import glaze.core.common;
 import glaze.core.opts;
 
+import glaze.core.buffer_traits;
+import glaze.core.context;
+
+import glaze.concepts.container_concepts;
+
 import glaze.util.dump;
 import glaze.util.parse;
 import glaze.util.bit;

@@ -31,11 +31,22 @@ import glaze.util.type_traits;
 import glaze.util.string_literal;
 
 
-namespace glz
+export namespace glz
 {
    namespace detail
    {
+      // glz:module-only
+#if 0
+      // glz:end-module-only
       static constexpr std::string_view empty_path = "";
+      // glz:module-only
+#else
+      // Consumers in other modules need this default template argument to name an
+      // exported entity; `static` would give it internal linkage and Clang rejects
+      // exporting it. The generated header keeps the reference `static` form.
+      inline constexpr std::string_view empty_path = "";
+#endif
+      // glz:end-module-only
 
       // Single shared thread_local buffer for error messages (safe for synchronous operations)
       inline std::string& error_buffer()

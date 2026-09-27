@@ -2,19 +2,19 @@
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/string_literal.hpp"
 // glz:header std=<array>
-// glz:header std=<cstddef>
 // glz:header std=<string_view>
+// glz:header project_imports=ignore
 export module glaze.util.string_literal;
 
 import std;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
    export using sv = std::string_view;
 
-   export template <size_t N>
+   export template <glz::size_t N>
    struct string_literal
    {
       using value_type = char;
@@ -22,11 +22,11 @@ namespace glz
       using const_reference = const value_type&;
       using pointer = value_type*;
       using const_pointer = const value_type*;
-      using size_type = size_t;
+      using size_type = glz::size_t;
 
-      static constexpr size_t length = (N > 0) ? (N - 1) : 0;
+      static constexpr glz::size_t length = (N > 0) ? (N - 1) : 0;
 
-      [[nodiscard]] constexpr size_t size() const noexcept { return length; }
+      [[nodiscard]] constexpr glz::size_t size() const noexcept { return length; }
 
       constexpr string_literal() noexcept = default;
       constexpr string_literal(const string_literal&) noexcept = default;
@@ -36,7 +36,7 @@ namespace glz
 
       constexpr string_literal(const char (&str)[N]) noexcept
       {
-         for (size_t i = 0; i < N; ++i) {
+         for (glz::size_t i = 0; i < N; ++i) {
             value[i] = str[i];
          }
       }
@@ -55,11 +55,11 @@ namespace glz
       constexpr const_reference operator[](size_type index) const noexcept { return value[index]; }
    };
 
-   export template <size_t N>
+   export template <glz::size_t N>
    constexpr auto string_literal_from_view(sv str)
    {
       string_literal<N + 1> sl{};
-      for (size_t i = 0; i < str.size(); ++i) {
+      for (glz::size_t i = 0; i < str.size(); ++i) {
          sl[i] = str[i];
       }
       *(sl.value + N) = '\0';
@@ -78,7 +78,7 @@ namespace glz
       inline constexpr std::string_view join()
       {
          static constexpr auto joined_arr = []() {
-            constexpr size_t len = (Strs.size() + ... + 0);
+            constexpr glz::size_t len = (Strs.size() + ... + 0);
             std::array<char, len + 1> arr;
             auto append = [i = 0, &arr](const auto& s) mutable {
                for (auto c : s) arr[i++] = c;
@@ -101,7 +101,7 @@ namespace glz
          constexpr auto N = Key.size();
          std::array<char, N + 4 + Prettify> result; // [quote, key, quote, colon, (prettify? space), null]
          result[0] = '"';
-         for (size_t i = 0; i < N; ++i) {
+         for (glz::size_t i = 0; i < N; ++i) {
             result[i + 1] = Key[i];
          }
          result[N + 1] = '"';

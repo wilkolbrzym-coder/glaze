@@ -19,6 +19,13 @@
 #include <string>
 #include <vector>
 
+// Wall clock AND process CPU clock. On a machine with other work running, wall
+// throughput is load-dominated; CPU time per op is the reproducible number.
+static double now_cpu_ns()
+{
+   return static_cast<double>(std::clock()) * (1.0e9 / static_cast<double>(CLOCKS_PER_SEC));
+}
+
 using namespace std::chrono;
 
 struct inner
@@ -129,15 +136,18 @@ struct timed
 {
    size_t iters;
    double total_ns;
+   double cpu_ns;
    uint64_t checksum;
 };
 
-// Runs `op` repeatedly until at least `target_ns` have elapsed (>= 3 iters).
+// Runs `op` repeatedly until at least `target_ns` of WALL time have elapsed
+// (>= 3 iters), recording both wall and process-CPU time for the loop.
 template <class F>
 static timed<F> time_op(F&& op, double target_ns = 2.0e8)
 {
    uint64_t checksum = op(); // warm-up, also validates it works
    auto t0 = steady_clock::now();
+   double c0 = now_cpu_ns();
    size_t iters = 0;
    checksum = 0;
    do {
@@ -146,17 +156,22 @@ static timed<F> time_op(F&& op, double target_ns = 2.0e8)
       if (steady_clock::now() - t0 > std::chrono::seconds(30)) break;
    } while (duration_cast<nanoseconds>(steady_clock::now() - t0).count() < target_ns || iters < 3);
    double total_ns = static_cast<double>(duration_cast<nanoseconds>(steady_clock::now() - t0).count());
-   return {iters, total_ns, checksum};
+   double cpu_ns = now_cpu_ns() - c0;
+   return {iters, total_ns, cpu_ns, checksum};
 }
 
-static void emit(const char* format, const char* op, size_t iters, double total_ns, size_t bytes,
-                 uint64_t checksum)
+static void emit(const char* format, const char* op, size_t iters, double total_ns, double cpu_ns,
+                 size_t bytes, uint64_t checksum)
 {
    double ns_per_op = total_ns / static_cast<double>(iters);
    double mb_per_s = (static_cast<double>(bytes) * static_cast<double>(iters)) / (total_ns / 1.0e9) / 1.0e6;
-   std::printf("RT format=%-4s op=%-5s iters=%zu total_ns=%.0f ns_per_op=%.1f mb_per_s=%.1f bytes=%zu "
+   double cpu_ns_per_op = cpu_ns / static_cast<double>(iters);
+   double cpu_mb_per_s = (static_cast<double>(bytes) * static_cast<double>(iters)) / (cpu_ns / 1.0e9) / 1.0e6;
+   std::printf("RT format=%-4s op=%-5s iters=%zu total_ns=%.0f ns_per_op=%.1f mb_per_s=%.1f "
+               "cpu_total_ns=%.0f cpu_ns_per_op=%.1f cpu_mb_per_s=%.1f bytes=%zu "
                "checksum=0x%016" PRIx64 "\n",
-               format, op, iters, total_ns, ns_per_op, mb_per_s, bytes, checksum);
+               format, op, iters, total_ns, ns_per_op, mb_per_s, cpu_ns, cpu_ns_per_op, cpu_mb_per_s,
+               bytes, checksum);
 }
 
 int main(int argc, char** argv)
@@ -208,7 +223,7 @@ int main(int argc, char** argv)
          glz::write_json(r, b);
          return fnv1a(b.data(), b.size());
       });
-      emit("json", "write", t.iters, t.total_ns, json.size(), t.checksum);
+      emit("json", "write", t.iters, t.total_ns, t.cpu_ns, json.size(), t.checksum);
    }
    {
       auto t = time_op([&] {
@@ -216,7 +231,7 @@ int main(int argc, char** argv)
          glz::read_json(out, json);
          return record_sum(out);
       });
-      emit("json", "read", t.iters, t.total_ns, json.size(), t.checksum);
+      emit("json", "read", t.iters, t.total_ns, t.cpu_ns, json.size(), t.checksum);
    }
 
    // ---- BEVE ------------------------------------------------------------
@@ -228,7 +243,7 @@ int main(int argc, char** argv)
          glz::write_beve(r, b);
          return fnv1a(b.data(), b.size());
       });
-      emit("beve", "write", t.iters, t.total_ns, beve.size(), t.checksum);
+      emit("beve", "write", t.iters, t.total_ns, t.cpu_ns, beve.size(), t.checksum);
    }
    {
       auto t = time_op([&] {
@@ -236,7 +251,7 @@ int main(int argc, char** argv)
          glz::read_beve(out, beve);
          return record_sum(out);
       });
-      emit("beve", "read", t.iters, t.total_ns, beve.size(), t.checksum);
+      emit("beve", "read", t.iters, t.total_ns, t.cpu_ns, beve.size(), t.checksum);
    }
 
    // ---- CBOR ------------------------------------------------------------
@@ -248,7 +263,7 @@ int main(int argc, char** argv)
          glz::write_cbor(r, b);
          return fnv1a(b.data(), b.size());
       });
-      emit("cbor", "write", t.iters, t.total_ns, cbor.size(), t.checksum);
+      emit("cbor", "write", t.iters, t.total_ns, t.cpu_ns, cbor.size(), t.checksum);
    }
    {
       auto t = time_op([&] {
@@ -256,7 +271,7 @@ int main(int argc, char** argv)
          glz::read_cbor(out, cbor);
          return record_sum(out);
       });
-      emit("cbor", "read", t.iters, t.total_ns, cbor.size(), t.checksum);
+      emit("cbor", "read", t.iters, t.total_ns, t.cpu_ns, cbor.size(), t.checksum);
    }
 
    // ---- TOML ------------------------------------------------------------
@@ -268,7 +283,7 @@ int main(int argc, char** argv)
          glz::write_toml(d, b);
          return fnv1a(b.data(), b.size());
       });
-      emit("toml", "write", t.iters, t.total_ns, toml.size(), t.checksum);
+      emit("toml", "write", t.iters, t.total_ns, t.cpu_ns, toml.size(), t.checksum);
    }
    {
       auto t = time_op([&] {
@@ -276,7 +291,7 @@ int main(int argc, char** argv)
          glz::read_toml(out, toml);
          return toml_sum(out);
       });
-      emit("toml", "read", t.iters, t.total_ns, toml.size(), t.checksum);
+      emit("toml", "read", t.iters, t.total_ns, t.cpu_ns, toml.size(), t.checksum);
    }
 
    return 0;

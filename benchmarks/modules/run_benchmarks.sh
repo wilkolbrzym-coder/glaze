@@ -164,16 +164,18 @@ run_header_path() {
   record "preprocessed_lines_umbrella" "header" "$tag" "$ppl_probe" "lines" "" "compile_probe.cpp -E | wc -l"
 
   # --- runtime: run each rep, take best-of; dump bytes once ---
-  echo "  running runtime workload ($tag) ..."
+  echo "  running runtime workload ($tag), 7 runs ..."
   local run_out="$WORK/rt_header_${tag}.txt"
   : > "$run_out"
   local r
-  for r in 1 2 3; do
+  for r in $(seq 1 7); do
     "$WORK/bin/runtime_${tag}" >> "$run_out"
   done
   mkdir -p "$WORK/dump_header"
   "$WORK/bin/runtime_${tag}" --dump "$WORK/dump_header" > "$WORK/dump_header/summary.txt"
   record "runtime_raw_log" "header" "$tag" "$(wc -l < "$run_out")" "lines" "" "$run_out"
+  python3 "$RUNNER/summarize_runtime.py" --path header --compiler "$tag" \
+      --files "$run_out" --tsv "$METRICS_TSV"
   echo
 }
 
@@ -273,15 +275,17 @@ PY
   record "preprocessed_lines" "module" "clang" "$ppl" "lines" "" "runtime_main.cpp -E | wc -l"
   record "distinct_glaze_headers" "module" "clang" "0" "files" "" "no textual includes in consumer"
 
-  echo "  running runtime workload (module) ..."
+  echo "  running runtime workload (module), 7 runs ..."
   run_out="$WORK/rt_module.txt"
   : > "$run_out"
-  for r in 1 2 3; do
+  for r in $(seq 1 7); do
     "$WORK/bin/runtime_mod" >> "$run_out"
   done
   mkdir -p "$WORK/dump_module"
   "$WORK/bin/runtime_mod" --dump "$WORK/dump_module" > "$WORK/dump_module/summary.txt"
   record "runtime_raw_log" "module" "clang" "$(wc -l < "$run_out")" "lines" "" "$run_out"
+  python3 "$RUNNER/summarize_runtime.py" --path module --compiler clang \
+      --files "$run_out" --tsv "$METRICS_TSV"
 
   # --- correctness: identical bytes ---
   echo "== cross-path byte comparison =="

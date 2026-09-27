@@ -74,8 +74,15 @@ Everything is scripted; no command needs to be run by hand. Output:
 
 ## Honesty notes
 
-* Compile-time is a **median over `--reps`** runs with the spread printed;
-  never a single run. The raw samples are in `timing.jsonl`.
+* Every compile-time metric is reported twice: **wall** time (median/spread)
+  and **child CPU** time (`ru_utime + ru_stime` of the compiler processes,
+  median/spread). On a machine with other processes running, wall time is
+  load-dominated — the measured spread makes this obvious — while CPU time is
+  reproducible to a few percent. Both are medians over `--reps` runs, never a
+  single run; the raw samples are in `timing.jsonl`.
+* This machine runs other applications concurrently (load average well above
+  the 4 available cores during measurement), so **prefer the `_cpu` rows for
+  compile-time comparisons** and treat wall times as upper bounds.
 * The **module half is only reported if the module units actually compile**.
   If the dependency closure fails, the driver prints the failing units and
   marks the module metrics unavailable rather than inventing numbers.

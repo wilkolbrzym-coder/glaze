@@ -1,0 +1,120 @@
+name: modules-tests
+
+# The C++20 modules build is opt-in (glaze_ENABLE_MODULES) and no existing
+# workflow builds it, so a regression in modules/ or in the headers it consumes
+# would merge unchecked. This workflow builds the `glaze_modules` library with
+# the `modules` preset and then runs tests/modules/run_modules_tests.sh, which
+# precompiles every modules/**/*.ixx, links an import-only TU per module and runs
+# the behavioural tests. The runner exits non-zero on any failure, so the job is
+# red whenever the module path is broken.
+#
+# Triggers:
+#   * pull_request is path-filtered: the modules build is expensive (254 module
+#     units, each precompiled, compiled to an object and linked into an import
+#     TU, plus libc++'s std module) and only a small set of paths can affect it.
+#     Maintainers: a path-filtered check reports as "skipped" on PRs that touch
+#     none of these paths, so do not make this a required status check while the
+#     filter is in place, or PRs will wait forever for a status that never comes.
+#   * workflow_dispatch is unfiltered, so the suite can be run on demand against
+#     any ref (main, a PR branch, a tag) without needing a matching path change.
+
+on:
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'include/**'
+      - 'tests/modules/**'
+      - 'cmake/modules-files.cmake'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - '.github/workflows/modules-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  modules:
+    # ubuntu-24.04 (noble) is pinned instead of ubuntu-latest: apt.llvm.org
+    # publishes llvm-toolchain-noble-22 and the experimental `import std` path
+    # depends on the exact libc++ layout, so the base image should not move
+    # underneath the job. Update this pin deliberately (and check apt.llvm.org
+    # still carries the matching suite) when the runner image is refreshed.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    env:
+      # CMake >= 3.30 is required for the experimental `import std` support that
+      # the `modules` preset turns on. Ubuntu 24.04's apt cmake is 3.28, so use
+      # the official Kitware release, pinned to the version this conversion was
+      # validated against locally.
+      CMAKE_VERSION: 4.4.3
+      LLVM_VERSION: 22
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install clang ${{ env.LLVM_VERSION }} with libc++
+        # Ubuntu 24.04 does not ship clang-22, so take it from apt.llvm.org, the
+        # same source the repo's clang-linux-latest.yml uses for clang 19/20.
+        run: |
+          set -eux
+          codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-${LLVM_VERSION} libc++-${LLVM_VERSION}-dev libc++abi-${LLVM_VERSION}-dev
+          clang++-${LLVM_VERSION} --version
+
+      - name: Install CMake ${{ env.CMAKE_VERSION }}
+        run: |
+          set -eux
+          curl -fsSL -o /tmp/cmake.tar.gz \
+            "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz"
+          sudo tar -xzf /tmp/cmake.tar.gz -C /opt
+          echo "/opt/cmake-${CMAKE_VERSION}-linux-x86_64/bin" >> "$GITHUB_PATH"
+          "/opt/cmake-${CMAKE_VERSION}-linux-x86_64/bin/cmake" --version
+
+      - name: Build the libc++ std module
+        # `import std;` in the module build needs CMake to find libc++.modules.json.
+        # On Ubuntu that file is also installed under /usr/lib/<triplet>/, where its
+        # relative "../share/libc++/v1/..." source paths do not resolve; the copy
+        # under /usr/lib/llvm-22/lib/ does resolve, which is exactly what the
+        # `modules` preset pins in CMAKE_CXX_STDLIB_MODULES_JSON. Assert both files
+        # so a layout change fails here with a clear message, then precompile
+        # std.cppm ourselves: the test runner needs a standalone std.pcm for
+        # -fmodule-file=std=, and this is the recipe that produces the local
+        # toolchain/std.pcm (verified byte-identical, sha256 e3cc8cb2...).
+        run: |
+          set -eux
+          test -f "/usr/lib/llvm-${LLVM_VERSION}/lib/libc++.modules.json"
+          test -f "/usr/lib/llvm-${LLVM_VERSION}/share/libc++/v1/std.cppm"
+          clang++-${LLVM_VERSION} -std=c++23 -stdlib=libc++ \
+            --precompile "/usr/lib/llvm-${LLVM_VERSION}/share/libc++/v1/std.cppm" \
+            -o "$RUNNER_TEMP/std.pcm"
+
+      - name: Configure the modules preset
+        run: cmake --preset modules
+
+      - name: Build glaze_modules
+        # Ninja is preinstalled on the runner. No ccache on purpose: the job is
+        # opt-in and does its own BMI caching in the test runner's scratch dir, so
+        # wiring a cache would add moving parts without removing a whole rebuild.
+        run: cmake --build --preset modules -j "$(nproc)" --target glaze_modules
+
+      - name: Run the module test suite
+        env:
+          CXX: clang++-${{ env.LLVM_VERSION }}
+          STD_PCM: ${{ runner.temp }}/std.pcm
+        run: |
+          bash tests/modules/run_modules_tests.sh \
+            --root "$GITHUB_WORKSPACE" \
+            --jobs "$(nproc)" \
+            --work "$RUNNER_TEMP/glz-modules-tests"

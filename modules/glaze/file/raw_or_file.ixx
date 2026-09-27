@@ -1,9 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/file/raw_or_file.hpp"
-// glz:header std=<cstddef>
 // glz:header std=<filesystem>
-// glz:header std=<string>
+// glz:header include="glaze/core/common.hpp"
+// glz:header project_imports=ignore
 export module glaze.file.raw_or_file;
 
 import std;
@@ -17,10 +17,10 @@ import glaze.file.file_ops;
 import glaze.json.read;
 import glaze.json.skip;
 import glaze.util.dump;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::size_t;
 
 namespace glz
 {
@@ -82,7 +82,7 @@ namespace glz
             skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            value.str = {it_start, static_cast<size_t>(it - it_start)};
+            value.str = {it_start, static_cast<glz::size_t>(it - it_start)};
          }
       }
    };

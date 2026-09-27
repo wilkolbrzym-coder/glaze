@@ -1,16 +1,26 @@
-#pragma once
+// glz:header path="glaze/eetf/read.hpp"
+// glz:header include="defs.hpp" group=g_rel0
+// glz:header include="ei.hpp" group=g_rel0
+// glz:header include="opts.hpp" group=g_rel0
+// glz:header project_imports=ignore
+module;
+// glz:module-only
+#include "glaze/concepts/container_concepts.hpp"
+#include "glaze/eetf/defs.hpp"
+#include "glaze/eetf/ei.hpp"
+#include "glaze/eetf/opts.hpp"
+// glz:end-module-only
 
 #include <glaze/core/chrono.hpp>
 #include <glaze/core/context.hpp>
 #include <glaze/core/read.hpp>
 #include <glaze/core/reflect.hpp>
 
-#include "defs.hpp"
-#include "ei.hpp"
-#include "opts.hpp"
+// glz:emit g_rel0
+export module glaze.eetf.read;
 
-using std::uint8_t;
-using std::size_t;
+import std;
+import glaze.core.basic_types;
 
 namespace glz
 {
@@ -87,7 +97,7 @@ namespace glz
       }
    } // namespace detail
 
-   template <>
+   export template <>
    struct skip_value<EETF>
    {
       template <auto Opts>
@@ -97,7 +107,7 @@ namespace glz
       }
    };
 
-   template <>
+   export template <>
    struct parse<EETF>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
@@ -149,7 +159,7 @@ namespace glz
    // with glz::depth_guard, bounding the descent at max_recursive_depth_limit. Note that skipping is
    // delegated to ei_skip_term, whose own recursion happens inside erl_interface and cannot be
    // bounded from here.
-   template <readable_array_t T>
+   export template <readable_array_t T>
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
@@ -165,7 +175,7 @@ namespace glz
       }
    };
 
-   template <boolean_like T>
+   export template <boolean_like T>
    struct from<EETF, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
@@ -183,7 +193,7 @@ namespace glz
       }
    };
 
-   template <num_t T>
+   export template <num_t T>
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
@@ -201,7 +211,7 @@ namespace glz
       }
    };
 
-   template <atom_t T>
+   export template <atom_t T>
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
@@ -221,7 +231,7 @@ namespace glz
       }
    };
 
-   template <str_t T>
+   export template <str_t T>
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
@@ -241,7 +251,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(tuple_t<T> || is_std_tuple<T>)
    struct from<EETF, T> final
    {
@@ -279,15 +289,15 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            for_each<N>([&]<glz::size_t I>() { parse<EETF>::op<Opts>(std::get<I>(value), ctx, it, end); });
          }
          else {
-            for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+            for_each<N>([&]<glz::size_t I>() { parse<EETF>::op<Opts>(glz::get<I>(value), ctx, it, end); });
          }
       }
    };
 
-   template <class T>
+   export template <class T>
       requires glaze_object_t<T> || reflectable<T>
    struct from<EETF, T> final
    {
@@ -335,7 +345,7 @@ namespace glz
                   const sv key{mkey.data(), n};
 
                   visit<N>(
-                     [&]<size_t I>() {
+                     [&]<glz::size_t I>() {
                         static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                         static constexpr auto Length = TargetKey.size();
                         if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
@@ -390,7 +400,7 @@ namespace glz
       }
    };
 
-   template <readable_map_t T>
+   export template <readable_map_t T>
    struct from<EETF, T> final
    {
       template <auto Opts>
@@ -438,13 +448,13 @@ namespace glz
    // But this approach can (and would) add a place for errors - because underlying data can hold "similar" types in
    // EETF terms
 
-   template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, class Buffer>
+   export template <glz::uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, class Buffer>
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
    {
       return read<eetf::eetf_opts{.format = EETF, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, is_buffer Buffer>
+   export template <glz::uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, is_buffer Buffer>
    [[nodiscard]] expected<T, error_ctx> read_term(Buffer&& buffer) noexcept
    {
       T value{};
@@ -458,4 +468,3 @@ namespace glz
    }
 
 } // namespace glz
-

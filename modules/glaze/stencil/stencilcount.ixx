@@ -1,11 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/stencil/stencilcount.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<string>
-// glz:header std=<unordered_map>
-// glz:header std=<utility>
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/format/format_to.hpp"
+// glz:header project_imports=ignore
 export module glaze.stencil.stencilcount;
 
 import glaze.core.common;
@@ -27,10 +27,8 @@ import glaze.util.for_each;
 import glaze.concepts.container_concepts;
 
 import std;
+import glaze.core.basic_types;
 
-using std::uint8_t;
-using std::uint64_t;
-using std::size_t;
 
 namespace glz
 {
@@ -51,14 +49,14 @@ namespace glz
       }
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
-            while (it < end && whitespace_table[uint8_t(*it)]) {
+            while (it < end && whitespace_table[glz::uint8_t(*it)]) {
                ++it;
             }
          };
 
-         std::unordered_map<uint64_t, uint64_t> numbering{};
-         uint64_t major_count{};
-         uint64_t prev_count{};
+         std::unordered_map<glz::uint64_t, glz::uint64_t> numbering{};
+         glz::uint64_t major_count{};
+         glz::uint64_t prev_count{};
 
          while (it < end) {
             switch (*it) {
@@ -68,7 +66,7 @@ namespace glz
                   ++it;
                   skip_whitespace();
 
-                  uint64_t count{};
+                  glz::uint64_t count{};
                   while (it != end && *it == '+') {
                      ++it;
                      ++count;
@@ -86,7 +84,7 @@ namespace glz
                   else if (count > 1) {
                      format_to(buffer, major_count);
 
-                     for (size_t i = 1; i < count; ++i) {
+                     for (glz::size_t i = 1; i < count; ++i) {
                         buffer.append(".");
                         auto& x = numbering[i];
                         if (i == (count - 1)) {
@@ -121,7 +119,7 @@ namespace glz
                      break;
                   }
 
-                  const sv key{start, size_t(it - start)};
+                  const sv key{start, glz::size_t(it - start)};
 
                   skip_whitespace();
 
@@ -136,7 +134,7 @@ namespace glz
                   if (index < N) [[likely]] {
                      std::string temp{};
                      visit<N>(
-                        [&]<size_t I>() {
+                        [&]<glz::size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
@@ -156,7 +154,7 @@ namespace glz
                         index);
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return {size_t(it - start), ctx.error, ctx.custom_error_message};
+                        return {glz::size_t(it - start), ctx.error, ctx.custom_error_message};
                      }
 
                      buffer.append(temp);
@@ -194,7 +192,7 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+         return {glz::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
       }
 
       return {};

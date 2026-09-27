@@ -33,6 +33,7 @@
 module;
 // glz:module-only
 #include <cassert>
+#include <string.h>
 // glz:end-module-only
 
 // glz:emit std

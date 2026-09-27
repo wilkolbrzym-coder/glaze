@@ -255,7 +255,6 @@ namespace glz::yaml
       t['t'] = true;
       t['\t'] = true; // backslash + literal tab character
       t['n'] = true;
-      t['\t'] = true; // backslash + literal tab character
       t['v'] = true;
       t['f'] = true;
       t['r'] = true;

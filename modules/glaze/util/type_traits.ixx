@@ -1,16 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/util/type_traits.hpp"
-// glz:header std=<cstddef>
 // glz:header std=<functional>
 // glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
+// glz:header project_imports=ignore
 export module glaze.util.type_traits;
 
 import std;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 export namespace glz
 {
@@ -52,7 +50,7 @@ export namespace glz
    template <class R, class... Args>
    struct function_traits<std::function<R(Args...)>>
    {
-      static constexpr size_t N = sizeof...(Args);
+      static constexpr glz::size_t N = sizeof...(Args);
       using result_type = R;
       using arguments = std::tuple<Args...>;
    };

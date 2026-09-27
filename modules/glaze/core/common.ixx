@@ -214,7 +214,7 @@ namespace glz
 
    // Stands in for key_bits_scope in objects that cannot include a file, so they do not touch the
    // context at all.
-   struct inert_key_bits_scope final
+   export struct inert_key_bits_scope final
    {
       constexpr inert_key_bits_scope(auto&&, void*) noexcept {}
    };

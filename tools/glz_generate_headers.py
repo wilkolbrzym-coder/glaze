@@ -69,12 +69,18 @@ HEADER_META_RE = re.compile(r"^\s*//\s*glz:header(?:\s+(?P<body>.*))?$")
 # is exported here rather than there, and so on); they are not part of the
 # reference header, so the generator drops them exactly like glz:header lines.
 MODULE_NOTE_RE = re.compile(r"^\s*//\s*glz:note\b")
-# A placement marker for the synthesised blocks of the header prologue.  A few
-# reference headers interleave their include blocks with real preprocessor
-# logic (api/lib.hpp's platform block, ext/eigen.hpp's __has_include fallback,
-# core/write_chars.hpp's feature-detection block).  `// glz:emit <what>` puts
-# the named block where the module wants it instead of at its default position.
-EMIT_MARKER_RE = re.compile(r"^\s*//\s*glz:emit\s+(?P<what>std|project|prelude)\s*$")
+# A placement marker for a synthesised include block.  A few reference headers
+# interleave their include blocks with real code or preprocessor logic
+# (api/lib.hpp's platform block, ext/eigen.hpp's __has_include fallback,
+# core/write_chars.hpp's feature-detection block, json/write.hpp's MSVC warning
+# block between two project-include groups, json/generic_fwd.hpp's mid-body
+# std/project groups).  `// glz:emit <block>` puts that block where the module
+# wants it instead of at its default position.  The default blocks are `std`,
+# `project` and `prelude`; a module may declare more with `group=<name>` on an
+# `include=`/`std=` metadata line, and place them with `// glz:emit <name>`.
+# A marker may sit anywhere the header needs the block: the global-module
+# fragment, the pre-include preamble, or the body between statements.
+EMIT_MARKER_RE = re.compile(r"^\s*//\s*glz:emit\s+(?P<what>[A-Za-z_][A-Za-z0-9_.]*)\s*$")
 # Module-only scaffolding.  A few modules need a helper or a macro fallback for
 # their own compilation while the reference header spells the same thing
 # differently (json/lazy.hpp takes GLZ_NO_UNIQUE_ADDRESS from tuplet/tuple.hpp).
@@ -103,6 +109,11 @@ class HeaderMetadata:
     path: str | None = None
     std: list[str] = field(default_factory=list)
     includes: list[str] = field(default_factory=list)
+    # Includes assigned to a named block with `group=<name>` instead of the
+    # default `std`/`project` block.  A reference header that splits its
+    # includes around real code needs more than one block of the same kind;
+    # the block is placed with `// glz:emit <name>`.
+    extra_blocks: dict[str, list[str]] = field(default_factory=dict)
     project_imports: str = "include"
     skip: str | None = None
     # A handful of upstream headers carry no licence preamble and/or no final
@@ -215,6 +226,13 @@ def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None
             tokens = shlex.split(body, posix=True)
         except ValueError as exc:
             raise HeaderGenerationError(f"{source_path}:{line_number}: invalid glz:header metadata: {exc}") from exc
+        # `group=<name>` on a metadata line assigns that line's include= / std=
+        # entries to a named block instead of the default `project` / `std`
+        # block.  Read it first so token order does not matter.
+        group: str | None = None
+        for token in tokens:
+            if token.startswith("group="):
+                group = token.split("=", 1)[1] or None
         for token in tokens:
             # `skip` may be written bare or with a value; either way the module
             # intentionally has no public header (internal unit).
@@ -224,12 +242,22 @@ def parse_metadata(source_path: Path, lines: list[str]) -> HeaderMetadata | None
             if "=" not in token:
                 raise HeaderGenerationError(f"{source_path}:{line_number}: expected key=value metadata, got {token!r}")
             key, value = token.split("=", 1)
+            if key == "group":
+                continue
             if key == "path":
                 metadata.path = value
             elif key == "std":
-                metadata.std.append(normalize_std_include(value))
+                include = normalize_std_include(value)
+                if group is None:
+                    metadata.std.append(include)
+                else:
+                    metadata.extra_blocks.setdefault(group, []).append(include)
             elif key in {"include", "extra_include", "extra_includes"}:
-                metadata.includes.append(normalize_project_include(value))
+                include = normalize_project_include(value)
+                if group is None:
+                    metadata.includes.append(include)
+                else:
+                    metadata.extra_blocks.setdefault(group, []).append(include)
             elif key == "project_imports":
                if value not in {"include", "ignore"}:
                   raise HeaderGenerationError(
@@ -549,7 +577,13 @@ def transform_source(
     gf_raw_lines: list[str] = []
     gmf_is_prologue = False
     if gf_start is not None and gf_start < export_index:
-        gf_raw_lines = lines[gf_start + 1 : export_index]
+        # A glz:module-only block in the fragment is module scaffolding even
+        # when the fragment doubles as the rendered prologue, so drop it here.
+        gf_raw_lines = [
+            line
+            for offset, line in enumerate(lines[gf_start + 1 : export_index], start=gf_start + 1)
+            if offset not in hidden_indices
+        ]
         gmf_is_prologue = any(EMIT_MARKER_RE.match(line) for line in gf_raw_lines)
     block_drop: set[int] = set()
     if gmf_is_prologue:
@@ -663,6 +697,17 @@ def transform_source(
         "project": project_include_lines,
         "prelude": prelude_lines,
     }
+    # Includes declared with `group=<name>` form extra blocks of the same kind;
+    # unlike the default blocks they are only ever emitted where a marker puts
+    # them, never at the default position.
+    for block_name, includes in metadata.extra_blocks.items():
+        if block_name in blocks_by_name:
+            raise HeaderGenerationError(
+                f"{source_path}: glz:header group={block_name} collides with the built-in {block_name!r} block"
+            )
+        blocks_by_name[block_name] = [
+            f"#include {include}" for include in sorted(dedupe(includes))
+        ]
     placed: set[str] = set()
 
     def expand_markers(source: list[str]) -> list[str]:
@@ -671,11 +716,20 @@ def transform_source(
             marker = EMIT_MARKER_RE.match(line)
             if marker:
                 what = marker.group("what")
+                if what not in blocks_by_name:
+                    raise HeaderGenerationError(
+                        f"{source_path}: glz:emit {what} names no declared block"
+                    )
                 placed.add(what)
                 expanded.extend(blocks_by_name[what])
                 continue
             expanded.append(line)
         return expanded
+
+    # A marker may also sit in the body, between real statements: the reference
+    # header then has the include block after that code (json/generic_fwd.hpp's
+    # std and project groups sit below its first namespace block).
+    body_lines = expand_markers(body_lines)
 
     # The global module fragment, when it carries markers, is the module's copy
     # of the reference header's pre-include region and is emitted in place of
@@ -712,7 +766,11 @@ def transform_source(
             output_lines.extend(block)
             continue
         first_block = False
-        output_lines.append("")
+        # Keep a single blank line between blocks; a preamble or prologue that
+        # already ends on a blank supplies it (json/generic_fwd.hpp opens its
+        # body directly under the pragma with the prologue's blank).
+        if output_lines and output_lines[-1] != "":
+            output_lines.append("")
         output_lines.extend(block)
 
     header_path = resolve_header_path(include_root, metadata.path)

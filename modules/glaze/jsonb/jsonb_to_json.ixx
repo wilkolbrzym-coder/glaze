@@ -1,12 +1,17 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/jsonb/jsonb_to_json.hpp"
-// glz:header std=<charconv>
 // glz:header std=<cstddef>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
+// glz:header std=<limits>
 // glz:header std=<string>
-// glz:header std=<type_traits>
+// glz:header std=<string_view>
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header include="glaze/jsonb/header.hpp"
+// glz:header include="glaze/jsonb/text_decode.hpp"
+// glz:header project_imports=ignore
 export module glaze.jsonb.jsonb_to_json;
 
 import std;
@@ -25,12 +30,8 @@ import glaze.util.expected;
 import glaze.util.string_literal;
 
 import glaze.concepts.container_concepts;
+import glaze.core.basic_types;
 
-using std::int64_t;
-using std::uint8_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
 namespace glz
 {
@@ -39,7 +40,7 @@ namespace glz
       // Emit a JSON string literal from a raw UTF-8 byte payload. Uses the JSON writer so all
       // control characters and structural JSON chars are correctly escaped.
       template <auto Opts, class B>
-      inline void emit_raw_string_as_json(is_context auto& ctx, const char* data, size_t size, B& out, size_t& ix)
+      inline void emit_raw_string_as_json(is_context auto& ctx, const char* data, glz::size_t size, B& out, glz::size_t& ix)
       {
          const sv s{data, size};
          to<JSON, sv>::template op<Opts>(s, ctx, out, ix);
@@ -48,7 +49,7 @@ namespace glz
       // Emit a string whose bytes are already a valid JSON string literal body (i.e. with
       // RFC 8259 escapes already in the payload). We just wrap in quotes.
       template <class B>
-      inline void emit_json_escaped_body(is_context auto& ctx, const char* data, size_t size, B& out, size_t& ix)
+      inline void emit_json_escaped_body(is_context auto& ctx, const char* data, glz::size_t size, B& out, glz::size_t& ix)
       {
          if (!ensure_space(ctx, out, ix + size + 2 + write_padding_bytes)) return;
          out[ix++] = static_cast<typename std::decay_t<B>::value_type>('"');
@@ -60,12 +61,12 @@ namespace glz
       }
 
       template <auto Opts, class B>
-      inline void jsonb_to_json_value(is_context auto& ctx, const uint8_t*& it, const uint8_t* end, B& out, size_t& ix,
-                                      uint32_t depth);
+      inline void jsonb_to_json_value(is_context auto& ctx, const glz::uint8_t*& it, const glz::uint8_t* end, B& out, glz::size_t& ix,
+                                      glz::uint32_t depth);
 
       template <auto Opts, class B>
-      inline void jsonb_to_json_container(is_context auto& ctx, const uint8_t* it, const uint8_t* stop, B& out,
-                                          size_t& ix, char open, char close, uint32_t depth)
+      inline void jsonb_to_json_container(is_context auto& ctx, const glz::uint8_t* it, const glz::uint8_t* stop, B& out,
+                                          glz::size_t& ix, char open, char close, glz::uint32_t depth)
       {
          if (!ensure_space(ctx, out, ix + 2 + write_padding_bytes)) return;
          out[ix++] = static_cast<typename std::decay_t<B>::value_type>(open);
@@ -100,8 +101,8 @@ namespace glz
       }
 
       template <auto Opts, class B>
-      inline void jsonb_to_json_value(is_context auto& ctx, const uint8_t*& it, const uint8_t* end, B& out, size_t& ix,
-                                      uint32_t depth)
+      inline void jsonb_to_json_value(is_context auto& ctx, const glz::uint8_t*& it, const glz::uint8_t* end, B& out, glz::size_t& ix,
+                                      glz::uint32_t depth)
       {
          // DoS protection: cap recursion on pathologically nested blobs so untrusted input
          // can't blow the stack. Only containers bump depth below; scalar emission leaves
@@ -110,14 +111,14 @@ namespace glz
             ctx.error = error_code::exceeded_max_recursive_depth;
             return;
          }
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
-         if (static_cast<uint64_t>(end - it) < sz) {
+         if (static_cast<glz::uint64_t>(end - it) < sz) {
             ctx.error = error_code::unexpected_end;
             return;
          }
-         const uint8_t* payload = it;
+         const glz::uint8_t* payload = it;
          it += sz;
 
          switch (tc) {
@@ -154,7 +155,7 @@ namespace glz
             // UB, and a positive literal above INT64_MAX ("0xFFFFFFFFFFFFFFFF") keeps
             // its value instead of wrapping to a negative int. Mirrors the reader's
             // parse_int_payload in jsonb/read.hpp.
-            sv s{reinterpret_cast<const char*>(payload), static_cast<size_t>(sz)};
+            sv s{reinterpret_cast<const char*>(payload), static_cast<glz::size_t>(sz)};
             const char* p = s.data();
             const char* e = p + s.size();
             bool neg = false;
@@ -165,7 +166,7 @@ namespace glz
             }
             const int base = (e - p >= 2 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) ? 16 : 10;
             const char* digits = (base == 16) ? p + 2 : p;
-            uint64_t mag = 0;
+            glz::uint64_t mag = 0;
             auto [ptr, ec] = std::from_chars(digits, e, mag, base);
             if (ec != std::errc{} || ptr != e) {
                ctx.error = error_code::parse_number_failure;
@@ -173,20 +174,20 @@ namespace glz
             }
             if (neg) {
                // |INT64_MIN| == INT64_MAX + 1, so that magnitude is still representable.
-               constexpr uint64_t max_neg_mag = static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()) + 1u;
+               constexpr glz::uint64_t max_neg_mag = static_cast<glz::uint64_t>((std::numeric_limits<glz::int64_t>::max)()) + 1u;
                if (mag > max_neg_mag) {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
-               to<JSON, int64_t>::template op<Opts>(static_cast<int64_t>(uint64_t{0} - mag), ctx, out, ix);
+               to<JSON, glz::int64_t>::template op<Opts>(static_cast<glz::int64_t>(glz::uint64_t{0} - mag), ctx, out, ix);
             }
             else {
-               to<JSON, uint64_t>::template op<Opts>(mag, ctx, out, ix);
+               to<JSON, glz::uint64_t>::template op<Opts>(mag, ctx, out, ix);
             }
             return;
          }
          case jsonb::type::float5: {
-            sv s{reinterpret_cast<const char*>(payload), static_cast<size_t>(sz)};
+            sv s{reinterpret_cast<const char*>(payload), static_cast<glz::size_t>(sz)};
             if (s == "NaN") {
                // Strict JSON has no NaN representation; emit null (matches SQLite json()).
                if (!ensure_space(ctx, out, ix + 4 + write_padding_bytes)) return;
@@ -211,7 +212,7 @@ namespace glz
             const char* p = s.data();
             const char* e = p + s.size();
             if (p < e && *p == '+') ++p;
-            const size_t n = static_cast<size_t>(e - p);
+            const glz::size_t n = static_cast<glz::size_t>(e - p);
             if (!ensure_space(ctx, out, ix + n + write_padding_bytes)) return;
             if (n) std::memcpy(&out[ix], p, n);
             ix += n;
@@ -220,17 +221,17 @@ namespace glz
          case jsonb::type::text:
             // Spec: TEXT payload is already a valid JSON string body (no control chars,
             // no unescaped " or \), so wrap in quotes and memcpy — no scan needed.
-            emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
+            emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<glz::size_t>(sz), out, ix);
             return;
          case jsonb::type::textraw:
             // Raw bytes that may require escaping — run through the JSON string writer.
-            emit_raw_string_as_json<Opts>(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out,
+            emit_raw_string_as_json<Opts>(ctx, reinterpret_cast<const char*>(payload), static_cast<glz::size_t>(sz), out,
                                           ix);
             return;
          case jsonb::type::textj: {
             // TEXTJ payload is already a valid JSON string body by spec. Emitting it
             // verbatim wrapped in quotes is correct.
-            emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
+            emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<glz::size_t>(sz), out, ix);
             return;
          }
          case jsonb::type::text5: {
@@ -238,20 +239,20 @@ namespace glz
             // continuations) that are not valid JSON. Decode to raw UTF-8 and re-emit via
             // the JSON string writer so the output is always strict JSON.
             std::string scratch;
-            jsonb_detail::decode_text(ctx, jsonb::type::text5, payload, payload + sz, static_cast<size_t>(sz), scratch);
+            jsonb_detail::decode_text(ctx, jsonb::type::text5, payload, payload + sz, static_cast<glz::size_t>(sz), scratch);
             if (bool(ctx.error)) return;
             emit_raw_string_as_json<Opts>(ctx, scratch.data(), scratch.size(), out, ix);
             return;
          }
          case jsonb::type::array: {
-            const uint8_t* arr_stop = payload + sz;
-            const uint8_t* ait = payload;
+            const glz::uint8_t* arr_stop = payload + sz;
+            const glz::uint8_t* ait = payload;
             jsonb_to_json_container<Opts>(ctx, ait, arr_stop, out, ix, '[', ']', depth + 1);
             return;
          }
          case jsonb::type::object: {
-            const uint8_t* obj_stop = payload + sz;
-            const uint8_t* oit = payload;
+            const glz::uint8_t* obj_stop = payload + sz;
+            const glz::uint8_t* oit = payload;
             jsonb_to_json_container<Opts>(ctx, oit, obj_stop, out, ix, '{', '}', depth + 1);
             return;
          }
@@ -267,11 +268,11 @@ namespace glz
    export template <auto Opts = glz::opts{}, class JSONBBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx jsonb_to_json(const JSONBBuffer& input, JSONBuffer& out)
    {
-      size_t ix{};
+      glz::size_t ix{};
       context ctx{};
 
-      const uint8_t* it = reinterpret_cast<const uint8_t*>(input.data());
-      const uint8_t* end = it + input.size();
+      const glz::uint8_t* it = reinterpret_cast<const glz::uint8_t*>(input.data());
+      const glz::uint8_t* end = it + input.size();
 
       if (it >= end) {
          return {0, error_code::unexpected_end};

@@ -1,9 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/format/format_to.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<string>
-// glz:header std=<utility>
+// glz:header include="glaze/core/write.hpp"
+// glz:header include="glaze/util/itoa.hpp"
+// glz:header include="glaze/util/zmij.hpp"
+// glz:header project_imports=ignore
 export module glaze.format.format_to;
 
 import glaze.core.write;
@@ -12,8 +13,8 @@ import glaze.concepts.container_concepts;
 import glaze.util.zmij;
 
 import std;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz
 {
@@ -25,7 +26,7 @@ namespace glz
 
       const auto start = buffer.data() + ix;
       const auto end = glz::to_chars(start, std::forward<T>(value));
-      ix += size_t(end - start);
+      ix += glz::size_t(end - start);
       buffer.resize(ix);
    }
 }

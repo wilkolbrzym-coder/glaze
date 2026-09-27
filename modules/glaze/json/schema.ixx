@@ -1,24 +1,28 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/schema.hpp"
-// glz:header std=<algorithm>
-// glz:header std=<array>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<functional>
-// glz:header std=<limits>
-// glz:header std=<map>
-// glz:header std=<optional>
-// glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
-// glz:header std=<utility>
-// glz:header std=<variant>
-// glz:header std=<vector>
+// glz:header include="glaze/api/std/array.hpp"
+// glz:header include="glaze/api/std/deque.hpp"
+// glz:header include="glaze/api/std/functional.hpp"
+// glz:header include="glaze/api/std/list.hpp"
+// glz:header include="glaze/api/std/map.hpp"
+// glz:header include="glaze/api/std/optional.hpp"
+// glz:header include="glaze/api/std/shared_ptr.hpp"
+// glz:header include="glaze/api/std/string.hpp"
+// glz:header include="glaze/api/std/tuple.hpp"
+// glz:header include="glaze/api/std/unique_ptr.hpp"
+// glz:header include="glaze/api/std/variant.hpp"
+// glz:header include="glaze/api/std/vector.hpp"
+// glz:header include="glaze/api/tuplet.hpp"
+// glz:header include="glaze/api/type_support.hpp"
+// glz:header include="glaze/core/custom_meta.hpp"
+// glz:header include="glaze/json/wrappers.hpp"
+// glz:header include="glaze/json/write.hpp"
+// glz:header project_imports=ignore
+// glz:header license_gap=none
 export module glaze.json.schema;
 
+// We include naming metas for standard types for consistency across compilers
 import std;
 
 import glaze.json.wrappers;
@@ -65,11 +69,7 @@ import glaze.util.string_literal;
 import glaze.util.tuple;
 
 import glaze.concepts.container_concepts;
-
-using std::uint32_t;
-using std::int64_t;
-using std::uint64_t;
-using std::size_t;
+import glaze.core.basic_types;
 
 export namespace glz
 {
@@ -167,12 +167,12 @@ export namespace glz
    struct sv_opt final
    {
       const char* data{};
-      size_t size{};
+      glz::size_t size{};
 
       constexpr sv_opt() noexcept = default;
       constexpr sv_opt(const char* str) noexcept : data(str), size(str ? std::char_traits<char>::length(str) : 0) {}
       constexpr sv_opt(std::string_view sv) noexcept : data(sv.data()), size(sv.size()) {}
-      constexpr sv_opt(const char* str, size_t len) noexcept : data(str), size(len) {}
+      constexpr sv_opt(const char* str, glz::size_t len) noexcept : data(str), size(len) {}
       constexpr sv_opt& operator=(std::string_view sv) noexcept
       {
          data = sv.data();
@@ -195,7 +195,7 @@ export namespace glz
 
    namespace detail
    {
-      enum struct defined_formats : uint32_t;
+      enum struct defined_formats : glz::uint32_t;
       struct ExtUnits final
       {
          std::optional<std::string_view> unitAscii{}; // ascii representation of the unit, e.g. "m^2" for square meters
@@ -208,8 +208,8 @@ export namespace glz
    {
       bool reflection_helper{}; // needed to support automatic reflection
 
-      using schema_number = boxed<std::variant<int64_t, uint64_t, double>>;
-      using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
+      using schema_number = boxed<std::variant<glz::int64_t, glz::uint64_t, double>>;
+      using schema_any = std::variant<std::monostate, bool, glz::int64_t, glz::uint64_t, double, std::string_view>;
 
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
       sv_opt title{};
@@ -222,8 +222,8 @@ export namespace glz
       // validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
       boxed<schema_any> constant{};
       // string only keywords
-      boxed<uint64_t> minLength{};
-      boxed<uint64_t> maxLength{};
+      boxed<glz::uint64_t> minLength{};
+      boxed<glz::uint64_t> maxLength{};
       sv_opt pattern{};
       // https://www.learnjsonschema.com/2020-12/format-annotation/format/
       std::optional<detail::defined_formats> format{};
@@ -234,14 +234,14 @@ export namespace glz
       schema_number exclusiveMaximum{};
       schema_number multipleOf{};
       // object only keywords
-      boxed<uint64_t> minProperties{};
-      boxed<uint64_t> maxProperties{};
+      boxed<glz::uint64_t> minProperties{};
+      boxed<glz::uint64_t> maxProperties{};
       // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
       // array only keywords
-      boxed<uint64_t> minItems{};
-      boxed<uint64_t> maxItems{};
-      boxed<uint64_t> minContains{};
-      boxed<uint64_t> maxContains{};
+      boxed<glz::uint64_t> minItems{};
+      boxed<glz::uint64_t> maxItems{};
+      boxed<glz::uint64_t> minContains{};
+      boxed<glz::uint64_t> maxContains{};
       std::optional<bool> uniqueItems{};
       boxed<std::vector<std::string_view>> enumeration{}; // enum
 
@@ -268,7 +268,7 @@ export namespace glz
    namespace detail
    {
 
-      enum struct defined_formats : uint32_t {
+      enum struct defined_formats : glz::uint32_t {
          datetime, //
          date, //
          time, //
@@ -479,7 +479,7 @@ namespace glz
                      static constexpr sv member_name = get_name<meta_wrapper_v<T>>();
                      constexpr auto schema_index = [] {
                         const auto& schema_keys = reflect<json_schema_type<T>>::keys;
-                        for (size_t i = 0; i < schema_size; ++i) {
+                        for (glz::size_t i = 0; i < schema_size; ++i) {
                            if (schema_keys[i] == member_name) {
                               return i;
                            }
@@ -605,7 +605,7 @@ namespace glz
                      static constexpr sv enum_key = reflect<T>::keys[I];
                      constexpr auto schema_index = [] {
                         const auto& schema_keys = reflect<json_schema_type<T>>::keys;
-                        for (size_t i = 0; i < schema_size; ++i) {
+                        for (glz::size_t i = 0; i < schema_size; ++i) {
                            if (schema_keys[i] == enum_key) {
                               return i;
                            }
@@ -1141,7 +1141,7 @@ namespace glz
 
                   constexpr auto schema_index = [] {
                      const auto& schema_keys = reflect<json_schema_type<T>>::keys;
-                     for (size_t i = 0; i < json_schema_size; ++i) {
+                     for (glz::size_t i = 0; i < json_schema_size; ++i) {
                         if (schema_keys[i] == key) {
                            return i;
                         }
@@ -1150,7 +1150,7 @@ namespace glz
                      if constexpr (modify_t<std::decay_t<T>> && I < count_members<std::decay_t<T>>) {
                         constexpr sv original_name = member_names<std::decay_t<T>>[I];
                         if constexpr (original_name != key) {
-                           for (size_t i = 0; i < json_schema_size; ++i) {
+                           for (glz::size_t i = 0; i < json_schema_size; ++i) {
                               if (schema_keys[i] == original_name) {
                                  return i;
                               }
@@ -1255,7 +1255,7 @@ namespace glz
       // Note: map keys are string_views pointing to ref values, which are compile-time static storage
       // (from join_v<...>). If runtime-constructed ref strings are ever introduced, these keys could
       // dangle after try_inline_ref moves the source schema.
-      inline void count_schema_refs(const schema& s, std::map<std::string_view, size_t>& counts)
+      inline void count_schema_refs(const schema& s, std::map<std::string_view, glz::size_t>& counts)
       {
          if (s.ref) {
             ++counts[*s.ref];
@@ -1300,7 +1300,7 @@ namespace glz
       // Try to inline a single-use $ref node by moving the definition from defs.
       // Returns true if the node was inlined.
       inline bool try_inline_ref(schema& node, std::map<std::string_view, schema, std::less<>>& defs,
-                                 const std::map<std::string_view, size_t>& counts)
+                                 const std::map<std::string_view, glz::size_t>& counts)
       {
          static constexpr std::string_view prefix = "#/$defs/";
          if (!node.ref) return false;
@@ -1329,7 +1329,7 @@ namespace glz
 
       // Inline single-use $ref entries by moving the definition from $defs into the reference site.
       inline void inline_single_use_refs(schema& s, std::map<std::string_view, schema, std::less<>>& defs,
-                                         const std::map<std::string_view, size_t>& counts)
+                                         const std::map<std::string_view, glz::size_t>& counts)
       {
          if (s.properties) {
             for (auto& [_, prop] : *s.properties) {
@@ -1387,7 +1387,7 @@ namespace glz
       }
 
       // Remove inlined (single-use) entries from $defs
-      inline void prune_inlined_defs(schema& s, const std::map<std::string_view, size_t>& counts)
+      inline void prune_inlined_defs(schema& s, const std::map<std::string_view, glz::size_t>& counts)
       {
          if (!s.defs) return;
          static constexpr std::string_view prefix = "#/$defs/";
@@ -1427,7 +1427,7 @@ namespace glz
       s.title = name_v<T>;
 
       // Inline single-use $defs entries at their reference sites
-      std::map<std::string_view, size_t> ref_counts;
+      std::map<std::string_view, glz::size_t> ref_counts;
       detail::count_schema_refs(s, ref_counts);
       // First inline refs within defs entries (for chained single-use types)
       for (auto& [_, def] : *s.defs) {

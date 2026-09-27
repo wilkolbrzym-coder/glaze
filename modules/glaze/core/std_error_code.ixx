@@ -9,17 +9,18 @@
 // - This forces a DATA segment which incurs page alignment overhead
 // For size-constrained embedded systems, avoid including this header.
 // glz:header path="glaze/core/std_error_code.hpp"
-// glz:header std=<cstdint>
-// glz:header std=<string>
 // glz:header std=<system_error>
+// glz:header include="glaze/core/error_category.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.std_error_code;
 
 import std;
 
 import glaze.core.context;
+import glaze.core.error_category;
 import glaze.core.meta;
+import glaze.core.basic_types;
 
-using std::uint32_t;
 
 export namespace glz
 {
@@ -27,7 +28,7 @@ export namespace glz
    {
       const char* name() const noexcept override { return "glaze"; }
 
-      std::string message(int ev) const override { return {meta<error_code>::keys[uint32_t(ev)]}; }
+      std::string message(int ev) const override { return {meta<error_code>::keys[glz::uint32_t(ev)]}; }
    };
 
    inline glaze_error_category error_category{};

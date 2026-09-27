@@ -1,7 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/beve/ptr.hpp"
-// glz:header std=<utility>
+// glz:header include="glaze/beve/read.hpp"
+// glz:header include="glaze/beve/write.hpp"
+// glz:header include="glaze/core/ptr.hpp"
+// glz:header project_imports=ignore
 export module glaze.beve.ptr;
 
 import std;

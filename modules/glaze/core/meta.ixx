@@ -3,18 +3,26 @@
 // glz:header path="glaze/core/meta.hpp"
 // glz:header std=<array>
 // glz:header std=<concepts>
-// glz:header std=<cstddef>
 // glz:header std=<initializer_list>
-// glz:header std=<string>
-// glz:header std=<string_view>
 // glz:header std=<type_traits>
 // glz:header std=<utility>
-// glz:header std=<variant>
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/forward.hpp"
+// glz:header include="glaze/reflection/get_name.hpp"
+// glz:header include="glaze/reflection/requires_key.hpp"
+// glz:header include="glaze/reflection/to_tuple.hpp"
+// glz:header include="glaze/tuplet/tuple.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/string_literal.hpp"
+// glz:header include="glaze/util/type_traits.hpp"
+// glz:header include="glaze/util/variant.hpp"
+// glz:header include="glaze/version.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.meta;
 
 import std;
 
-export import glaze.core.meta_fwd;
+export import glaze.forward;
 
 import glaze.reflection.get_name;
 import glaze.reflection.requires_key;
@@ -28,8 +36,8 @@ import glaze.util.type_traits;
 import glaze.util.variant;
 
 import glaze.version;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 export namespace glz
 {
@@ -41,6 +49,8 @@ export namespace glz
    {
       operation op = operation::serialize;
    };
+
+   // Primary template for glz::meta lives in glaze/forward.hpp.
 
    template <>
    struct meta<std::string_view>
@@ -111,7 +121,7 @@ export namespace glz
 
    namespace detail
    {
-      template <class T, size_t... I>
+      template <class T, glz::size_t... I>
       constexpr auto reflect_array_impl(std::index_sequence<I...>) noexcept
       {
 #if GLZ_REFLECTION26
@@ -192,10 +202,10 @@ export namespace glz
       template <class Tuple>
       consteval auto compute_value_indices()
       {
-         return []<size_t... I>(std::index_sequence<I...>) {
-            constexpr size_t count = (static_cast<size_t>(!object_key_like<glz::tuple_element_t<I, Tuple>>) + ... + 0);
-            std::array<size_t, count> result{};
-            size_t idx = 0;
+         return []<glz::size_t... I>(std::index_sequence<I...>) {
+            constexpr glz::size_t count = (static_cast<glz::size_t>(!object_key_like<glz::tuple_element_t<I, Tuple>>) + ... + 0);
+            std::array<glz::size_t, count> result{};
+            glz::size_t idx = 0;
             (([&] {
                 if constexpr (!object_key_like<glz::tuple_element_t<I, Tuple>>) {
                    result[idx++] = I;
@@ -206,9 +216,9 @@ export namespace glz
          }(std::make_index_sequence<glz::tuple_size_v<Tuple>>{});
       }
 
-      inline constexpr size_t modify_npos = static_cast<size_t>(-1);
+      inline constexpr glz::size_t modify_npos = static_cast<glz::size_t>(-1);
 
-      template <class T, size_t I>
+      template <class T, glz::size_t I>
       struct aggregate_accessor
       {
          template <class V>
@@ -226,10 +236,10 @@ export namespace glz
       };
 
       template <class T>
-      consteval size_t find_member_index(std::string_view name)
+      consteval glz::size_t find_member_index(std::string_view name)
       {
          constexpr auto names = member_names<T>;
-         for (size_t i = 0; i < names.size(); ++i) {
+         for (glz::size_t i = 0; i < names.size(); ++i) {
             if (names[i] == name) {
                return i;
             }
@@ -254,7 +264,7 @@ export namespace glz
       template <class T>
       struct modify_data_impl<T, false>
       {
-         static constexpr size_t value_count = 0;
+         static constexpr glz::size_t value_count = 0;
       };
 
       template <class T>
@@ -265,18 +275,18 @@ export namespace glz
          static constexpr auto tuple = object.value;
          using tuple_t = std::remove_cvref_t<decltype(tuple)>;
          static constexpr auto indices = compute_value_indices<tuple_t>();
-         static constexpr size_t value_count = indices.size();
+         static constexpr glz::size_t value_count = indices.size();
 
-         template <size_t EntryPos>
-         static constexpr size_t tuple_index_v = indices[EntryPos];
+         template <glz::size_t EntryPos>
+         static constexpr glz::size_t tuple_index_v = indices[EntryPos];
 
-         template <size_t EntryPos>
+         template <glz::size_t EntryPos>
          using element_type = glz::tuple_element_t<tuple_index_v<EntryPos>, tuple_t>;
 
-         template <size_t EntryPos>
+         template <glz::size_t EntryPos>
          static consteval bool has_key()
          {
-            constexpr size_t idx = tuple_index_v<EntryPos>;
+            constexpr glz::size_t idx = tuple_index_v<EntryPos>;
             if constexpr (idx == 0) {
                return false;
             }
@@ -285,10 +295,10 @@ export namespace glz
             }
          }
 
-         template <size_t EntryPos>
+         template <glz::size_t EntryPos>
          static consteval sv key()
          {
-            constexpr size_t idx = tuple_index_v<EntryPos>;
+            constexpr glz::size_t idx = tuple_index_v<EntryPos>;
             if constexpr (idx == 0) {
                return sv{};
             }
@@ -297,20 +307,20 @@ export namespace glz
             }
          }
 
-         template <size_t EntryPos>
+         template <glz::size_t EntryPos>
          static consteval auto element()
          {
             return glz::get<tuple_index_v<EntryPos>>(tuple);
          }
 
-         template <size_t EntryPos>
+         template <glz::size_t EntryPos>
          static consteval sv pointer_name()
          {
             return pointer_name_storage<glz::get<tuple_index_v<EntryPos>>(tuple)>::value;
          }
 
-         template <size_t EntryPos>
-         static consteval size_t base_index()
+         template <glz::size_t EntryPos>
+         static consteval glz::size_t base_index()
          {
             using elem_t = element_type<EntryPos>;
             if constexpr (std::is_member_pointer_v<elem_t>) {
@@ -324,7 +334,7 @@ export namespace glz
             }
          }
 
-         template <size_t EntryPos>
+         template <glz::size_t EntryPos>
          static consteval sv new_name()
          {
             using elem_t = element_type<EntryPos>;
@@ -341,8 +351,8 @@ export namespace glz
             }
          }
 
-         template <size_t BaseIndex, size_t Pos>
-         static consteval size_t find_replacement_impl()
+         template <glz::size_t BaseIndex, glz::size_t Pos>
+         static consteval glz::size_t find_replacement_impl()
          {
             if constexpr (base_index<Pos>() == BaseIndex) {
                return Pos;
@@ -355,8 +365,8 @@ export namespace glz
             }
          }
 
-         template <size_t BaseIndex>
-         static consteval size_t find_replacement()
+         template <glz::size_t BaseIndex>
+         static consteval glz::size_t find_replacement()
          {
             if constexpr (value_count == 0) {
                return modify_npos;
@@ -366,24 +376,24 @@ export namespace glz
             }
          }
 
-         template <size_t... I>
+         template <glz::size_t... I>
          static consteval auto compute_extra_indices_impl(std::index_sequence<I...>)
          {
-            constexpr size_t count = (static_cast<size_t>(base_index<I>() == modify_npos) + ... + 0);
-            std::array<size_t, count> result{};
-            size_t idx = 0;
+            constexpr glz::size_t count = (static_cast<glz::size_t>(base_index<I>() == modify_npos) + ... + 0);
+            std::array<glz::size_t, count> result{};
+            glz::size_t idx = 0;
             ((base_index<I>() == modify_npos ? (result[idx++] = I, 0) : 0), ...);
             return result;
          }
 
          static constexpr auto extra_indices = compute_extra_indices_impl(std::make_index_sequence<value_count>{});
-         static constexpr size_t extra_count = extra_indices.size();
+         static constexpr glz::size_t extra_count = extra_indices.size();
       };
 
       template <class T>
       using modify_data = modify_data_impl<T, modify_t<T>>;
 
-      template <class T, size_t BaseIndex>
+      template <class T, glz::size_t BaseIndex>
       consteval auto base_entry_key()
       {
          if constexpr (modify_t<T>) {
@@ -395,7 +405,7 @@ export namespace glz
          return member_names<T>[BaseIndex];
       }
 
-      template <class T, size_t BaseIndex>
+      template <class T, glz::size_t BaseIndex>
       consteval auto base_entry_value()
       {
          if constexpr (modify_t<T>) {
@@ -412,10 +422,10 @@ export namespace glz
          }
       }
 
-      template <class T, size_t ElementIdx>
+      template <class T, glz::size_t ElementIdx>
       consteval auto base_entry_element()
       {
-         constexpr size_t base_index = ElementIdx / 2;
+         constexpr glz::size_t base_index = ElementIdx / 2;
          if constexpr ((ElementIdx % 2) == 0) {
             return base_entry_key<T, base_index>();
          }
@@ -424,11 +434,11 @@ export namespace glz
          }
       }
 
-      template <class T, size_t ExtraOffset>
+      template <class T, glz::size_t ExtraOffset>
       consteval auto extra_entry_element_offset()
       {
          static_assert(modify_t<T>);
-         constexpr size_t entry_pos = modify_data<T>::extra_indices[ExtraOffset / 2];
+         constexpr glz::size_t entry_pos = modify_data<T>::extra_indices[ExtraOffset / 2];
          if constexpr ((ExtraOffset % 2) == 0) {
             return modify_data<T>::template new_name<entry_pos>();
          }
@@ -437,20 +447,20 @@ export namespace glz
          }
       }
 
-      template <class T, size_t ElementIdx>
+      template <class T, glz::size_t ElementIdx>
       consteval auto combined_entry_element()
       {
-         constexpr size_t base_total = 2 * detail::count_members<T>;
+         constexpr glz::size_t base_total = 2 * detail::count_members<T>;
          if constexpr (ElementIdx < base_total) {
             return base_entry_element<T, ElementIdx>();
          }
          else {
-            constexpr size_t extra_offset = ElementIdx - base_total;
+            constexpr glz::size_t extra_offset = ElementIdx - base_total;
             return extra_entry_element_offset<T, extra_offset>();
          }
       }
 
-      template <class T, size_t... I>
+      template <class T, glz::size_t... I>
       consteval auto make_entries_impl(std::index_sequence<I...>)
       {
          if constexpr (sizeof...(I) == 0) {
@@ -468,8 +478,8 @@ export namespace glz
          static_assert(std::is_class_v<decayed_t> && std::is_aggregate_v<decayed_t>,
                        "glz::meta modify requires aggregate class types");
 
-         constexpr size_t base_total = 2 * detail::count_members<T>;
-         constexpr size_t total_elements = [] {
+         constexpr glz::size_t base_total = 2 * detail::count_members<T>;
+         constexpr glz::size_t total_elements = [] {
             if constexpr (modify_t<T>) {
                return base_total + 2 * modify_data<T>::extra_count;
             }
@@ -755,23 +765,23 @@ export namespace glz
 
    namespace detail
    {
-      template <class T, size_t N>
+      template <class T, glz::size_t N>
          requires(not std::integral<T>)
       inline constexpr auto convert_ids_to_array(const std::array<T, N>& arr)
       {
          std::array<std::string_view, N> result;
-         for (size_t i = 0; i < N; ++i) {
+         for (glz::size_t i = 0; i < N; ++i) {
             result[i] = arr[i];
          }
          return result;
       }
 
-      template <class T, size_t N>
+      template <class T, glz::size_t N>
          requires(std::integral<T>)
       inline constexpr auto convert_ids_to_array(const std::array<T, N>& arr)
       {
          std::array<T, N> result;
-         for (size_t i = 0; i < N; ++i) {
+         for (glz::size_t i = 0; i < N; ++i) {
             result[i] = arr[i];
          }
          return result;
@@ -801,37 +811,26 @@ export namespace glz
    namespace detail
    {
       template <is_variant T>
-      inline constexpr bool variant_ids_are_string_views = [] {
-         constexpr auto& ids = ids_v<T>;
-         if constexpr (ids.size() == 0) {
-            return false;
-         }
-         else {
-            return std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>;
-         }
-      }();
-
-      template <is_variant T>
-      inline constexpr size_t variant_ids_string_len = [] {
+      inline constexpr glz::size_t variant_ids_string_len = [] {
          constexpr auto& ids = ids_v<T>;
          constexpr auto N = ids.size();
-         size_t len = 17; // "supported types: "
-         for (size_t i = 0; i < N; ++i) {
+         glz::size_t len = 17; // "supported types: "
+         for (glz::size_t i = 0; i < N; ++i) {
             if (i > 0) len += 2; // ", "
             len += ids[i].size();
          }
          return len;
       }();
 
-      template <is_variant T, size_t Len>
+      template <is_variant T, glz::size_t Len>
       inline constexpr auto variant_ids_joined = [] {
          constexpr auto& ids = ids_v<T>;
          constexpr auto N = ids.size();
          std::array<char, Len + 1> arr{};
          const char* prefix = "supported types: ";
-         size_t pos = 0;
-         for (size_t i = 0; i < 17; ++i) arr[pos++] = prefix[i];
-         for (size_t i = 0; i < N; ++i) {
+         glz::size_t pos = 0;
+         for (glz::size_t i = 0; i < 17; ++i) arr[pos++] = prefix[i];
+         for (glz::size_t i = 0; i < N; ++i) {
             if (i > 0) {
                arr[pos++] = ',';
                arr[pos++] = ' ';
@@ -841,25 +840,25 @@ export namespace glz
          arr[Len] = '\0';
          return arr;
       }();
-
-      template <is_variant T, bool StringIds>
-      struct variant_ids_string
-      {
-         static constexpr std::string_view value{};
-      };
-
-      template <is_variant T>
-      struct variant_ids_string<T, true>
-      {
-         static constexpr auto len = variant_ids_string_len<T>;
-         static constexpr auto& arr = variant_ids_joined<T, len>;
-         static constexpr std::string_view value{arr.data(), len};
-      };
    }
 
    template <is_variant T>
-   inline constexpr std::string_view variant_ids_string_v =
-      detail::variant_ids_string<T, detail::variant_ids_are_string_views<T>>::value;
+   inline constexpr std::string_view variant_ids_string_v = [] {
+      constexpr auto& ids = ids_v<T>;
+      constexpr auto N = ids.size();
+
+      if constexpr (N == 0) {
+         return std::string_view{};
+      }
+      else if constexpr (std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>) {
+         constexpr auto Len = detail::variant_ids_string_len<T>;
+         constexpr auto& arr = detail::variant_ids_joined<T, Len>;
+         return std::string_view{arr.data(), Len};
+      }
+      else {
+         return std::string_view{};
+      }
+   }();
 
    template <class T>
    concept versioned = requires { meta<std::decay_t<T>>::version; };

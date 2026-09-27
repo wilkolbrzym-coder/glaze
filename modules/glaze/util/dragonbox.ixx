@@ -1,4 +1,4 @@
-// glz:header path="glaze/util/dragonbox.hpp"
+// glz:header skip
 // glz:header std=<bit>
 // glz:header std=<cassert>
 // glz:header std=<cstdint>

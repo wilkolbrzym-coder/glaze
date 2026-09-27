@@ -4,9 +4,8 @@
 // glz:header std=<cstdio>
 // glz:header std=<filesystem>
 // glz:header std=<string>
-// glz:header std=<string_view>
-// glz:header std=<system_error>
-// glz:header std=<utility>
+// glz:header include="glaze/core/context.hpp"
+// glz:header project_imports=ignore
 export module glaze.file.file_ops;
 
 import std;

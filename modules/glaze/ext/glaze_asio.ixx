@@ -35,8 +35,10 @@ module;
 // In short: define GLZ_USE_BOOST_ASIO to choose Boost; read GLZ_USING_BOOST_ASIO to
 // learn what was chosen. cmake/glaze-asio.cmake sets the former on the glaze::asio
 // target so the linked backend and this header can never disagree (issue #2599).
+// glz:module-only
 // asio's execution headers use std::nested_exception without including <exception>.
 #include <exception>
+// glz:end-module-only
 #if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
 #include <asio/signal_set.hpp>

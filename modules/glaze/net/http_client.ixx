@@ -35,18 +35,31 @@ module;
 #include <openssl/ssl.h> // For SSL_set_tlsext_host_name
 #endif
 
+// glz:module-only
+// Asio is a third-party library without a module interface: its declarations
+// must be textually available in this translation unit (the imported
+// glaze.ext.glaze_asio module cannot re-export the global asio namespace).
+// The generated header gets asio through glaze/ext/glaze_asio.hpp.
+#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
+#include <asio.hpp>
+#elif __has_include(<boost/asio.hpp>)
+#include <boost/asio.hpp>
+#endif
+// glz:end-module-only
+
 export module glaze.net.http_client;
 
 import std;
 
 import glaze.core.basic_types;
+import glaze.json.write;
+import glaze.net.http;
 import glaze.net.http_router;
 import glaze.util.itoa;
 import glaze.util.key_transformers;
 
 import glaze.ext.glaze_asio;
 import glaze.util.env;
-#include <glaze/glaze.hpp>
 
 export namespace glz
 {

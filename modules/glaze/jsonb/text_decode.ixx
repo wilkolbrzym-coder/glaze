@@ -1,16 +1,16 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/jsonb/text_decode.hpp"
-// glz:header std=<cstddef>
 // glz:header std=<cstdint>
+// glz:header std=<cstring>
 // glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/jsonb/header.hpp"
+// glz:header include="glaze/util/inline.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header project_imports=ignore
 export module glaze.jsonb.text_decode;
-
-import std;
-
-import glaze.core.context;
-import glaze.jsonb.header;
-import glaze.util.parse;
 
 // Text-variant escape decoders shared by the JSONB reader (from<JSONB, string>) and the
 // JSONB→JSON converter (jsonb_to_json). TEXTJ carries RFC 8259 JSON escapes, TEXT5 carries
@@ -18,10 +18,12 @@ import glaze.util.parse;
 // unescape-decoded to raw UTF-8 before being used as a C++ string or re-emitted as a strict
 // JSON string literal.
 
-using std::int32_t;
-using std::uint8_t;
-using std::uint32_t;
-using std::size_t;
+import std;
+
+import glaze.core.context;
+import glaze.jsonb.header;
+import glaze.util.parse;
+import glaze.core.basic_types;
 
 namespace glz::jsonb_detail
 {
@@ -61,11 +63,11 @@ namespace glz::jsonb_detail
          return true;
       case 'u': {
          // 4 hex digits, possibly followed by a `\uXXXX` surrogate pair.
-         auto hex4 = [](It p) -> int32_t {
-            uint32_t v = 0;
+         auto hex4 = [](It p) -> glz::int32_t {
+            glz::uint32_t v = 0;
             for (int i = 0; i < 4; ++i) {
                const char ch = static_cast<char>(p[i]);
-               uint32_t d;
+               glz::uint32_t d;
                if (ch >= '0' && ch <= '9')
                   d = ch - '0';
                else if (ch >= 'a' && ch <= 'f')
@@ -76,13 +78,13 @@ namespace glz::jsonb_detail
                   return -1;
                v = (v << 4) | d;
             }
-            return static_cast<int32_t>(v);
+            return static_cast<glz::int32_t>(v);
          };
          if ((end - it) < 4) return false;
-         int32_t high = hex4(it);
+         glz::int32_t high = hex4(it);
          if (high < 0) return false;
          it += 4;
-         uint32_t code_point = static_cast<uint32_t>(high);
+         glz::uint32_t code_point = static_cast<glz::uint32_t>(high);
 
          using namespace glz::unicode;
          if ((code_point & generic_surrogate_mask) == generic_surrogate_value) {
@@ -90,17 +92,17 @@ namespace glz::jsonb_detail
             if ((end - it) < 6) return false;
             if (static_cast<char>(it[0]) != '\\' || static_cast<char>(it[1]) != 'u') return false;
             it += 2;
-            const int32_t low = hex4(it);
+            const glz::int32_t low = hex4(it);
             if (low < 0) return false;
             it += 4;
-            if ((static_cast<uint32_t>(low) & surrogate_mask) != low_surrogate_value) return false;
+            if ((static_cast<glz::uint32_t>(low) & surrogate_mask) != low_surrogate_value) return false;
             code_point = ((code_point & surrogate_codepoint_mask) << surrogate_codepoint_bits) |
-                         (static_cast<uint32_t>(low) & surrogate_codepoint_mask);
+                         (static_cast<glz::uint32_t>(low) & surrogate_codepoint_mask);
             code_point += surrogate_codepoint_offset;
          }
 
          char utf8[4];
-         const uint32_t n = glz::code_point_to_utf8(code_point, utf8);
+         const glz::uint32_t n = glz::code_point_to_utf8(code_point, utf8);
          if (n == 0) return false;
          out.append(utf8, n);
          return true;
@@ -163,10 +165,10 @@ namespace glz::jsonb_detail
    // rule for the type code. TEXT and TEXTRAW pass through as raw UTF-8; TEXTJ decodes JSON
    // escapes; TEXT5 decodes JSON5 escapes.
    export template <class It>
-   inline void decode_text(is_context auto& ctx, uint8_t type_code, It it, It end, size_t size,
+   inline void decode_text(is_context auto& ctx, glz::uint8_t type_code, It it, It end, glz::size_t size,
                            std::string& out) noexcept
    {
-      if (static_cast<size_t>(end - it) < size) [[unlikely]] {
+      if (static_cast<glz::size_t>(end - it) < size) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return;
       }

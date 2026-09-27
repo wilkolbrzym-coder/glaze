@@ -1,9 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/glaze_exceptions.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<stdexcept>
-// glz:header std=<utility>
+// glz:header include="glaze/exceptions/binary_exceptions.hpp"
+// glz:header include="glaze/exceptions/cbor_exceptions.hpp"
+// glz:header include="glaze/exceptions/csv_exceptions.hpp"
+// glz:header include="glaze/exceptions/json_exceptions.hpp"
+// glz:header include="glaze/exceptions/msgpack_exceptions.hpp"
+// glz:header project_imports=ignore
 export module glaze.exceptions;
 
 #if __cpp_exceptions
@@ -26,8 +29,8 @@ import glaze.core.opts;
 import glaze.core.read;
 import glaze.core.reflect;
 import glaze.core.write;
+import glaze.core.basic_types;
 
-using std::size_t;
 
 namespace glz::ex
 {
@@ -52,7 +55,7 @@ namespace glz::ex
    }
 
    export template <auto Opts, class T, raw_buffer Buffer>
-   size_t write(T&& value, Buffer&& buffer) noexcept
+   glz::size_t write(T&& value, Buffer&& buffer) noexcept
    {
       return glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }

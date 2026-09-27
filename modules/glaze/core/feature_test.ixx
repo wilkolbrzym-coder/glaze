@@ -1,7 +1,8 @@
 // Glaze Library
-// For the license information refer to glaze.ixx
-
-#pragma once
+// For the license information refer to glaze.hpp
+// glz:header path="glaze/core/feature_test.hpp"
+// glz:header project_imports=ignore
+module;
 
 // Detect constexpr std::string support
 // The old GCC ABI (_GLIBCXX_USE_CXX11_ABI=0) does not have constexpr std::string::size()
@@ -36,8 +37,13 @@
 #define GLZ_HAS_OPTIONAL_REF 0
 #endif
 #endif
+// glz:emit std
+export module glaze.core.feature_test;
 
-namespace glz
+import std;
+import glaze.core.basic_types;
+
+export namespace glz
 {
    // Constexpr bool for use in if constexpr or other compile-time contexts
    // Use GLZ_HAS_CONSTEXPR_STRING macro for #if preprocessor guards

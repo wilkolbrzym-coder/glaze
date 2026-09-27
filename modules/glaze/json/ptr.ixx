@@ -1,7 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/ptr.hpp"
-// glz:header std=<utility>
+// glz:header include="glaze/core/ptr.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.ptr;
 
 import std;

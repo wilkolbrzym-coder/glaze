@@ -1,22 +1,29 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/jsonb/read.hpp"
-// glz:header std=<array>
 // glz:header std=<charconv>
-// glz:header std=<concepts>
-// glz:header std=<cstddef>
+// glz:header std=<cmath>
 // glz:header std=<cstdint>
 // glz:header std=<cstring>
-// glz:header std=<deque>
-// glz:header std=<expected>
 // glz:header std=<limits>
-// glz:header std=<optional>
 // glz:header std=<string>
-// glz:header std=<tuple>
-// glz:header std=<type_traits>
 // glz:header std=<utility>
-// glz:header std=<variant>
-// glz:header std=<vector>
+// glz:header include="glaze/core/chrono.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/core/read.hpp"
+// glz:header include="glaze/core/reflect.hpp"
+// glz:header include="glaze/file/file_ops.hpp"
+// glz:header include="glaze/json/generic.hpp"
+// glz:header include="glaze/jsonb/header.hpp"
+// glz:header include="glaze/jsonb/skip.hpp"
+// glz:header include="glaze/jsonb/text_decode.hpp"
+// glz:header include="glaze/util/bit_array.hpp"
+// glz:header include="glaze/util/compare.hpp"
+// glz:header include="glaze/util/dump.hpp"
+// glz:header include="glaze/util/fast_float.hpp"
+// glz:header include="glaze/util/for_each.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header project_imports=ignore
 export module glaze.jsonb.read;
 
 import std;
@@ -51,18 +58,10 @@ import glaze.util.variant;
 import glaze.util.string_literal;
 
 import glaze.tuplet;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::int8_t;
-using std::uint8_t;
-using std::int16_t;
-using std::uint16_t;
-using std::int32_t;
-using std::uint32_t;
-using std::int64_t;
-using std::uint64_t;
-using std::size_t;
 
 namespace glz
 {
@@ -77,7 +76,7 @@ namespace glz
 
       // Parse a JSONB integer payload (INT or INT5) and store into target.
       template <class T>
-      inline void parse_int_payload(is_context auto& ctx, uint8_t type_code, const char* p, size_t n, T& out) noexcept
+      inline void parse_int_payload(is_context auto& ctx, glz::uint8_t type_code, const char* p, glz::size_t n, T& out) noexcept
       {
          if (n == 0) [[unlikely]] {
             ctx.error = error_code::parse_number_failure;
@@ -100,7 +99,7 @@ namespace glz
             }
             if ((stop - start) >= 2 && start[0] == '0' && (start[1] == 'x' || start[1] == 'X')) {
                start += 2;
-               uint64_t mag = 0;
+               glz::uint64_t mag = 0;
                auto [ptr, ec] = std::from_chars(start, stop, mag, 16);
                if (ec != std::errc{} || ptr != stop) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
@@ -109,13 +108,13 @@ namespace glz
                if (negative) {
                   if constexpr (std::is_signed_v<T>) {
                      // |min()| == max() + 1 for two's complement; allow that edge case.
-                     constexpr auto max_neg_mag = static_cast<uint64_t>((std::numeric_limits<T>::max)()) + 1u;
+                     constexpr auto max_neg_mag = static_cast<glz::uint64_t>((std::numeric_limits<T>::max)()) + 1u;
                      if (mag > max_neg_mag) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
                      // Negate via unsigned arithmetic to avoid UB at INT_MIN.
-                     out = static_cast<T>(uint64_t{0} - mag);
+                     out = static_cast<T>(glz::uint64_t{0} - mag);
                   }
                   else {
                      // Unsigned target can't represent a negative value.
@@ -139,7 +138,7 @@ namespace glz
          }
 
          // Default: decimal.
-         using Wide = std::conditional_t<std::is_signed_v<T>, int64_t, uint64_t>;
+         using Wide = std::conditional_t<std::is_signed_v<T>, glz::int64_t, glz::uint64_t>;
          Wide tmp = 0;
          auto [ptr, ec] = std::from_chars(start, stop, tmp, 10);
          if (ec != std::errc{} || ptr != stop) [[unlikely]] {
@@ -155,7 +154,7 @@ namespace glz
 
       // Parse a JSONB float/double payload (FLOAT, FLOAT5, INT, or INT5) into a floating target.
       template <class T>
-      inline void parse_float_payload(is_context auto& ctx, uint8_t type_code, const char* p, size_t n, T& out) noexcept
+      inline void parse_float_payload(is_context auto& ctx, glz::uint8_t type_code, const char* p, glz::size_t n, T& out) noexcept
       {
          if (n == 0) [[unlikely]] {
             ctx.error = error_code::parse_number_failure;
@@ -227,14 +226,14 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto& ctx, auto& it, auto end) noexcept
       {
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
          if (tc != jsonb::type::null_) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -262,8 +261,8 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
       {
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
          if (tc == jsonb::type::true_) {
             value = true;
@@ -275,7 +274,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -291,15 +290,15 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
       {
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
          if (tc == jsonb::type::int_ || tc == jsonb::type::int5) {
-            jsonb_detail::parse_int_payload(ctx, tc, reinterpret_cast<const char*>(it), static_cast<size_t>(sz), value);
+            jsonb_detail::parse_int_payload(ctx, tc, reinterpret_cast<const char*>(it), static_cast<glz::size_t>(sz), value);
             if (bool(ctx.error)) [[unlikely]]
                return;
             it += sz;
@@ -307,7 +306,7 @@ namespace glz
          else if (tc == jsonb::type::float_ || tc == jsonb::type::float5) {
             // Accept floats that happen to be integral.
             double tmp{};
-            jsonb_detail::parse_float_payload(ctx, tc, reinterpret_cast<const char*>(it), static_cast<size_t>(sz), tmp);
+            jsonb_detail::parse_float_payload(ctx, tc, reinterpret_cast<const char*>(it), static_cast<glz::size_t>(sz), tmp);
             if (bool(ctx.error)) [[unlikely]]
                return;
             // A float payload may hold NaN, +/-Inf (e.g. a JSON5 "NaN"/"Infinity" sentinel) or a
@@ -339,16 +338,16 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end) noexcept
       {
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
          if (tc == jsonb::type::float_ || tc == jsonb::type::float5 || tc == jsonb::type::int_ ||
              tc == jsonb::type::int5) {
-            jsonb_detail::parse_float_payload(ctx, tc, reinterpret_cast<const char*>(it), static_cast<size_t>(sz),
+            jsonb_detail::parse_float_payload(ctx, tc, reinterpret_cast<const char*>(it), static_cast<glz::size_t>(sz),
                                               value);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -367,10 +366,10 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -384,10 +383,10 @@ namespace glz
 
          if (tc == jsonb::type::text || tc == jsonb::type::textraw) {
             if constexpr (string_view_t<T>) {
-               value = {reinterpret_cast<const char*>(it), static_cast<size_t>(sz)};
+               value = {reinterpret_cast<const char*>(it), static_cast<glz::size_t>(sz)};
             }
             else {
-               value.assign(reinterpret_cast<const char*>(it), static_cast<size_t>(sz));
+               value.assign(reinterpret_cast<const char*>(it), static_cast<glz::size_t>(sz));
             }
             it += sz;
             return;
@@ -400,7 +399,7 @@ namespace glz
             }
             else {
                std::string buf;
-               jsonb_detail::decode_text(ctx, tc, it, end, static_cast<size_t>(sz), buf);
+               jsonb_detail::decode_text(ctx, tc, it, end, static_cast<glz::size_t>(sz), buf);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                value.assign(buf.data(), buf.size());
@@ -418,20 +417,20 @@ namespace glz
       template <class It>
       inline bool read_string_key(is_context auto& ctx, It& it, It end, std::string& scratch, sv& key_out)
       {
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return false;
-         if (static_cast<uint64_t>(end - it) < sz) {
+         if (static_cast<glz::uint64_t>(end - it) < sz) {
             ctx.error = error_code::unexpected_end;
             return false;
          }
          if (tc == jsonb::type::text || tc == jsonb::type::textraw) {
-            key_out = sv{reinterpret_cast<const char*>(it), static_cast<size_t>(sz)};
+            key_out = sv{reinterpret_cast<const char*>(it), static_cast<glz::size_t>(sz)};
             it += sz;
             return true;
          }
          if (tc == jsonb::type::textj || tc == jsonb::type::text5) {
-            decode_text(ctx, tc, it, end, static_cast<size_t>(sz), scratch);
+            decode_text(ctx, tc, it, end, static_cast<glz::size_t>(sz), scratch);
             if (bool(ctx.error)) return false;
             it += sz;
             key_out = sv{scratch.data(), scratch.size()};
@@ -451,14 +450,14 @@ namespace glz
       {
          depth_guard g{ctx};
          if (!g) return;
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
          if (tc != jsonb::type::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -484,8 +483,8 @@ namespace glz
          }
          else {
             // Fixed-size container (std::array). Parse up to capacity.
-            size_t i = 0;
-            const size_t cap = value.size();
+            glz::size_t i = 0;
+            const glz::size_t cap = value.size();
             while (it < stop) {
                if (i >= cap) [[unlikely]] {
                   ctx.error = error_code::exceeded_static_array_size;
@@ -516,14 +515,14 @@ namespace glz
          static_assert(str_t<Key> || std::same_as<Key, std::string>,
                        "JSONB objects only support string keys (types 7-10).");
 
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
          if (tc != jsonb::type::object) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -567,14 +566,14 @@ namespace glz
       {
          depth_guard g{ctx};
          if (!g) return;
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
          if (tc != jsonb::type::object) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -613,7 +612,7 @@ namespace glz
             }
          }();
 
-         auto hash_match_and_parse = [&](const char* key_data, size_t key_len) {
+         auto hash_match_and_parse = [&](const char* key_data, glz::size_t key_len) {
             if constexpr (N > 0) {
                static constexpr auto HashInfo = hash_info<DT>;
                const auto index =
@@ -622,7 +621,7 @@ namespace glz
 
                bool matched = false;
                visit<N>(
-                  [&]<size_t I>() {
+                  [&]<glz::size_t I>() {
                      static constexpr auto TargetKey = get<I>(reflect<DT>::keys);
                      static constexpr auto Length = TargetKey.size();
                      if ((Length == key_len) && compare<Length>(TargetKey.data(), key_data)) [[likely]] {
@@ -650,10 +649,10 @@ namespace glz
 
          std::string key_scratch;
          while (it < stop) {
-            uint8_t key_tc{};
-            uint64_t key_sz{};
+            glz::uint8_t key_tc{};
+            glz::uint64_t key_sz{};
             if (!jsonb::read_header(ctx, it, stop, key_tc, key_sz)) return;
-            if (static_cast<uint64_t>(stop - it) < key_sz) [[unlikely]] {
+            if (static_cast<glz::uint64_t>(stop - it) < key_sz) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -668,14 +667,14 @@ namespace glz
             // Materialize the key bytes either as a view into the buffer (literal) or into a
             // scratch buffer (escape-encoded).
             const char* key_data{};
-            size_t key_len{};
+            glz::size_t key_len{};
             if (literal_key) {
                key_data = reinterpret_cast<const char*>(it);
-               key_len = static_cast<size_t>(key_sz);
+               key_len = static_cast<glz::size_t>(key_sz);
                it += key_sz;
             }
             else {
-               jsonb_detail::decode_text(ctx, key_tc, it, stop, static_cast<size_t>(key_sz), key_scratch);
+               jsonb_detail::decode_text(ctx, key_tc, it, stop, static_cast<glz::size_t>(key_sz), key_scratch);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                it += key_sz;
@@ -727,7 +726,7 @@ namespace glz
          if constexpr (Opts.error_on_missing_keys) {
             static constexpr auto req_fields = required_fields<DT, Opts>();
             if ((req_fields & fields) != req_fields) {
-               for (size_t i = 0; i < N; ++i) {
+               for (glz::size_t i = 0; i < N; ++i) {
                   if (!fields[i] && req_fields[i]) {
                      ctx.custom_error_message = reflect<DT>::keys[i];
                      break;
@@ -749,14 +748,14 @@ namespace glz
       {
          depth_guard g{ctx};
          if (!g) return;
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
          if (tc != jsonb::type::object) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -775,14 +774,14 @@ namespace glz
       {
          depth_guard g{ctx};
          if (!g) return;
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
          if (tc != jsonb::type::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -790,13 +789,13 @@ namespace glz
 
          static constexpr auto N = glz::tuple_size_v<std::decay_t<T>>;
          if constexpr (is_std_tuple<T>) {
-            for_each<N>([&]<size_t I>() {
+            for_each<N>([&]<glz::size_t I>() {
                if (bool(ctx.error)) return;
                parse<JSONB>::op<Opts>(std::get<I>(value), ctx, it, end);
             });
          }
          else {
-            for_each<N>([&]<size_t I>() {
+            for_each<N>([&]<glz::size_t I>() {
                if (bool(ctx.error)) return;
                parse<JSONB>::op<Opts>(glz::get<I>(value), ctx, it, end);
             });
@@ -820,20 +819,20 @@ namespace glz
       {
          depth_guard g{ctx};
          if (!g) return;
-         uint8_t tc{};
-         uint64_t sz{};
+         glz::uint8_t tc{};
+         glz::uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
          if (tc != jsonb::type::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
          const auto stop = it + sz;
 
-         for_each<reflect<T>::size>([&]<size_t I>() {
+         for_each<reflect<T>::size>([&]<glz::size_t I>() {
             if (bool(ctx.error)) return;
             parse<JSONB>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
          });
@@ -857,7 +856,7 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
-         uint8_t initial;
+         glz::uint8_t initial;
          std::memcpy(&initial, it, 1);
 
          // Accept any null element (size 0 or, per spec, non-zero payload that a legacy
@@ -901,7 +900,7 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
-         uint8_t initial;
+         glz::uint8_t initial;
          std::memcpy(&initial, it, 1);
          if (jsonb::get_type(initial) == jsonb::type::null_) {
             std::nullptr_t n;
@@ -959,7 +958,7 @@ namespace glz
          };
 
          // Peek the outer type code without advancing.
-         uint8_t initial;
+         glz::uint8_t initial;
          std::memcpy(&initial, it, 1);
          if (jsonb::get_type(initial) != jsonb::type::object) {
             // Not an object → must be the value directly.
@@ -971,10 +970,10 @@ namespace glz
          // happens to be an object? Save the position, consume the object header, then look
          // at the first key.
          const auto start = it;
-         uint8_t obj_tc{};
-         uint64_t obj_sz{};
+         glz::uint8_t obj_tc{};
+         glz::uint64_t obj_sz{};
          if (!jsonb::read_header(ctx, it, end, obj_tc, obj_sz)) return;
-         if (static_cast<uint64_t>(end - it) < obj_sz) [[unlikely]] {
+         if (static_cast<glz::uint64_t>(end - it) < obj_sz) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -995,14 +994,14 @@ namespace glz
          // Try to read the first key. If it's TEXT/TEXTRAW equal to "unexpected", this is an
          // error wrapper. Otherwise rewind to `start` and parse as value.
          auto key_scan_it = it;
-         uint8_t key_tc{};
-         uint64_t key_sz{};
+         glz::uint8_t key_tc{};
+         glz::uint64_t key_sz{};
          if (!jsonb::read_header(ctx, key_scan_it, payload_end, key_tc, key_sz)) return;
 
          static constexpr sv unexpected_key = "unexpected";
          const bool is_literal_text = (key_tc == jsonb::type::text || key_tc == jsonb::type::textraw);
          if (is_literal_text && key_sz == unexpected_key.size() &&
-             static_cast<uint64_t>(payload_end - key_scan_it) >= key_sz &&
+             static_cast<glz::uint64_t>(payload_end - key_scan_it) >= key_sz &&
              std::memcmp(key_scan_it, unexpected_key.data(), key_sz) == 0) {
             // It's an unexpected wrapper. Advance past the key and parse the error value.
             key_scan_it += key_sz;
@@ -1063,18 +1062,18 @@ namespace glz
       template <template <class> class Trait, class... Ts>
       struct first_index_impl<std::variant<Ts...>, Trait>
       {
-         static constexpr size_t find()
+         static constexpr glz::size_t find()
          {
-            size_t result = std::variant_npos;
-            size_t idx = 0;
+            glz::size_t result = std::variant_npos;
+            glz::size_t idx = 0;
             ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
             return result;
          }
-         static constexpr size_t value = find();
+         static constexpr glz::size_t value = find();
       };
 
       template <class Variant, template <class> class Trait>
-      constexpr size_t first_index_v = first_index_impl<Variant, Trait>::value;
+      constexpr glz::size_t first_index_v = first_index_impl<Variant, Trait>::value;
 
       // True if the variant can be deduced from the JSONB type code byte. Each scalar
       // category (bool, int, float, string, array, null) may have at most one
@@ -1084,9 +1083,9 @@ namespace glz
       consteval bool variant_jsonb_auto_deducible()
       {
          constexpr auto N = std::variant_size_v<T>;
-         size_t bools = 0, ints = 0, floats = 0, strings = 0, arrays = 0, objects = 0, nulls = 0;
-         [&]<size_t... I>(std::index_sequence<I...>) {
-            (([&]<size_t Idx>() {
+         glz::size_t bools = 0, ints = 0, floats = 0, strings = 0, arrays = 0, objects = 0, nulls = 0;
+         [&]<glz::size_t... I>(std::index_sequence<I...>) {
+            (([&]<glz::size_t Idx>() {
                 using V = std::decay_t<std::variant_alternative_t<Idx, T>>;
                 bools += is_jsonb_variant_bool<V>::value;
                 ints += is_jsonb_variant_int<V>::value;
@@ -1128,18 +1127,18 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
-         const uint8_t tc = jsonb::get_type(static_cast<uint8_t>(*it));
+         const glz::uint8_t tc = jsonb::get_type(static_cast<glz::uint8_t>(*it));
 
          using V = std::decay_t<decltype(value)>;
-         constexpr size_t bool_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_bool>;
-         constexpr size_t int_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_int>;
-         constexpr size_t float_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_float>;
-         constexpr size_t str_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_str>;
-         constexpr size_t array_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_array>;
-         constexpr size_t object_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_object>;
-         constexpr size_t null_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_null>;
+         constexpr glz::size_t bool_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_bool>;
+         constexpr glz::size_t int_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_int>;
+         constexpr glz::size_t float_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_float>;
+         constexpr glz::size_t str_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_str>;
+         constexpr glz::size_t array_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_array>;
+         constexpr glz::size_t object_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_object>;
+         constexpr glz::size_t null_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_null>;
 
-         auto dispatch = [&]<size_t Idx>() {
+         auto dispatch = [&]<glz::size_t Idx>() {
             if constexpr (Idx == std::variant_npos) {
                ctx.error = error_code::no_matching_variant_type;
             }
@@ -1193,10 +1192,10 @@ namespace glz
                // Tagged dispatch: read the OBJECT header, then the first (key, value)
                // pair which must carry the tag and resolve to a type id. The remaining
                // body is parsed into the resolved alternative with the tag key skipped.
-               uint8_t obj_tc{};
-               uint64_t obj_sz{};
+               glz::uint8_t obj_tc{};
+               glz::uint64_t obj_sz{};
                if (!jsonb::read_header(ctx, it, end, obj_tc, obj_sz)) return;
-               if (static_cast<uint64_t>(end - it) < obj_sz) [[unlikely]] {
+               if (static_cast<glz::uint64_t>(end - it) < obj_sz) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -1204,10 +1203,10 @@ namespace glz
                const auto body_start = it;
 
                // First key — must be the tag.
-               uint8_t key_tc{};
-               uint64_t key_sz{};
+               glz::uint8_t key_tc{};
+               glz::uint64_t key_sz{};
                if (!jsonb::read_header(ctx, it, stop, key_tc, key_sz)) return;
-               if (static_cast<uint64_t>(stop - it) < key_sz) [[unlikely]] {
+               if (static_cast<glz::uint64_t>(stop - it) < key_sz) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -1215,11 +1214,11 @@ namespace glz
                std::string key_scratch;
                sv first_key{};
                if (literal_key) {
-                  first_key = sv{reinterpret_cast<const char*>(it), static_cast<size_t>(key_sz)};
+                  first_key = sv{reinterpret_cast<const char*>(it), static_cast<glz::size_t>(key_sz)};
                   it += key_sz;
                }
                else if (key_tc == jsonb::type::textj || key_tc == jsonb::type::text5) {
-                  jsonb_detail::decode_text(ctx, key_tc, it, stop, static_cast<size_t>(key_sz), key_scratch);
+                  jsonb_detail::decode_text(ctx, key_tc, it, stop, static_cast<glz::size_t>(key_sz), key_scratch);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   it += key_sz;
@@ -1237,7 +1236,7 @@ namespace glz
                }
 
                using id_type = std::decay_t<decltype(ids_v<V>[0])>;
-               size_t type_index{};
+               glz::size_t type_index{};
                if constexpr (std::integral<id_type>) {
                   id_type id{};
                   parse<JSONB>::op<Opts>(id, ctx, it, stop);
@@ -1373,9 +1372,9 @@ namespace glz
          using object_t = typename G::object_t;
 
          // Peek the type code without advancing.
-         uint8_t initial;
+         glz::uint8_t initial;
          std::memcpy(&initial, it, 1);
-         const uint8_t tc = jsonb::get_type(initial);
+         const glz::uint8_t tc = jsonb::get_type(initial);
 
          switch (tc) {
          case jsonb::type::null_: {
@@ -1397,14 +1396,14 @@ namespace glz
          case jsonb::type::int5: {
             // Prefer the widest integer alternative available in this Mode, fall back to double.
             if constexpr (Mode == num_mode::u64) {
-               uint64_t u{};
-               from<JSONB, uint64_t>::template op<Opts>(u, ctx, it, end);
+               glz::uint64_t u{};
+               from<JSONB, glz::uint64_t>::template op<Opts>(u, ctx, it, end);
                if (bool(ctx.error)) return;
                value.data = u;
             }
             else if constexpr (Mode == num_mode::i64) {
-               int64_t i{};
-               from<JSONB, int64_t>::template op<Opts>(i, ctx, it, end);
+               glz::int64_t i{};
+               from<JSONB, glz::int64_t>::template op<Opts>(i, ctx, it, end);
                if (bool(ctx.error)) return;
                value.data = i;
             }

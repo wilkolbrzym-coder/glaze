@@ -1,20 +1,33 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/net/rest_registry_impl.hpp"
+// glz:header include="glaze/core/opts.hpp // For REST constant"
+// glz:header include="glaze/glaze.hpp"
+// glz:header include="glaze/json/schema.hpp"
+// glz:header include="glaze/net/http_router.hpp"
+// glz:header include="glaze/rpc/repe/repe.hpp // For protocol_storage template"
+// glz:header project_imports=ignore
+module;
 
-#pragma once
+// glz:emit project
 
-#include "glaze/core/opts.hpp" // For REST constant
+export module glaze.net.rest_registry_impl;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.core.opts;
+import glaze.json.schema;
+import glaze.net.http_router;
+import glaze.rpc.repe.repe;
+
 #include "glaze/glaze.hpp"
-#include "glaze/json/schema.hpp"
-#include "glaze/net/http_router.hpp"
-#include "glaze/rpc/repe/repe.hpp" // For protocol_storage template
 
-using std::uint32_t;
 
-namespace glz
+export namespace glz
 {
    // Forward declaration of the registry template
-   template <auto Opts, uint32_t Proto>
+   template <auto Opts, glz::uint32_t Proto>
    struct registry;
 
    template <>

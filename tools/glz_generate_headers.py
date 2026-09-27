@@ -381,6 +381,53 @@ def leading_guard_prefix(lines: list[str], start: int) -> tuple[list[str], set[i
     return lines[index:end], set(range(index, end))
 
 
+def include_only_block_indices(lines: list[str], start: int, end: int) -> set[int]:
+    """Indices of global-module-fragment blocks that exist only to pull in headers.
+
+    A module sometimes guards a platform header purely so the module translation
+    unit compiles, e.g.::
+
+        module;
+        #ifdef _MSC_VER
+        #include <intrin.h>
+        #endif
+        export module ...;
+
+    The reference header has no trace of such a guard.  A preprocessor block is
+    dropped when it contains at least one ``#include`` and every non-preprocessor,
+    non-blank line inside it is an ``#include``.  Blocks that also carry macros,
+    ``static_assert``s or other content (the ``GLAZE_API_ON_WINDOWS`` block in
+    api/lib.hpp, the ``__has_include(<Eigen/Core>)`` fallback in eigen.hpp) are
+    kept, because there they are part of the header's own logic.
+    """
+    drop: set[int] = set()
+    index = start
+    while index < end:
+        if not PREPROCESSOR_OPEN_RE.match(lines[index]):
+            index += 1
+            continue
+        depth = 0
+        block: list[int] = []
+        cursor = index
+        while cursor < end:
+            line = lines[cursor]
+            if PREPROCESSOR_OPEN_RE.match(line):
+                depth += 1
+            elif PREPROCESSOR_CLOSE_RE.match(line):
+                depth -= 1
+            block.append(cursor)
+            cursor += 1
+            if depth == 0:
+                break
+        content = [lines[i].strip() for i in block if lines[i].strip()]
+        includes = [l for l in content if RAW_INCLUDE_RE.match(l)]
+        non_preproc = [l for l in content if not l.startswith("#")]
+        if includes and not non_preproc:
+            drop.update(block)
+        index = cursor
+    return drop
+
+
 def transform_source(
     source_path: Path,
     source_text: str,
@@ -409,9 +456,26 @@ def transform_source(
         # for its own sake but `license=none` omits it from the header.
         prefix = []
 
+    # The body starts after the `export module X;` declaration; for a file with
+    # a global module fragment `first_decl_index` points at `module;` instead.
+    export_index = next(
+        (i for i, line in enumerate(lines) if re.match(r"^\s*export\s+module\b", line)),
+        first_decl_index,
+    )
+
     # A feature-test guard that opens the body belongs *before* the include
     # block in the reference header; lift it out of the body (see helper).
-    guard_lines, guard_indices = leading_guard_prefix(lines, first_decl_index + 1)
+    guard_lines, guard_indices = leading_guard_prefix(lines, export_index + 1)
+
+    # Include-only preprocessor blocks in the global module fragment are
+    # module-internal (see helper); drop them entirely.
+    gf_start = next(
+        (i for i, line in enumerate(lines) if re.match(r"^\s*module\s*;\s*$", line)),
+        None,
+    )
+    block_drop: set[int] = set()
+    if gf_start is not None and gf_start < export_index:
+        block_drop = include_only_block_indices(lines, gf_start + 1, export_index)
 
     std_includes = list(metadata.std)
     project_includes: list[str] = list(metadata.includes)
@@ -425,7 +489,7 @@ def transform_source(
     for index, line in enumerate(lines):
         if index < first_decl_index:
             continue
-        if index in guard_indices:
+        if index in guard_indices or index in block_drop:
             continue
         if HEADER_META_RE.match(line):
             continue

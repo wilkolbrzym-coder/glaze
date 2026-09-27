@@ -1,19 +1,32 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
+// glz:header path="glaze/rpc/registry.hpp"
+// glz:header include="glaze/glaze.hpp"
+// glz:header include="glaze/rpc/repe/buffer.hpp"
+// glz:header include="glaze/rpc/repe/repe.hpp"
+// glz:header project_imports=ignore
+// glz:header include="glaze/net/rest_registry_impl.hpp" group=b1
+// glz:header include="glaze/rpc/jsonrpc_registry_impl.hpp" group=b2
+// glz:header include="glaze/rpc/repe/repe_registry_impl.hpp" group=b3
+module;
 
-#pragma once
+// glz:emit project
+
+export module glaze.rpc.registry;
+
+import std;
+
+import glaze.core.basic_types;
+import glaze.net.rest_registry_impl;
+import glaze.rpc.jsonrpc_registry_impl;
+import glaze.rpc.repe.buffer;
+import glaze.rpc.repe.repe;
+import glaze.rpc.repe.repe_registry_impl;
 
 #include "glaze/glaze.hpp"
-#include "glaze/rpc/repe/buffer.hpp"
-#include "glaze/rpc/repe/repe.hpp"
 
-using std::uint8_t;
-using std::uint16_t;
-using std::uint32_t;
-using std::uint64_t;
-using std::size_t;
 
-namespace glz
+export namespace glz
 {
    namespace detail
    {
@@ -45,53 +58,53 @@ namespace glz
          return buf;
       }
 
-      inline std::string_view build_version_error(uint8_t version)
+      inline std::string_view build_version_error(glz::uint8_t version)
       {
          auto& buf = error_buffer();
          buf = "REPE version mismatch: expected 1, got ";
          const auto n = buf.size();
          buf.resize(n + 8);
-         auto* end = glz::to_chars(buf.data() + n, uint32_t(version));
-         buf.resize(size_t(end - buf.data()));
+         auto* end = glz::to_chars(buf.data() + n, glz::uint32_t(version));
+         buf.resize(glz::size_t(end - buf.data()));
          return buf;
       }
 
-      inline std::string_view build_length_error(uint64_t expected, uint64_t actual)
+      inline std::string_view build_length_error(glz::uint64_t expected, glz::uint64_t actual)
       {
          auto& buf = error_buffer();
          buf = "REPE length mismatch: expected ";
          auto n = buf.size();
          buf.resize(n + 24);
          auto* end = glz::to_chars(buf.data() + n, expected);
-         buf.resize(size_t(end - buf.data()));
+         buf.resize(glz::size_t(end - buf.data()));
          buf.append(", got ");
          n = buf.size();
          buf.resize(n + 24);
          end = glz::to_chars(buf.data() + n, actual);
-         buf.resize(size_t(end - buf.data()));
+         buf.resize(glz::size_t(end - buf.data()));
          return buf;
       }
 
       // Reported when query_length + body_length overflow the 64-bit message length,
       // so no meaningful "expected" total can be formed (see repe::checked_message_length).
-      inline std::string_view build_length_overflow_error(uint64_t query_length, uint64_t body_length)
+      inline std::string_view build_length_overflow_error(glz::uint64_t query_length, glz::uint64_t body_length)
       {
          auto& buf = error_buffer();
          buf = "REPE length overflow: query_length ";
          auto n = buf.size();
          buf.resize(n + 24);
          auto* end = glz::to_chars(buf.data() + n, query_length);
-         buf.resize(size_t(end - buf.data()));
+         buf.resize(glz::size_t(end - buf.data()));
          buf.append(" + body_length ");
          n = buf.size();
          buf.resize(n + 24);
          end = glz::to_chars(buf.data() + n, body_length);
-         buf.resize(size_t(end - buf.data()));
+         buf.resize(glz::size_t(end - buf.data()));
          buf.append(" exceed uint64_t");
          return buf;
       }
 
-      inline std::string_view build_magic_error(uint16_t spec)
+      inline std::string_view build_magic_error(glz::uint16_t spec)
       {
          auto& buf = error_buffer();
          buf = "REPE magic number mismatch: expected 0x1507, got 0x";
@@ -107,16 +120,16 @@ namespace glz
    }
 
    // Forward declaration of implementation template
-   template <auto Opts, uint32_t Protocol>
+   template <auto Opts, glz::uint32_t Protocol>
    struct registry_impl;
 }
 
 // Include implementation files
-#include "glaze/net/rest_registry_impl.hpp"
-#include "glaze/rpc/jsonrpc_registry_impl.hpp"
-#include "glaze/rpc/repe/repe_registry_impl.hpp"
+// glz:emit b1
+// glz:emit b2
+// glz:emit b3
 
-namespace glz
+export namespace glz
 {
    // Every buffer the registry parses comes from a caller: a wire span, an FFI pointer, or a view
    // into the caller's string. None of them can be assumed to carry the '\0' sentinel a
@@ -143,7 +156,7 @@ namespace glz
    };
 
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <auto Opts = opts{}, uint32_t Proto = REPE>
+   template <auto Opts = opts{}, glz::uint32_t Proto = REPE>
    struct registry
    {
       // procedure for REPE protocol (zero-copy state_view)
@@ -319,7 +332,7 @@ namespace glz
          impl::register_merge_endpoint(root, merged, *this);
 
          // Register each merged object's member paths
-         for_each<sizeof...(Ts)>([&]<size_t I>() {
+         for_each<sizeof...(Ts)>([&]<glz::size_t I>() {
             auto& obj = glz::get<I>(merged.value);
             using T = std::decay_t<decltype(obj)>;
             register_members<root, T, root>(obj);
@@ -353,7 +366,7 @@ namespace glz
 
          // Length validation - REPE spec requires length = 48 + query_length + body_length
          // (overflow-safe: query_length/body_length are attacker-controlled 64-bit fields)
-         uint64_t expected_length{};
+         glz::uint64_t expected_length{};
          if (!repe::checked_message_length(in.header, expected_length) || in.header.length != expected_length) {
             out.header.ec = error_code::invalid_header;
             out.header.id = in.header.id; // Echo back the original ID
@@ -433,7 +446,7 @@ namespace glz
                   else {
                      // Length mismatch, or query/body lengths that overflow the total
                      // (overflow-safe: query_length/body_length are attacker-controlled).
-                     uint64_t expected{};
+                     glz::uint64_t expected{};
                      if (repe::checked_message_length(hdr, expected)) {
                         resp.set_error(result.ec, detail::build_length_error(expected, hdr.length));
                      }
@@ -627,7 +640,7 @@ namespace glz
          std::vector<std::string> responses;
          responses.reserve(batch.size());
 
-         size_t total_size = 2; // []
+         glz::size_t total_size = 2; // []
          for (const auto& req : batch) {
             auto response = process_single_request(req.str);
             if (response.has_value()) {
@@ -645,7 +658,7 @@ namespace glz
          std::string result;
          result.reserve(total_size);
          result = "[";
-         for (size_t i = 0; i < responses.size(); ++i) {
+         for (glz::size_t i = 0; i < responses.size(); ++i) {
             if (i > 0) {
                result += ",";
             }

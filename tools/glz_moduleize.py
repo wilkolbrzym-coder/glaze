@@ -229,6 +229,142 @@ def max_blank_run(lines: list[str]) -> int:
     return best
 
 
+def _classify_scope(header: str) -> str:
+    """Decide the kind of scope a ``{`` opens from the text before it."""
+    text = re.sub(r"\b(?:class|struct|union|enum)\b[^;{(]*$", "", header)
+    if re.search(r"\bnamespace\b", text):
+        # anonymous namespaces (``namespace {`` with no name) are internal.
+        tail = text.rsplit("namespace", 1)[1].strip()
+        if tail == "" or tail == "inline":
+            return "anon"
+        return "ns"
+    return "other"
+
+
+def _strip_to_code(lines: list[str]) -> list[str]:
+    """Blank comments and literals across the whole body, line by line.
+
+    Block comments span lines, so this tracks the ``/* ... */`` state; a
+    declaration scanner must never mistake a documentation line for code.
+    """
+    result: list[str] = []
+    in_block = False
+    for line in lines:
+        out: list[str] = []
+        i = 0
+        n = len(line)
+        while i < n:
+            if in_block:
+                end = line.find("*/", i)
+                if end == -1:
+                    out.append(" " * (n - i))
+                    i = n
+                else:
+                    out.append(" " * (end + 2 - i))
+                    i = end + 2
+                    in_block = False
+                continue
+            ch = line[i]
+            if ch == "/" and i + 1 < n and line[i + 1] == "/":
+                out.append(" " * (n - i))
+                i = n
+                continue
+            if ch == "/" and i + 1 < n and line[i + 1] == "*":
+                in_block = True
+                i += 2
+                out.append("  ")
+                continue
+            if ch in {'"', "'"}:
+                j = i + 1
+                while j < n:
+                    if line[j] == "\\":
+                        j += 2
+                        continue
+                    if line[j] == ch:
+                        j += 1
+                        break
+                    j += 1
+                out.append(" " * (j - i))
+                i = j
+                continue
+            out.append(ch)
+            i += 1
+        result.append("".join(out))
+    return result
+
+
+def export_body(body: list[str]) -> list[str]:
+    """Prefix ``export`` on every exportable namespace-scope declaration.
+
+    The previous hand conversion exported exactly the declarations other units
+    reference.  Exporting a superset is equally correct for consumers and is
+    derivable from the input alone, so this marks every namespace-scope
+    declaration that *can* legally carry ``export``.  Declarations with internal
+    linkage (namespace-scope ``static`` and anonymous-namespace members) may not
+    be exported by the language, so they are left untouched -- that is the only
+    reason a declaration is skipped.
+    """
+    code = _strip_to_code(body)
+    stack: list[str] = []
+    open_decl = False
+    marked: list[int] = []
+    header_buf: list[str] = []
+
+    def at_namespace_scope() -> bool:
+        return not stack or stack[-1] == "ns"
+
+    for index, raw in enumerate(code):
+        stripped = raw.strip()
+        if not stripped:
+            continue  # continuation / blank
+        if stripped.startswith("#"):
+            continue  # preprocessor: never a declaration, never ends one
+        begins_decl = False
+        if (
+            not open_decl
+            and at_namespace_scope()
+            and not stripped.startswith(("}", "{"))
+        ):
+            if stripped.startswith("namespace"):
+                begins_decl = False  # export the members, not the namespace
+            elif re.match(r"^export\b", stripped):
+                begins_decl = False
+            elif re.match(r"^static\b", stripped):
+                begins_decl = False  # internal linkage: cannot be exported
+            else:
+                begins_decl = True
+                marked.append(index)
+                open_decl = True
+
+        # Walk braces / semicolons.  ``header_buf`` carries the text that
+        # introduces the *next* scope across line breaks, so a namespace whose
+        # brace sits on the following line is still classified correctly.
+        for ch in raw:
+            if ch == "{":
+                stack.append(_classify_scope("".join(header_buf)))
+                header_buf = []
+            elif ch == "}":
+                if stack:
+                    stack.pop()
+                header_buf = []
+            elif ch == ";":
+                if open_decl and at_namespace_scope():
+                    open_decl = False
+                header_buf = []
+            else:
+                if len(header_buf) < 400:
+                    header_buf.append(ch)
+        if open_decl and at_namespace_scope() and stripped.endswith((";", "}")):
+            open_decl = False
+
+    out = list(body)
+    for index in marked:
+        line = out[index]
+        indent = line[: len(line) - len(line.lstrip())]
+        out[index] = f"{indent}export {line.lstrip()}"
+    return out
+
+
 def _comment_run_to_ixx(lines: list[str]) -> list[str]:
     return [line.replace("glaze.hpp", "glaze.ixx") for line in lines]
 
@@ -238,6 +374,7 @@ def convert(
     header_rel: str,
     module_name: str | None = None,
     name_map: dict[str, str] | None = None,
+    exports: bool = True,
 ) -> str:
     """Return the module source text for ``header_text``."""
     name = module_name or (name_map or {}).get(header_rel) or module_name_from_path(header_rel)
@@ -313,6 +450,9 @@ def convert(
             if target is None:
                 continue
             imports.append(f"import {target};")
+
+    if exports:
+        new_body = export_body(new_body)
 
     output: list[str] = []
     output.extend(_comment_run_to_ixx(framing.license_lines))

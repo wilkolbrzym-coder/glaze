@@ -1,8 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/manage.hpp"
-// glz:header std=<cstdint>
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/common.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.manage;
 
 import std;
@@ -11,12 +11,12 @@ import glaze.core.common;
 import glaze.core.context;
 import glaze.core.opts;
 import glaze.util.type_traits;
+import glaze.core.basic_types;
 
 // Calls a read function after reading and calls a write function before writing.
 // glz::manage is useful for transforming state from a user facing format
 // into a more complex or esoteric internal format.
 
-using std::uint32_t;
 
 namespace glz
 {
@@ -36,7 +36,7 @@ namespace glz
    export template <class T, class Member, class From, class To>
    manage_t(T&, Member, From, To) -> manage_t<T, Member, From, To>;
 
-   template <uint32_t Format, class T>
+   template <glz::uint32_t Format, class T>
       requires(is_specialization_v<T, manage_t>)
    struct from<Format, T>
    {
@@ -81,7 +81,7 @@ namespace glz
       }
    };
 
-   template <uint32_t Format, class T>
+   template <glz::uint32_t Format, class T>
       requires(is_specialization_v<T, manage_t>)
    struct to<Format, T>
    {

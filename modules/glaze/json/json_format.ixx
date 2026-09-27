@@ -1,11 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/json_format.hpp"
-// glz:header std=<array>
-// glz:header std=<bit>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
-// glz:header std=<cstring>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/util/dump.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.json_format;
 
 import glaze.core.common;
@@ -16,13 +16,10 @@ import glaze.util.parse;
 import glaze.util.string_literal;
 
 import std;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::uint8_t;
-using std::int64_t;
-using std::uint64_t;
-using std::size_t;
 
 export namespace glz::detail
 {
@@ -74,8 +71,8 @@ export namespace glz::detail
       return t;
    }();
 
-   template <bool use_tabs, uint8_t indentation_width>
-   inline void append_new_line(auto&& b, auto&& ix, const int64_t indent)
+   template <bool use_tabs, glz::uint8_t indentation_width>
+   inline void append_new_line(auto&& b, auto&& ix, const glz::int64_t indent)
    {
       dump('\n', b, ix);
       if constexpr (use_tabs) {
@@ -93,22 +90,22 @@ export namespace glz::detail
       auto start = it;
       ++it; // skip quote
       while (it < end) [[likely]] {
-         uint64_t chunk;
+         glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const uint64_t quote = has_quote(chunk);
+         const glz::uint64_t quote = has_quote(chunk);
          if (quote) {
-            it += (std::countr_zero(quote) >> 3);
+            it += (countr_zero(quote) >> 3);
 
             auto* prev = it - 1;
             while (*prev == '\\') {
                --prev;
             }
-            if (size_t(it - prev) % 2) {
+            if (glz::size_t(it - prev) % 2) {
                ++it; // add quote
-               return {start, size_t(it - start)};
+               return {start, glz::size_t(it - start)};
             }
             ++it; // skip escaped quote and continue
          }
@@ -127,22 +124,22 @@ export namespace glz::detail
       auto start = it;
       ++it; // skip quote
       for (const auto end_m7 = end - 7; it < end_m7;) {
-         uint64_t chunk;
+         glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const uint64_t quote = has_quote(chunk);
+         const glz::uint64_t quote = has_quote(chunk);
          if (quote) {
-            it += (std::countr_zero(quote) >> 3);
+            it += (countr_zero(quote) >> 3);
 
             auto* prev = it - 1;
             while (*prev == '\\') {
                --prev;
             }
-            if (size_t(it - prev) % 2) {
+            if (glz::size_t(it - prev) % 2) {
                ++it; // add quote
-               return {start, size_t(it - start)};
+               return {start, glz::size_t(it - start)};
             }
             ++it; // skip escaped quote and continue
          }
@@ -158,9 +155,9 @@ export namespace glz::detail
             while (*prev == '\\') {
                --prev;
             }
-            if (size_t(it - prev) % 2) {
+            if (glz::size_t(it - prev) % 2) {
                ++it; // add quote
-               return {start, size_t(it - start)};
+               return {start, glz::size_t(it - start)};
             }
          }
          ++it;
@@ -175,18 +172,18 @@ export namespace glz::detail
       auto start = it;
       it += 2; // skip /*
       for (const auto end_m7 = end - 7; it < end_m7;) {
-         uint64_t chunk;
+         glz::uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const uint64_t slash = has_char<'/'>(chunk);
+         const glz::uint64_t slash = has_char<'/'>(chunk);
          if (slash) {
-            it += (std::countr_zero(slash) >> 3);
+            it += (countr_zero(slash) >> 3);
 
             if (it[-1] == '*') {
                ++it; // add slash
-               return {start, size_t(it - start)};
+               return {start, glz::size_t(it - start)};
             }
             // skip slash and continue
             ++it;
@@ -200,7 +197,7 @@ export namespace glz::detail
       while (it < end) {
          if (it[-1] == '*' && *it == '/') {
             ++it; // add slash
-            return {start, size_t(it - start)};
+            return {start, glz::size_t(it - start)};
          }
          ++it;
       }
@@ -213,15 +210,15 @@ export namespace glz::detail
    {
       auto start = it;
       if constexpr (null_terminated) {
-         while (numeric_table[uint8_t(*it)]) {
+         while (numeric_table[glz::uint8_t(*it)]) {
             ++it;
          }
       }
       else {
-         while ((it < end) && numeric_table[uint8_t(*it)]) {
+         while ((it < end) && numeric_table[glz::uint8_t(*it)]) {
             ++it;
          }
       }
-      return {start, size_t(it - start)};
+      return {start, glz::size_t(it - start)};
    }
 }

@@ -222,8 +222,8 @@ namespace glz
    // Hands the including object's key bits to the read of an included file, and clears them
    // afterwards in case that read never claimed them (an included document whose top level is not
    // the including object, or one that failed before reaching its closing brace).
-   template <class Ctx>
-   export struct include_key_scope final
+   export template <class Ctx>
+   struct include_key_scope final
    {
       Ctx& ctx;
 

@@ -3,12 +3,8 @@
 // glz:header path="glaze/containers/ordered_small_map.hpp"
 // glz:header std=<algorithm>
 // glz:header std=<concepts>
-// glz:header std=<cstddef>
-// glz:header std=<cstdint>
 // glz:header std=<cstdlib>
 // glz:header std=<cstring>
-// glz:header std=<initializer_list>
-// glz:header std=<iterator>
 // glz:header std=<limits>
 // glz:header std=<memory>
 // glz:header std=<new>
@@ -16,17 +12,16 @@
 // glz:header std=<string>
 // glz:header std=<string_view>
 // glz:header std=<tuple>
-// glz:header std=<type_traits>
 // glz:header std=<utility>
+// glz:header include="glaze/hash/sweethash.hpp"
+// glz:header project_imports=ignore
 export module glaze.containers.ordered_small_map;
 
 import std;
 
 import glaze.hash.sweethash;
+import glaze.core.basic_types;
 
-using std::size_t;
-using std::uint8_t;
-using std::uint32_t;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -70,39 +65,39 @@ namespace glz
       // Compact index entry: maps a hash to a position in the data array
       struct hash_index_entry
       {
-         uint32_t key_hash;
-         uint32_t index;
+         glz::uint32_t key_hash;
+         glz::uint32_t index;
       };
 
       // Bloom filter: 1024 bits (128 bytes) with 2 hash functions.
       // False positive rate at n entries: (1 - e^(-2n/1024))^2
       //   n=32: ~4%   n=64: ~13%   n=128: ~40%   n=256: ~74%
-      static constexpr size_t bloom_bytes = 128;
-      static constexpr uint32_t bloom_bits = bloom_bytes * 8; // 1024
-      static constexpr uint32_t bloom_mask = bloom_bits - 1; // 0x3FF
+      static constexpr glz::size_t bloom_bytes = 128;
+      static constexpr glz::uint32_t bloom_bits = bloom_bytes * 8; // 1024
+      static constexpr glz::uint32_t bloom_mask = bloom_bits - 1; // 0x3FF
 
       // Heap-allocated index block: [index_header][hash_index_entry × capacity]
       // The bloom filter is embedded in the header.
       struct index_header
       {
-         uint32_t size; // number of data elements covered by the sorted index (0 = fully invalid)
-         uint32_t capacity; // allocated index entry slots
-         uint8_t bloom[bloom_bytes]; // bloom filter for fast insert rejection
+         glz::uint32_t size; // number of data elements covered by the sorted index (0 = fully invalid)
+         glz::uint32_t capacity; // allocated index entry slots
+         glz::uint8_t bloom[bloom_bytes]; // bloom filter for fast insert rejection
       };
 
       // Compact data storage: pointer + uint32 size/capacity = 16 bytes
       // Combined with index_ pointer (8 bytes) = 24 bytes total
       value_type* data_ = nullptr; // 8 bytes
-      uint32_t size_ = 0; // 4 bytes
-      uint32_t capacity_ = 0; // 4 bytes
+      glz::uint32_t size_ = 0; // 4 bytes
+      glz::uint32_t capacity_ = 0; // 4 bytes
       mutable index_header* index_ = nullptr; // 8 bytes
       // Total: 24 bytes
 
       static constexpr size_type linear_search_threshold = 8;
       static constexpr size_type bloom_threshold = 128; // disable bloom filter above this size
-      static constexpr uint32_t max_u32 = (std::numeric_limits<uint32_t>::max)();
+      static constexpr glz::uint32_t max_u32 = (std::numeric_limits<glz::uint32_t>::max)();
 
-      static uint32_t hash_key(std::string_view key) noexcept { return sweethash::sweet32(key); }
+      static glz::uint32_t hash_key(std::string_view key) noexcept { return sweethash::sweet32(key); }
 
       // --- Data array management ---
 
@@ -116,58 +111,58 @@ namespace glz
          GLZ_THROW_OR_ABORT(std::length_error("ordered_small_map index capacity overflow"));
       }
 
-      static uint32_t checked_u32(size_type value)
+      static glz::uint32_t checked_u32(size_type value)
       {
          if (value > static_cast<size_type>(max_u32)) {
             throw_capacity_overflow();
          }
-         return static_cast<uint32_t>(value);
+         return static_cast<glz::uint32_t>(value);
       }
 
-      static uint32_t next_data_capacity(uint32_t current)
+      static glz::uint32_t next_data_capacity(glz::uint32_t current)
       {
          if (current == 0) return 4;
          if (current > (max_u32 / 2)) return max_u32;
          return current * 2;
       }
 
-      static uint32_t next_index_capacity(uint32_t current)
+      static glz::uint32_t next_index_capacity(glz::uint32_t current)
       {
          if (current == 0) return 16;
          if (current > (max_u32 / 2)) return max_u32;
          return current * 2;
       }
 
-      static size_t checked_data_allocation_bytes(uint32_t count)
+      static glz::size_t checked_data_allocation_bytes(glz::uint32_t count)
       {
-         if (count > ((std::numeric_limits<size_t>::max)() / sizeof(value_type))) {
+         if (count > ((std::numeric_limits<glz::size_t>::max)() / sizeof(value_type))) {
             GLZ_THROW_OR_ABORT(std::bad_alloc{});
          }
-         return static_cast<size_t>(count) * sizeof(value_type);
+         return static_cast<glz::size_t>(count) * sizeof(value_type);
       }
 
-      static size_t checked_index_allocation_bytes(uint32_t count)
+      static glz::size_t checked_index_allocation_bytes(glz::uint32_t count)
       {
-         constexpr size_t header = sizeof(index_header);
-         constexpr size_t entry = sizeof(hash_index_entry);
-         if (count > (((std::numeric_limits<size_t>::max)() - header) / entry)) {
+         constexpr glz::size_t header = sizeof(index_header);
+         constexpr glz::size_t entry = sizeof(hash_index_entry);
+         if (count > (((std::numeric_limits<glz::size_t>::max)() - header) / entry)) {
             GLZ_THROW_OR_ABORT(std::bad_alloc{});
          }
-         return header + static_cast<size_t>(count) * entry;
+         return header + static_cast<glz::size_t>(count) * entry;
       }
 
-      static void destroy_range(value_type* data, uint32_t count) noexcept
+      static void destroy_range(value_type* data, glz::uint32_t count) noexcept
       {
-         for (uint32_t i = 0; i < count; ++i) {
+         for (glz::uint32_t i = 0; i < count; ++i) {
             std::destroy_at(data + i);
          }
       }
 
-      value_type* allocate_and_relocate(uint32_t new_cap)
+      value_type* allocate_and_relocate(glz::uint32_t new_cap)
       {
          auto* new_data = static_cast<value_type*>(::operator new(checked_data_allocation_bytes(new_cap)));
 #if __cpp_exceptions
-         uint32_t constructed = 0;
+         glz::uint32_t constructed = 0;
          try {
             for (; constructed < size_; ++constructed) {
                std::construct_at(new_data + constructed, std::move_if_noexcept(data_[constructed]));
@@ -179,18 +174,18 @@ namespace glz
             throw;
          }
 #else
-         for (uint32_t i = 0; i < size_; ++i) {
+         for (glz::uint32_t i = 0; i < size_; ++i) {
             std::construct_at(new_data + i, std::move_if_noexcept(data_[i]));
          }
 #endif
          return new_data;
       }
 
-      static value_type* allocate_and_copy(const value_type* source, uint32_t count)
+      static value_type* allocate_and_copy(const value_type* source, glz::uint32_t count)
       {
          auto* new_data = static_cast<value_type*>(::operator new(checked_data_allocation_bytes(count)));
 #if __cpp_exceptions
-         uint32_t constructed = 0;
+         glz::uint32_t constructed = 0;
          try {
             for (; constructed < count; ++constructed) {
                std::construct_at(new_data + constructed, source[constructed]);
@@ -202,14 +197,14 @@ namespace glz
             throw;
          }
 #else
-         for (uint32_t i = 0; i < count; ++i) {
+         for (glz::uint32_t i = 0; i < count; ++i) {
             std::construct_at(new_data + i, source[i]);
          }
 #endif
          return new_data;
       }
 
-      void reallocate_data(uint32_t new_cap)
+      void reallocate_data(glz::uint32_t new_cap)
       {
          if (new_cap < size_) {
             throw_capacity_overflow();
@@ -227,7 +222,7 @@ namespace glz
             if (size_ == max_u32) {
                throw_capacity_overflow();
             }
-            const uint32_t new_cap = next_data_capacity(capacity_);
+            const glz::uint32_t new_cap = next_data_capacity(capacity_);
             reallocate_data(new_cap);
          }
       }
@@ -265,7 +260,7 @@ namespace glz
 
       void destroy_all() noexcept
       {
-         for (uint32_t i = 0; i < size_; ++i) {
+         for (glz::uint32_t i = 0; i < size_; ++i) {
             std::destroy_at(data_ + i);
          }
       }
@@ -281,19 +276,19 @@ namespace glz
 
       // --- Bloom filter ---
 
-      void bloom_set(uint32_t h) const noexcept
+      void bloom_set(glz::uint32_t h) const noexcept
       {
-         const uint32_t a = h & bloom_mask;
-         const uint32_t b = (h >> 10) & bloom_mask;
-         index_->bloom[a >> 3] |= uint8_t(1) << (a & 7);
-         index_->bloom[b >> 3] |= uint8_t(1) << (b & 7);
+         const glz::uint32_t a = h & bloom_mask;
+         const glz::uint32_t b = (h >> 10) & bloom_mask;
+         index_->bloom[a >> 3] |= glz::uint8_t(1) << (a & 7);
+         index_->bloom[b >> 3] |= glz::uint8_t(1) << (b & 7);
       }
 
-      bool bloom_maybe_contains(uint32_t h) const noexcept
+      bool bloom_maybe_contains(glz::uint32_t h) const noexcept
       {
-         const uint32_t a = h & bloom_mask;
-         const uint32_t b = (h >> 10) & bloom_mask;
-         return (index_->bloom[a >> 3] & (uint8_t(1) << (a & 7))) && (index_->bloom[b >> 3] & (uint8_t(1) << (b & 7)));
+         const glz::uint32_t a = h & bloom_mask;
+         const glz::uint32_t b = (h >> 10) & bloom_mask;
+         return (index_->bloom[a >> 3] & (glz::uint8_t(1) << (a & 7))) && (index_->bloom[b >> 3] & (glz::uint8_t(1) << (b & 7)));
       }
 
       void bloom_clear() const noexcept { std::memset(index_->bloom, 0, bloom_bytes); }
@@ -305,7 +300,7 @@ namespace glz
          return static_cast<hash_index_entry*>(static_cast<void*>(index_ + 1));
       }
 
-      uint32_t index_size() const noexcept { return index_ ? index_->size : 0; }
+      glz::uint32_t index_size() const noexcept { return index_ ? index_->size : 0; }
 
       void invalidate_index() noexcept
       {
@@ -324,11 +319,11 @@ namespace glz
          if (needed > static_cast<size_type>(max_u32)) {
             throw_index_overflow();
          }
-         const auto needed_u32 = static_cast<uint32_t>(needed);
+         const auto needed_u32 = static_cast<glz::uint32_t>(needed);
          if (index_ && index_->capacity >= needed_u32) return;
-         uint32_t cap = index_ ? index_->capacity : 0;
+         glz::uint32_t cap = index_ ? index_->capacity : 0;
          while (cap < needed_u32) {
-            const uint32_t next = next_index_capacity(cap);
+            const glz::uint32_t next = next_index_capacity(cap);
             if (next <= cap) {
                throw_index_overflow();
             }
@@ -352,8 +347,8 @@ namespace glz
          ensure_index_capacity(static_cast<size_type>(size_));
          bloom_clear();
          auto* entries = index_entries();
-         for (uint32_t i = 0; i < size_; ++i) {
-            const uint32_t h = hash_key(data_[i].first);
+         for (glz::uint32_t i = 0; i < size_; ++i) {
+            const glz::uint32_t h = hash_key(data_[i].first);
             entries[i] = {h, i};
             bloom_set(h);
          }
@@ -376,13 +371,13 @@ namespace glz
          }
 
          // Incrementally insert-sort the few new entries
-         for (uint32_t i = current; i < size_; ++i) {
+         for (glz::uint32_t i = current; i < size_; ++i) {
             const hash_index_entry entry{hash_key(data_[i].first), i};
             const auto* base = index_entries();
             const auto* p = branchless_lower_bound(base, index_->size, entry.key_hash);
-            auto pos = static_cast<size_t>(p - base);
+            auto pos = static_cast<glz::size_t>(p - base);
 
-            const uint32_t m = index_->size;
+            const glz::uint32_t m = index_->size;
             ensure_index_capacity(static_cast<size_type>(m) + 1);
             auto* entries = index_entries();
             if (pos < m) {
@@ -397,21 +392,21 @@ namespace glz
       struct index_find_result
       {
          iterator it; // found iterator, or end() if not found
-         size_t insert_pos; // index position for insertion (valid only when it == end())
-         uint32_t key_hash; // precomputed hash of the key
+         glz::size_t insert_pos; // index position for insertion (valid only when it == end())
+         glz::uint32_t key_hash; // precomputed hash of the key
       };
 
       // Single binary search that returns both the lookup result and
       // the index insertion position, avoiding a redundant second search.
       template <class K>
-      index_find_result index_find_or_pos(const K& key, uint32_t h)
+      index_find_result index_find_or_pos(const K& key, glz::uint32_t h)
       {
          ensure_index();
 
          const auto* base = index_entries();
          const auto* idx_end = base + index_->size;
          const auto* p = branchless_lower_bound(base, index_->size, h);
-         const size_t pos = static_cast<size_t>(p - base);
+         const glz::size_t pos = static_cast<glz::size_t>(p - base);
 
          // Scan adjacent entries with matching hash
          for (auto* scan = p; scan != idx_end && scan->key_hash == h; ++scan) {
@@ -427,7 +422,7 @@ namespace glz
       template <class K>
       iterator linear_find(const K& key)
       {
-         for (uint32_t i = 0; i < size_; ++i) {
+         for (glz::uint32_t i = 0; i < size_; ++i) {
             if (data_[i].first == key) return data_ + i;
          }
          return data_ + size_;
@@ -436,18 +431,18 @@ namespace glz
       template <class K>
       const_iterator linear_find(const K& key) const
       {
-         for (uint32_t i = 0; i < size_; ++i) {
+         for (glz::uint32_t i = 0; i < size_; ++i) {
             if (data_[i].first == key) return data_ + i;
          }
          return data_ + size_;
       }
 
       // Branchless binary search - compiles to cmov instead of conditional branches
-      static const hash_index_entry* branchless_lower_bound(const hash_index_entry* p, size_t len,
-                                                            uint32_t target) noexcept
+      static const hash_index_entry* branchless_lower_bound(const hash_index_entry* p, glz::size_t len,
+                                                            glz::uint32_t target) noexcept
       {
          while (len > 1) {
-            size_t half = len / 2;
+            glz::size_t half = len / 2;
             p += (p[half - 1].key_hash < target) * half;
             len -= half;
          }
@@ -463,7 +458,7 @@ namespace glz
       {
          ensure_index();
 
-         const uint32_t h = hash_key(key);
+         const glz::uint32_t h = hash_key(key);
          const auto* base = index_entries();
          const auto* idx_end = base + index_->size;
          const auto* p = branchless_lower_bound(base, index_->size, h);
@@ -481,7 +476,7 @@ namespace glz
       {
          ensure_index();
 
-         const uint32_t h = hash_key(key);
+         const glz::uint32_t h = hash_key(key);
          const auto* base = index_entries();
          const auto* idx_end = base + index_->size;
          const auto* p = branchless_lower_bound(base, index_->size, h);
@@ -504,7 +499,7 @@ namespace glz
             return data_[size_ - 1].second;
          }
 
-         const uint32_t h = hash_key(key);
+         const glz::uint32_t h = hash_key(key);
          if (try_bloom_insert(h, append_fn)) {
             return data_[size_ - 1].second;
          }
@@ -515,7 +510,7 @@ namespace glz
          append_fn();
          bloom_set(h);
          if (index_size() > 0) {
-            const uint32_t n = index_->size;
+            const glz::uint32_t n = index_->size;
             ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
@@ -533,7 +528,7 @@ namespace glz
       // Returns true if the key is definitely new and was appended (caller is done).
       // Returns false if the bloom says "maybe present" (caller must do full search).
       template <class F>
-      bool try_bloom_insert(uint32_t h, F&& append_fn)
+      bool try_bloom_insert(glz::uint32_t h, F&& append_fn)
       {
          if (index_ && size_ <= bloom_threshold && !bloom_maybe_contains(h)) {
             // Definitely not present — skip the search
@@ -548,7 +543,7 @@ namespace glz
       // Full insert path: ensure index, search for duplicate, insert if new.
       // Returns iterator to existing or newly inserted element, and whether insertion happened.
       template <class F>
-      std::pair<iterator, bool> indexed_insert(const key_type& key, uint32_t h, F&& append_fn)
+      std::pair<iterator, bool> indexed_insert(const key_type& key, glz::uint32_t h, F&& append_fn)
       {
          auto [it, pos, _] = index_find_or_pos(key, h);
          if (it != end()) return {it, false};
@@ -557,13 +552,13 @@ namespace glz
          // After ensure_index in index_find_or_pos, index is current for all entries before this one.
          // Insert the new entry into the sorted index to keep it current.
          if (index_size() > 0) {
-            const uint32_t n = index_->size;
+            const glz::uint32_t n = index_->size;
             ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
             }
-            entries[pos] = {h, static_cast<uint32_t>(size_ - 1)};
+            entries[pos] = {h, static_cast<glz::uint32_t>(size_ - 1)};
             index_->size = size_;
          }
          return {data_ + size_ - 1, true};
@@ -716,7 +711,7 @@ namespace glz
             push_back_impl(value);
             return {data_ + size_ - 1, true};
          }
-         const uint32_t h = hash_key(value.first);
+         const glz::uint32_t h = hash_key(value.first);
          if (try_bloom_insert(h, [&] { push_back_impl(value); })) {
             return {data_ + size_ - 1, true};
          }
@@ -731,7 +726,7 @@ namespace glz
             push_back_impl(std::move(value));
             return {data_ + size_ - 1, true};
          }
-         const uint32_t h = hash_key(value.first);
+         const glz::uint32_t h = hash_key(value.first);
          if (try_bloom_insert(h, [&] { push_back_impl(std::move(value)); })) {
             return {data_ + size_ - 1, true};
          }
@@ -764,7 +759,7 @@ namespace glz
             emplace_back_kv(std::forward<K>(key), std::forward<Args>(args)...);
             return {data_ + size_ - 1, true};
          }
-         const uint32_t h = hash_key(key);
+         const glz::uint32_t h = hash_key(key);
          if (try_bloom_insert(h, [&] { emplace_back_kv(std::forward<K>(key), std::forward<Args>(args)...); })) {
             return {data_ + size_ - 1, true};
          }
@@ -773,13 +768,13 @@ namespace glz
          emplace_back_kv(std::forward<K>(key), std::forward<Args>(args)...);
          bloom_set(h);
          if (index_size() > 0) {
-            const uint32_t n = index_->size;
+            const glz::uint32_t n = index_->size;
             ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
             }
-            entries[pos] = {h, static_cast<uint32_t>(size_ - 1)};
+            entries[pos] = {h, static_cast<glz::uint32_t>(size_ - 1)};
             index_->size = size_;
          }
          return {data_ + size_ - 1, true};
@@ -798,7 +793,7 @@ namespace glz
             emplace_back_kv(key, std::forward<M>(obj));
             return {data_ + size_ - 1, true};
          }
-         const uint32_t h = hash_key(key);
+         const glz::uint32_t h = hash_key(key);
          if (try_bloom_insert(h, [&] { emplace_back_kv(key, std::forward<M>(obj)); })) {
             return {data_ + size_ - 1, true};
          }
@@ -810,13 +805,13 @@ namespace glz
          emplace_back_kv(key, std::forward<M>(obj));
          bloom_set(h);
          if (index_size() > 0) {
-            const uint32_t n = index_->size;
+            const glz::uint32_t n = index_->size;
             ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
             }
-            entries[pos] = {h, static_cast<uint32_t>(size_ - 1)};
+            entries[pos] = {h, static_cast<glz::uint32_t>(size_ - 1)};
             index_->size = size_;
          }
          return {data_ + size_ - 1, true};
@@ -835,7 +830,7 @@ namespace glz
             emplace_back_kv(std::move(key), std::forward<M>(obj));
             return {data_ + size_ - 1, true};
          }
-         const uint32_t h = hash_key(key);
+         const glz::uint32_t h = hash_key(key);
          if (try_bloom_insert(h, [&] { emplace_back_kv(std::move(key), std::forward<M>(obj)); })) {
             return {data_ + size_ - 1, true};
          }
@@ -848,13 +843,13 @@ namespace glz
          emplace_back_kv(std::move(key), std::forward<M>(obj));
          bloom_set(h);
          if (index_size() > 0) {
-            const uint32_t n = index_->size;
+            const glz::uint32_t n = index_->size;
             ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
             }
-            entries[pos] = {h, static_cast<uint32_t>(size_ - 1)};
+            entries[pos] = {h, static_cast<glz::uint32_t>(size_ - 1)};
             index_->size = size_;
          }
          return {data_ + size_ - 1, true};
@@ -880,7 +875,7 @@ namespace glz
          invalidate_index();
          auto* mfirst = data_ + (first - data_);
          auto* mlast = data_ + (last - data_);
-         const auto count = static_cast<uint32_t>(mlast - mfirst);
+         const auto count = static_cast<glz::uint32_t>(mlast - mfirst);
          // Destroy erased elements
          for (auto* p = mfirst; p < mlast; ++p) {
             std::destroy_at(p);
@@ -985,7 +980,7 @@ namespace glz
       bool operator==(const ordered_small_map& other) const
       {
          if (size_ != other.size_) return false;
-         for (uint32_t i = 0; i < size_; ++i) {
+         for (glz::uint32_t i = 0; i < size_; ++i) {
             if (data_[i] != other.data_[i]) return false;
          }
          return true;

@@ -1,6 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/toml/skip.hpp"
+// glz:header include="glaze/core/context.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header include="glaze/toml/common.hpp"
+// glz:header project_imports=ignore
+// glz:header license=none
 export module glaze.toml.skip;
 
 import glaze.toml.common;

@@ -1,12 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/core/custom_meta.hpp"
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/wrappers.hpp"
+// glz:header project_imports=ignore
 export module glaze.core.custom_meta;
 
 import std;
 
-import glaze.core.meta_fwd;
+import glaze.forward;
 import glaze.core.common;
 import glaze.core.custom;
 import glaze.tuplet;

@@ -1,9 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 // glz:header path="glaze/json/skip.hpp"
-// glz:header std=<cstddef>
-// glz:header std=<span>
-// glz:header std=<type_traits>
+// glz:header include="glaze/core/streaming_state.hpp"
+// glz:header include="glaze/util/parse.hpp"
+// glz:header project_imports=ignore
 export module glaze.json.skip;
 
 import std;
@@ -14,11 +14,10 @@ import glaze.core.streaming_state;
 
 import glaze.util.parse;
 import glaze.util.atoi;
+import glaze.core.basic_types;
 
 #include "glaze/util/inline.hpp"
 
-using std::size_t;
-using std::uint8_t;
 
 export namespace glz
 {
@@ -205,7 +204,7 @@ export namespace glz
    void skip_value_streaming(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto refill = [&]() -> bool {
-         const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
+         const glz::size_t consumed = static_cast<glz::size_t>(it - ctx.stream.data());
          const char* new_it;
          const char* new_end;
          ctx.stream.consume_and_refill(consumed, new_it, new_end);
@@ -216,7 +215,7 @@ export namespace glz
 
       // Skip leading whitespace, refilling as needed
       while (true) {
-         while (it < end && whitespace_table[uint8_t(*it)]) {
+         while (it < end && whitespace_table[glz::uint8_t(*it)]) {
             ++it;
          }
          if (it < end) break;
@@ -229,7 +228,7 @@ export namespace glz
       const char open = *it;
       if (open == '{' || open == '[') {
          ++it;
-         size_t depth = 1;
+         glz::size_t depth = 1;
          bool in_string = false;
          bool escaped = false;
          while (depth) {
@@ -305,7 +304,7 @@ export namespace glz
                continue;
             }
             const char c = *it;
-            if (whitespace_table[uint8_t(c)] || c == ',' || c == '}' || c == ']') {
+            if (whitespace_table[glz::uint8_t(c)] || c == ',' || c == '}' || c == ']') {
                break;
             }
             ++it;
@@ -326,7 +325,7 @@ export namespace glz
          bool validate_skipped = true;
       };
       skip_value<JSON>::op<opts_validate_skipped{{Opts}}>(ctx, it, end);
-      return std::span{start, size_t(it - start)};
+      return std::span{start, glz::size_t(it - start)};
    }
 
    template <auto Opts>

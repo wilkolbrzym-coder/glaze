@@ -797,6 +797,9 @@ namespace glz
 // float128_t requires std::from_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
 #if !defined(_LIBCPP_VERSION) || defined(_LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT)
             if constexpr (is_float128<V>) {
+               static_assert(has_charconv_float_read<V>,
+                             "std::from_chars has no overload for this 16-byte float on this toolchain (e.g. "
+                             "MinGW). Read the value into a double instead.");
                auto [ptr, ec] = std::from_chars(it, end, value);
                if (ec != std::errc()) {
                   ctx.error = error_code::parse_number_failure;

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <charconv>
 #include <concepts>
 #include <cstdint>
 #include <ranges>
@@ -119,6 +120,18 @@ namespace glz
    concept is_float128 = requires(T x) {
       requires sizeof(x) == 16;
       requires std::floating_point<T>;
+   };
+
+   // 16-byte floats are written and read through <charconv>, which may lack the overloads even when
+   // __STDCPP_FLOAT128_T__ is defined (e.g. MinGW's libstdc++).
+   template <class T>
+   concept has_charconv_float_write = requires(T value, char* first, char* last) {
+      std::to_chars(first, last, value, std::chars_format::general);
+   };
+
+   template <class T>
+   concept has_charconv_float_read = requires(T value, char* first, char* last) {
+      std::from_chars(first, last, value);
    };
 
    template <typename T>

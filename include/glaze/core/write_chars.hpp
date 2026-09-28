@@ -323,6 +323,10 @@ namespace glz
 // float128_t requires std::to_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
 #if !defined(_LIBCPP_VERSION) || _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT
             else if constexpr (is_float128<V>) {
+               static_assert(has_charconv_float_write<V>,
+                             "std::to_chars has no overload for this 16-byte float on this toolchain (e.g. "
+                             "MinGW). Set float_max_write_precision = glz::float_precision::float64 in custom "
+                             "options to write it as a double.");
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
                if (ec != std::errc()) {

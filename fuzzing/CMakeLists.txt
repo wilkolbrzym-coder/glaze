@@ -18,6 +18,17 @@ check_source_compiles(CXX "
     extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
     { return 0;}
     " haslibfuzzer)
+unset(CMAKE_REQUIRED_LINK_OPTIONS)
+
+# Some toolchains accept -fsanitize but ship no sanitizer runtime (e.g. MinGW GCC),
+# so build the fuzzers uninstrumented there rather than failing to link.
+set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=address,undefined -fno-sanitize-recover=all)
+check_source_compiles(CXX "int main() { return 0; }" has_sanitizer_runtime)
+unset(CMAKE_REQUIRED_LINK_OPTIONS)
+if(NOT has_sanitizer_runtime AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
+    message(STATUS "glaze: this toolchain cannot link -fsanitize=address,undefined, "
+                   "so the fuzz targets build uninstrumented")
+endif()
 
 
 macro(create_fuzztest testname)
@@ -35,8 +46,10 @@ macro(create_fuzztest testname)
     if(MSVC)
         target_link_libraries(fuzz_${testname} PRIVATE main)
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
-        target_compile_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
-        target_link_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
+        if(has_sanitizer_runtime)
+            target_compile_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
+            target_link_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
+        endif()
     else()
         target_link_libraries(fuzz_${testname} PRIVATE main)
     endif()

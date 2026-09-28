@@ -10716,17 +10716,21 @@ suite bitset = [] {
 };
 
 #if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__)
-suite float128_test = [] {
-   "float128"_test = [] {
-      std::float128_t x = 3.14;
+// __STDCPP_FLOAT128_T__ does not guarantee the <charconv> overloads (MinGW lacks them). Float keeps the
+// discarded branch dependent, so it is never instantiated where they are missing.
+suite float128_test = []<class Float = std::float128_t> {
+   if constexpr (glz::has_charconv_float_write<Float> && glz::has_charconv_float_read<Float>) {
+      "float128"_test = [] {
+         Float x = 3.14;
 
-      std::string s{};
-      expect(not glz::write_json(x, s));
+         std::string s{};
+         expect(not glz::write_json(x, s));
 
-      x = 0.0;
-      expect(!glz::read_json(x, s));
-      expect(x == 3.14);
-   };
+         x = 0.0;
+         expect(!glz::read_json(x, s));
+         expect(x == 3.14);
+      };
+   }
 };
 #endif
 

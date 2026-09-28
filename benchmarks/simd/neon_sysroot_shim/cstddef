@@ -1,0 +1,4 @@
+#pragma once
+typedef __SIZE_TYPE__ size_t;
+typedef __PTRDIFF_TYPE__ ptrdiff_t;
+namespace std { using ::size_t; using ::ptrdiff_t; }

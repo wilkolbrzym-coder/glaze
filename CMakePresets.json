@@ -77,6 +77,25 @@
                 "BUILD_TESTING": true,
                 "glaze_BUILD_INTEROP": true
             }
+        },
+        {
+            "name": "modules",
+            "displayName": "Clang 22 modules",
+            "description": "C++20 modules build (glaze::modules). Needs clang 22 with libc++ and CMake's experimental import std support.",
+            "binaryDir": "${sourceDir}/build/modules",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "/usr/bin/clang-22",
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++-22",
+                "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+                "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "glaze_ENABLE_MODULES": true,
+                "CMAKE_EXPERIMENTAL_CXX_IMPORT_STD": "f35a9ac6-8463-4d38-8eec-5d6008153e7d",
+                "CMAKE_CXX_STDLIB_MODULES_JSON": "/usr/lib/llvm-22/lib/libc++.modules.json"
+            }
         }
     ],
     "buildPresets": [
@@ -95,6 +114,10 @@
         {
             "name": "gcc-release",
             "configurePreset": "gcc-release"
+        },
+        {
+            "name": "modules",
+            "configurePreset": "modules"
         }
     ],
     "testPresets": [

@@ -1,0 +1,482 @@
+name: modules-tests
+
+# Module-path CI: builds the C++20 modules library and runs the module suite, the
+# header-only path where a compiler cannot `import std;`, and the benchmarks.
+#
+# WHAT EACH JOB TESTS
+#   modules-linux     clang 19-22 + libc++ on Linux x86_64/arm64: the real module
+#                     build (preset `modules`, target `glaze_modules`) and
+#                     tests/modules/run_modules_tests.sh. arm64 is included so the
+#                     NEON code paths are executed on real aarch64 hardware.
+#   headers-gcc       GCC only builds headers: GCC's module support does NOT
+#                     provide the standard `std` module (libstdc++ ships no
+#                     libstdc++.modules.json), so these legs run
+#                     tests/modules/header_smoke.sh and must never be read as
+#                     module tests. The exhaustively dependency-checked header
+#                     matrix remains .github/workflows/standalone-headers.yml.
+#   modules-windows   MSVC (VS 2022 17.10+, the first release whose STL ships the
+#                     `std` module) builds `glaze_modules`. It is a COMPILE check:
+#                     run_modules_tests.sh passes clang/libc++ flags
+#                     (-fmodule-file=std=, -stdlib=libc++) and cannot drive MSVC.
+#                     Executing the module tree on Windows is not covered yet.
+#   headers-macos     Apple's libc++ predates std.cppm, so macOS cannot `import
+#                     std`; these legs run the header-only smoke. On macos-14/15
+#                     (arm64) that smoke executes on Apple Silicon (NEON). A
+#                     module leg on macOS would need Homebrew LLVM's libc++ and is
+#                     out of scope here.
+#   benchmarks        runs benchmarks/modules/run_benchmarks.sh and
+#                     benchmarks/simd/run_simd_benchmarks.sh when they exist,
+#                     publishes the output as a job summary and an artifact, and
+#                     is skipped with a notice until they land (the scripts are
+#                     being added in parallel).
+#
+# SUPPORTED VERSIONS (as of this workflow)
+#   clang  19, 20, 21, 22 with libc++. Minimum enforced: 19. Rationale: CMake's
+#          libc++ `import std` gate is >= 18.1.2; 19 is the first stable release
+#          whose libc++ package ships std.cppm + libc++.modules.json in the LLVM
+#          tree (CCME requires that layout). apt.llvm.org currently serves
+#          19.1.7 / 20.1.8 / 21.1.8 / 22.1.x for both amd64 and arm64. 22 is the
+#          version this conversion is developed and locally validated against.
+#   MSVC   VS 2022 17.10-17.14 (cl 19.40+). Hosted runners ship one VS 2022
+#          minor, so each Windows leg asserts cl >= 19.40 and that
+#          %VCToolsInstallDir%\modules\modules.json exists; per-minor legs would
+#          need a self-hosted or container image and are not possible here.
+#          windows-11-arm is a best-effort arm64 leg: it depends on the MSVC
+#          dev-env action locating an arm64 VS toolset on that image.
+#   GCC    12, 13, 14 on ubuntu-24.04 (header-only; see above). GCC 15+ is not in
+#          the ubuntu-24.04 archive and would need a newer base image/container.
+#
+# ARM64   The arm64 legs use GitHub-hosted runners: ubuntu-24.04-arm for the
+#          Linux module tests, macos-14/15 for the Apple Silicon header smoke and
+#          windows-11-arm for the MSVC compile check. These must be available to
+#          the repository; if they are not, remove the arm64 entries from the
+#          plan job's lists rather than leaving a leg that can never run.
+#
+# REDUCED VS FULL MATRIX
+#   pull_request runs the reduced matrix: one leg per OS family plus arm64, so it
+#   stays fast. The full matrix (every clang/GCC version above, extra macOS and
+#   Windows images, arm64 benchmarks) runs on:
+#     * workflow_dispatch -> "Run workflow"; `full_matrix` defaults to true, so
+#       the full matrix is the default for a manual run. Uncheck it to reproduce
+#       the reduced PR run by hand.
+#     * schedule -> nightly at 06:00 UTC.
+#   The plan job builds the matrix lists and prints which mode is running.
+
+on:
+  push:
+    branches:
+      - modules
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'include/**'
+      - 'tests/modules/**'
+      - 'benchmarks/**'
+      - 'cmake/modules-files.cmake'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - '.github/workflows/modules-tests.yml'
+  workflow_dispatch:
+    inputs:
+      full_matrix:
+        description: Run the full compiler/OS matrix (uncheck for the reduced one-leg-per-OS run)
+        type: boolean
+        default: true
+  schedule:
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Builds the reduced or full matrix lists and checks whether the benchmark
+  # scripts have landed. Every other job consumes these outputs.
+  # ---------------------------------------------------------------------------
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      clang: ${{ steps.plan.outputs.clang }}
+      gcc: ${{ steps.plan.outputs.gcc }}
+      msvc: ${{ steps.plan.outputs.msvc }}
+      apple: ${{ steps.plan.outputs.apple }}
+      bench: ${{ steps.plan.outputs.bench }}
+      bench_modules_present: ${{ steps.plan.outputs.bench_modules_present }}
+      bench_simd_present: ${{ steps.plan.outputs.bench_simd_present }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Choose the reduced or full matrix
+        id: plan
+        run: |
+          set -euo pipefail
+          full=false
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            full=true
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.full_matrix }}" = "true" ]; then
+            full=true
+          fi
+
+          if [ "$full" = "true" ]; then
+            mode=full
+            clang=$(jq -cn '[{"runner":"ubuntu-24.04","llvm":"19","name":"clang-19-linux-x86_64"},{"runner":"ubuntu-24.04","llvm":"20","name":"clang-20-linux-x86_64"},{"runner":"ubuntu-24.04","llvm":"21","name":"clang-21-linux-x86_64"},{"runner":"ubuntu-24.04","llvm":"22","name":"clang-22-linux-x86_64"},{"runner":"ubuntu-24.04-arm","llvm":"22","name":"clang-22-linux-arm64"}]')
+            gcc=$(jq -cn '[{"gcc":"12","name":"gcc-12-linux-x86_64"},{"gcc":"13","name":"gcc-13-linux-x86_64"},{"gcc":"14","name":"gcc-14-linux-x86_64"}]')
+            msvc=$(jq -cn '[{"runner":"windows-2022","name":"msvc-visualstudio-2022"},{"runner":"windows-2025","name":"msvc-visualstudio-2025"},{"runner":"windows-11-arm","name":"msvc-windows-11-arm64"}]')
+            apple=$(jq -cn '[{"runner":"macos-14","name":"appleclang-macos14-arm64"},{"runner":"macos-15","name":"appleclang-macos15-arm64"},{"runner":"macos-15-intel","name":"appleclang-macos15-x86_64"}]')
+            bench=$(jq -cn '[{"runner":"ubuntu-24.04","name":"bench-linux-x86_64"},{"runner":"ubuntu-24.04-arm","name":"bench-linux-arm64"}]')
+          else
+            mode=reduced
+            clang=$(jq -cn '[{"runner":"ubuntu-24.04","llvm":"22","name":"clang-22-linux-x86_64"},{"runner":"ubuntu-24.04-arm","llvm":"22","name":"clang-22-linux-arm64"}]')
+            gcc=$(jq -cn '[{"gcc":"13","name":"gcc-13-linux-x86_64"}]')
+            msvc=$(jq -cn '[{"runner":"windows-2022","name":"msvc-visualstudio-2022"}]')
+            apple=$(jq -cn '[{"runner":"macos-14","name":"appleclang-macos14-arm64"}]')
+            bench=$(jq -cn '[{"runner":"ubuntu-24.04","name":"bench-linux-x86_64"}]')
+          fi
+
+          echo "matrix mode: $mode (event: $GITHUB_EVENT_NAME)"
+          {
+            echo "clang=$clang"
+            echo "gcc=$gcc"
+            echo "msvc=$msvc"
+            echo "apple=$apple"
+            echo "bench=$bench"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ -f benchmarks/modules/run_benchmarks.sh ]; then
+            echo "bench_modules_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bench_modules_present=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f benchmarks/simd/run_simd_benchmarks.sh ]; then
+            echo "bench_simd_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bench_simd_present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ ! -f benchmarks/modules/run_benchmarks.sh ] || [ ! -f benchmarks/simd/run_simd_benchmarks.sh ]; then
+            echo "::notice title=Benchmarks not wired yet::benchmarks/modules/run_benchmarks.sh and/or benchmarks/simd/run_simd_benchmarks.sh are not present yet; the benchmarks job is skipped until they land."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # clang + libc++ module build and suite: Linux x86_64 and arm64.
+  # ---------------------------------------------------------------------------
+  modules-linux:
+    needs: plan
+    if: needs.plan.outputs.clang != '[]'
+    name: modules ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.clang) }}
+    env:
+      LLVM_VERSION: ${{ matrix.llvm }}
+      CMAKE_VERSION: '4.4.3'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install clang ${{ matrix.llvm }} with libc++
+        # Ubuntu 24.04 does not ship clang-19..22; apt.llvm.org serves all four for
+        # the noble suite on both amd64 and arm64.
+        run: |
+          set -eux
+          codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-${LLVM_VERSION} libc++-${LLVM_VERSION}-dev libc++abi-${LLVM_VERSION}-dev \
+            libeigen3-dev libasio-dev erlang-dev
+          clang++-${LLVM_VERSION} --version
+
+      - name: Install CMake ${{ env.CMAKE_VERSION }}
+        # CMake >= 3.30 is required for the experimental `import std` support the
+        # `modules` preset enables; ubuntu-24.04's apt cmake is 3.28. The Kitware
+        # release is installed for both runner architectures.
+        run: |
+          set -eux
+          case "$(uname -m)" in
+            x86_64)  cmake_arch=x86_64 ;;
+            aarch64) cmake_arch=aarch64 ;;
+            *) echo "unsupported runner architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          curl -fsSL -o /tmp/cmake.tar.gz \
+            "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${cmake_arch}.tar.gz"
+          sudo tar -xzf /tmp/cmake.tar.gz -C /opt
+          echo "/opt/cmake-${CMAKE_VERSION}-linux-${cmake_arch}/bin" >> "$GITHUB_PATH"
+          "/opt/cmake-${CMAKE_VERSION}-linux-${cmake_arch}/bin/cmake" --version
+
+      - name: Build the libc++ std module
+        # The suite needs a standalone std.pcm for -fmodule-file=std=. This is the
+        # same recipe that produces the local toolchain/std.pcm (verified
+        # byte-identical, sha256 e3cc8cb2...).
+        run: |
+          set -eux
+          test -f "/usr/lib/llvm-${LLVM_VERSION}/lib/libc++.modules.json"
+          test -f "/usr/lib/llvm-${LLVM_VERSION}/share/libc++/v1/std.cppm"
+          clang++-${LLVM_VERSION} -std=c++23 -stdlib=libc++ \
+            --precompile "/usr/lib/llvm-${LLVM_VERSION}/share/libc++/v1/std.cppm" \
+            -o "$RUNNER_TEMP/std.pcm"
+
+      - name: Configure the modules preset for clang ${{ matrix.llvm }}
+        # The `modules` preset pins clang-22 paths, so override the compiler and the
+        # libc++ module-metadata path per leg. CMAKE_CXX_STDLIB_MODULES_JSON is the
+        # Ubuntu workaround: libc++ installs libc++.modules.json both in the LLVM
+        # tree and under /usr/lib/<triplet>/, and only the LLVM-tree copy resolves
+        # its relative "../share/libc++/v1/..." source paths.
+        run: |
+          cmake --preset modules \
+            -DCMAKE_C_COMPILER="/usr/bin/clang-${LLVM_VERSION}" \
+            -DCMAKE_CXX_COMPILER="/usr/bin/clang++-${LLVM_VERSION}" \
+            -DCMAKE_CXX_STDLIB_MODULES_JSON="/usr/lib/llvm-${LLVM_VERSION}/lib/libc++.modules.json"
+
+      - name: Build glaze_modules
+        run: cmake --build --preset modules -j "$(nproc)" --target glaze_modules
+
+      - name: Run the module test suite
+        env:
+          CXX: clang++-${{ matrix.llvm }}
+          STD_PCM: ${{ runner.temp }}/std.pcm
+          # The suite covers every unit, including the optional-dependency ones:
+          # Eigen lives outside the default search path and erlang-dev installs
+          # ei.h under the Erlang tree. Standalone asio.hpp needs no extra path.
+          CPLUS_INCLUDE_PATH: /usr/include/eigen3:/usr/lib/erlang/usr/include
+        run: |
+          bash tests/modules/run_modules_tests.sh \
+            --root "$GITHUB_WORKSPACE" \
+            --jobs "$(nproc)" \
+            --work "$RUNNER_TEMP/glz-modules-tests"
+
+  # ---------------------------------------------------------------------------
+  # GCC: header-only. GCC has no `std` module, so this is NOT a module test.
+  # ---------------------------------------------------------------------------
+  headers-gcc:
+    needs: plan
+    if: needs.plan.outputs.gcc != '[]'
+    name: headers-only ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.gcc) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install g++-${{ matrix.gcc }}
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y "g++-${{ matrix.gcc }}"
+          "g++-${{ matrix.gcc }}" --version
+
+      - name: Header-only smoke (GCC cannot import std)
+        # Covers only the header-only path: every dependency-free public umbrella
+        # header is compiled standalone and a JSON round-trip is built and run.
+        # No module is built and no module test is run. Do not add module steps
+        # here: libstdc++ does not ship the `std` module.
+        run: bash tests/modules/header_smoke.sh "g++-${{ matrix.gcc }}"
+
+  # ---------------------------------------------------------------------------
+  # MSVC: builds the module tree. Compile-only for modules (suite is clang-only).
+  # ---------------------------------------------------------------------------
+  modules-windows:
+    needs: plan
+    if: needs.plan.outputs.msvc != '[]'
+    name: modules ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.msvc) }}
+    env:
+      CMAKE_VERSION: '4.4.3'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up the MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Assert the toolset ships the STL std module (VS 2022 17.10+)
+        # VS 2022 17.10 (cl 19.40) is the first VS 2022 release whose STL provides
+        # the `std` module. Hosted runners ship a single 17.x minor, so this is the
+        # floor check rather than a per-minor matrix.
+        shell: pwsh
+        run: |
+          $cl = (cl 2>&1 | Out-String)
+          $m = [regex]::Match($cl, 'Version (\d+\.\d+)')
+          if (-not $m.Success) { throw "could not determine cl version:`n$cl" }
+          $ver = [double]$m.Groups[1].Value
+          Write-Host "cl version: $ver (VS 2022 17.10 = cl 19.40 is the floor)"
+          if ($ver -lt 19.40) {
+            throw "MSVC $ver predates VS 2022 17.10, the first VS 2022 release with the STL std module"
+          }
+          $json = Join-Path $env:VCToolsInstallDir 'modules/modules.json'
+          if (-not (Test-Path $json)) { throw "STL module metadata not found at $json" }
+          Write-Host "STL module metadata: $json"
+
+      - name: Install CMake ${{ env.CMAKE_VERSION }}
+        shell: pwsh
+        run: |
+          $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x86_64' }
+          $name = "cmake-$env:CMAKE_VERSION-windows-$arch"
+          Invoke-WebRequest -Uri "https://github.com/Kitware/CMake/releases/download/v$env:CMAKE_VERSION/$name.zip" -OutFile "$env:RUNNER_TEMP\cmake.zip"
+          Expand-Archive "$env:RUNNER_TEMP\cmake.zip" -DestinationPath C:\ -Force
+          "C:\$name\bin" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
+          & "C:\$name\bin\cmake.exe" --version
+
+      - name: Configure the module build (MSVC)
+        # The `modules` preset is clang/libc++-specific (clang-22 and -stdlib=libc++),
+        # so MSVC configures the same target directly. CMake locates MSVC's
+        # modules.json under %VCToolsInstallDir%\modules (VS 2022 17.10+).
+        run: |
+          cmake -S . -B build/modules-msvc -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -Dglaze_ENABLE_MODULES=ON `
+            -DCMAKE_EXPERIMENTAL_CXX_IMPORT_STD=f35a9ac6-8463-4d38-8eec-5d6008153e7d
+
+      - name: Build glaze_modules
+        # Compile check only: tests/modules/run_modules_tests.sh drives clang's
+        # -fmodule-file=std= and -stdlib=libc++ and cannot run against MSVC.
+        run: cmake --build build/modules-msvc --target glaze_modules
+
+  # ---------------------------------------------------------------------------
+  # macOS: Apple's libc++ cannot import std, so header-only smoke (executes on
+  # arm64 -> NEON). A module leg would need Homebrew LLVM's libc++.
+  # ---------------------------------------------------------------------------
+  headers-macos:
+    needs: plan
+    if: needs.plan.outputs.apple != '[]'
+    name: headers-only ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.apple) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use the newest Xcode the image ships
+        # The default Xcode on the hosted images is not always the newest, and
+        # older AppleClang rejects constructs the headers use. Pick the highest
+        # installed one explicitly rather than inheriting the image default.
+        run: |
+          set -eux
+          newest="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -t_ -k2 -V | tail -1 || true)"
+          if [ -n "$newest" ]; then
+            sudo xcode-select -s "$newest/Contents/Developer"
+          fi
+          xcode-select -p
+          c++ --version
+
+      - name: Header-only smoke (Apple's libc++ cannot import std)
+        # Apple's libc++ predates std.cppm, so this leg is header-only. On the
+        # arm64 images the round-trip runs natively, exercising NEON.
+        run: bash tests/modules/header_smoke.sh c++
+
+  # ---------------------------------------------------------------------------
+  # Benchmarks: skipped with a notice until the scripts land.
+  # ---------------------------------------------------------------------------
+  benchmarks:
+    needs: plan
+    if: needs.plan.outputs.bench_modules_present == 'true' || needs.plan.outputs.bench_simd_present == 'true'
+    name: benchmarks ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.bench) }}
+    env:
+      CMAKE_VERSION: '4.4.3'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install clang 22 with libc++
+        run: |
+          set -eux
+          codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-22 main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y clang-22 libc++-22-dev libc++abi-22-dev
+          clang++-22 --version
+
+      - name: Install CMake ${{ env.CMAKE_VERSION }}
+        run: |
+          set -eux
+          case "$(uname -m)" in
+            x86_64)  cmake_arch=x86_64 ;;
+            aarch64) cmake_arch=aarch64 ;;
+            *) echo "unsupported runner architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          curl -fsSL -o /tmp/cmake.tar.gz \
+            "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${cmake_arch}.tar.gz"
+          sudo tar -xzf /tmp/cmake.tar.gz -C /opt
+          echo "/opt/cmake-${CMAKE_VERSION}-linux-${cmake_arch}/bin" >> "$GITHUB_PATH"
+
+      - name: Run the module benchmarks
+        if: needs.plan.outputs.bench_modules_present == 'true'
+        env:
+          CXX: clang++-22
+        run: |
+          set -o pipefail
+          bash benchmarks/modules/run_benchmarks.sh 2>&1 | tee bench-modules.txt
+
+      - name: Run the SIMD benchmarks
+        if: needs.plan.outputs.bench_simd_present == 'true'
+        env:
+          CXX: clang++-22
+        run: |
+          set -o pipefail
+          bash benchmarks/simd/run_simd_benchmarks.sh 2>&1 | tee bench-simd.txt
+
+      - name: Publish benchmark results to the job summary
+        if: always()
+        run: |
+          {
+            echo "## Benchmarks: ${{ matrix.name }}"
+            echo
+            echo "### Module benchmarks (\`benchmarks/modules/run_benchmarks.sh\`)"
+            echo
+            if [ -f bench-modules.txt ]; then
+              echo '```'
+              cat bench-modules.txt
+              echo '```'
+            else
+              echo "_not run (script absent or step failed)_"
+            fi
+            echo
+            echo "### SIMD benchmarks (\`benchmarks/simd/run_simd_benchmarks.sh\`)"
+            echo
+            if [ -f bench-simd.txt ]; then
+              echo '```'
+              cat bench-simd.txt
+              echo '```'
+            else
+              echo "_not run (script absent or step failed)_"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-${{ matrix.name }}
+          path: |
+            bench-modules.txt
+            bench-simd.txt
+          if-no-files-found: ignore

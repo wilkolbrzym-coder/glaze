@@ -1,0 +1,45 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+
+// Optional std::error_code integration for glz::error_code
+// Include this header to enable implicit conversion from glz::error_code to std::error_code
+//
+// NOTE: Including this header adds ~34KB to binary size due to:
+// - The global error_category variable with std::error_category vtable
+// - This forces a DATA segment which incurs page alignment overhead
+// For size-constrained embedded systems, avoid including this header.
+// glz:header path="glaze/core/std_error_code.hpp"
+// glz:header std=<system_error>
+// glz:header include="glaze/core/error_category.hpp"
+// glz:header project_imports=ignore
+export module glaze.core.std_error_code;
+
+import std;
+
+import glaze.core.context;
+import glaze.core.error_category;
+import glaze.core.meta;
+import glaze.core.basic_types;
+
+
+export namespace glz
+{
+   struct glaze_error_category : public std::error_category
+   {
+      const char* name() const noexcept override { return "glaze"; }
+
+      std::string message(int ev) const override { return {meta<error_code>::keys[glz::uint32_t(ev)]}; }
+   };
+
+   inline glaze_error_category error_category{};
+
+   inline std::error_code make_error_code(error_code e) { return {static_cast<int>(e), error_category}; }
+}
+
+// Make Glaze error_code compatible with std::error_code
+export namespace std
+{
+   template <>
+   struct is_error_code_enum<glz::error_code> : true_type
+   {};
+}

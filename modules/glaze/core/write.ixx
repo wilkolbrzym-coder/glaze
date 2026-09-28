@@ -1,0 +1,163 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/core/write.hpp"
+// glz:header std=<fstream>
+// glz:header include="glaze/core/buffer_traits.hpp"
+// glz:header include="glaze/core/common.hpp"
+// glz:header include="glaze/core/opts.hpp"
+// glz:header project_imports=ignore
+export module glaze.core.write;
+
+import std;
+
+import glaze.core.opts;
+import glaze.core.buffer_traits;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.concepts.container_concepts;
+
+import glaze.util.expected;
+import glaze.util.string_literal;
+import glaze.core.basic_types;
+
+
+namespace glz
+{
+   // For writing to a std::string, std::vector<char>, std::deque<char> and the like
+   export template <auto Opts, class T, output_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
+   {
+      using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
+      call_scope scope{ctx};
+
+      if constexpr (traits::is_resizable) {
+         // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
+         if (buffer.size() < 2 * write_padding_bytes) {
+            resize_unfilled(buffer, 2 * write_padding_bytes);
+         }
+      }
+      glz::size_t ix = 0; // overwrite index
+      to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+
+      if (bool(ctx.error)) [[unlikely]] {
+         // Truncate on the way out too: the padding above is grown without being filled, so a
+         // buffer left at its padded length would hand the caller indeterminate bytes. Not
+         // `finalize`, which for a streaming buffer means flushing -- a failed write must not
+         // push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
+         return {ix, ctx.error, ctx.custom_error_message};
+      }
+
+      traits::finalize(buffer, ix);
+      return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   export template <auto& Partial, auto Opts, class T, output_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
+   {
+      using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
+
+      if constexpr (traits::is_resizable) {
+         // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
+         if (buffer.size() < 2 * write_padding_bytes) {
+            resize_unfilled(buffer, 2 * write_padding_bytes);
+         }
+      }
+      context ctx{};
+      glz::size_t ix = 0;
+      serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+
+      if (bool(ctx.error)) [[unlikely]] {
+         // Truncate on the way out too: the padding above is grown without being filled, so a
+         // buffer left at its padded length would hand the caller indeterminate bytes. Not
+         // `finalize`, which for a streaming buffer means flushing -- a failed write must not
+         // push the partial document downstream on its way out.
+         if constexpr (traits::is_resizable && not traits::is_output_streaming) {
+            buffer.resize(ix);
+         }
+         return {ix, ctx.error, ctx.custom_error_message};
+      }
+
+      traits::finalize(buffer, ix);
+      return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   export template <auto& Partial, auto Opts, class T, raw_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
+   {
+      context ctx{};
+      glz::size_t ix = 0;
+      serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return {ix, ctx.error, ctx.custom_error_message};
+      }
+      return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   export template <auto Opts, class T, output_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
+   {
+      context ctx{};
+      return write<Opts>(std::forward<T>(value), buffer, ctx);
+   }
+
+   export template <auto Opts, class T>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] glz::expected<std::string, error_ctx> write(T&& value)
+   {
+      std::string buffer{};
+      context ctx{};
+      const auto res = write<Opts>(std::forward<T>(value), buffer, ctx);
+      if (res) [[unlikely]] {
+         return glz::unexpected(res);
+      }
+      return {buffer};
+   }
+
+   export template <auto Opts, class T, raw_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
+   {
+      call_scope scope{ctx};
+      glz::size_t ix = 0;
+      to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return {ix, ctx.error, ctx.custom_error_message};
+      }
+      return {ix, error_code::none, ctx.custom_error_message};
+   }
+
+   export template <auto Opts, class T, raw_buffer Buffer>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer)
+   {
+      context ctx{};
+      return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
+   }
+
+   // requires file_name to be null terminated
+   //
+   // Writes the buffer verbatim in binary mode (symmetric with the "rb" read in
+   // file_to_buffer) so binary formats are not corrupted by newline translation on
+   // Windows, and reports a write/flush failure instead of silently succeeding.
+   export [[nodiscard]] inline error_code buffer_to_file(auto&& buffer, const sv file_name)
+   {
+      std::ofstream file(file_name.data(), std::ios::out | std::ios::binary);
+      if (!file) {
+         return error_code::file_open_failure;
+      }
+      file.write(buffer.data(), buffer.size());
+      file.close();
+      if (!file) {
+         // A failed write or flush surfaces on close; do not report success silently.
+         return error_code::file_close_failure;
+      }
+      return {};
+   }
+}

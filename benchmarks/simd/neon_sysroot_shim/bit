@@ -1,0 +1,13 @@
+#pragma once
+#include <cstdint>
+namespace std {
+constexpr int countr_zero(unsigned int x) noexcept { return __builtin_ctz(x); }
+constexpr int countr_zero(unsigned long x) noexcept { return __builtin_ctzl(x); }
+constexpr int countr_zero(unsigned long long x) noexcept { return __builtin_ctzll(x); }
+constexpr int countl_zero(unsigned int x) noexcept { return __builtin_clz(x); }
+constexpr int countl_zero(unsigned long x) noexcept { return __builtin_clzl(x); }
+constexpr int countl_zero(unsigned long long x) noexcept { return __builtin_clzll(x); }
+constexpr int popcount(unsigned int x) noexcept { return __builtin_popcount(x); }
+constexpr int popcount(unsigned long x) noexcept { return __builtin_popcountl(x); }
+constexpr int popcount(unsigned long long x) noexcept { return __builtin_popcountll(x); }
+}
